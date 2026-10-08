@@ -1,8 +1,9 @@
 # Этап 2: граничные сценарии Git
 
 Источник: `docs/SPEC.md`, разделы «Git-логика» и «Этап 2».
-Исполняемый файл: `tests/spec-boundaries.test.ts`, Vitest.
-Команда после настройки общего раннера: `npm test -- tests/spec-boundaries.test.ts`.
+Сценарии: `tests/cases/git-boundaries.ts`, общие для двух раннеров с проверками через `node:assert/strict`.
+Вход Vitest: `tests/spec-boundaries.test.ts`; команда после настройки общего раннера: `npm test -- tests/spec-boundaries.test.ts`.
+Запуск без зависимостей на Node 24: `node --test tests/run-git-boundaries.node.ts`.
 
 Каждый тест создаёт настоящий временный репозиторий внутри `.tmp/`, затем удаляет свой каталог.
 Удалённый репозиторий в push-тестах — локальный bare-репозиторий; сетевые сервисы не нужны.
@@ -29,7 +30,7 @@
 
 `tests/contracts/git-boundaries.ts` фиксирует предлагаемые имена методов, ошибок и полей результата.
 Спецификация задаёт поведение, но не эти имена; при реализации API контракт можно согласованно переименовать.
-Ожидается экспорт `createGitAdapter()` из `src/adapters/git/index.ts`.
+Реализован экспорт `createGitAdapter()` из `src/adapters/git/index.ts`; производственный порт — `src/core/ports/git.ts`.
 UI-предупреждения, выбор другой цели и подтверждение `git init` здесь не проверяются: проверяется результат адаптера для будущего UI.
 LFS проверяется по атрибутам, без скачивания LFS-объектов и установки расширения.
 
@@ -46,7 +47,16 @@ Node `v24.15.0`, npm `12.2.0`. В момент проверки общий `pack
 npm exec --yes --cache .tmp/boundaries-npm-cache --fetch-retries=0 --fetch-timeout=15000 --package vitest -- vitest run tests/spec-boundaries.test.ts
 ```
 
-Завершилась кодом 1: `ENOTFOUND registry.npmjs.org`. Тесты не были запущены;
-красный результат не подтверждён. Для завершения нужен доступный Vitest и повторный прогон.
-Синтаксис обоих TypeScript-файлов проверен командами `node --experimental-strip-types --check <file>`;
-обе завершились кодом 0. Это не проверка типов и не выполнение тестов.
+Завершилась кодом 1: `ENOTFOUND registry.npmjs.org`. Через Vitest тесты не были запущены.
+
+После добавления входа `node:test` выполнены те же 14 сценариев:
+
+```sh
+node --test tests/run-git-boundaries.node.ts
+```
+
+- До реализации: 0 passed, 14 failed, код 1. Все падения — `RED_MISSING_IMPLEMENTATION`; подготовка Git-репозиториев прошла.
+- После реализации: 14 passed, 0 failed, 0 skipped, код 0. Выполнены поведенческие assertions, включая сохранность основной копии и удалённой ветки.
+
+Прогон подтверждает граничные сценарии этапа 2. Он не означает готовность всего приложения,
+прохождение Vitest, проверку типов или проверку положительного применения squash — это отдельные проверки.
