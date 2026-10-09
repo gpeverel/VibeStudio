@@ -20,6 +20,7 @@
     "smoke": "electron . --smoke-test",
     "test": "vitest run",
     "test:node": "node --test tests/run-git-boundaries.node.ts",
+    "test:live": "vitest run --config vitest.live.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "eslint . --max-warnings 0",
     "check:boundaries": "depcruise --config .dependency-cruiser.cjs src",
