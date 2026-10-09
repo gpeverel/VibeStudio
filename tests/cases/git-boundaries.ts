@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 import type {
@@ -138,7 +138,7 @@ export function registerGitBoundaryTests({ beforeEach, afterEach, describe, it }
   /** Незавершённые Git-операции основной копии; пустой список означает отсутствие следов. */
   function unfinishedGitState(path = project): string[] {
     return ['MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge', 'rebase-apply', 'SQUASH_MSG']
-      .filter((name) => existsSync(join(path, git(path, 'rev-parse', '--git-path', name))));
+      .filter((name) => existsSync(resolve(path, git(path, 'rev-parse', '--git-path', name))));
   }
 
   function snapshot(path: string) {
@@ -567,7 +567,7 @@ export function registerGitBoundaryTests({ beforeEach, afterEach, describe, it }
       await rejectsWith(prepare(sut), 'merge_conflict');
       assert.deepEqual(fullSnapshot(), before);
       assert.equal(git(workspace, 'diff', '--name-only', '--diff-filter=U'), 'tracked.txt');
-      assert.ok(existsSync(join(workspace, git(workspace, 'rev-parse', '--git-path', 'MERGE_HEAD'))), 'слияние ждёт разрешения в workspace');
+      assert.ok(existsSync(resolve(workspace, git(workspace, 'rev-parse', '--git-path', 'MERGE_HEAD'))), 'слияние ждёт разрешения в workspace');
 
       await writeFile(join(workspace, 'tracked.txt'), 'resolved\n');
       git(workspace, 'add', 'tracked.txt');
