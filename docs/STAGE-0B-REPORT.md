@@ -1,16 +1,16 @@
 # Этап 0B: основание Git — отчёт
 
-Дата проверки: 2026-10-09. Node `v24.15.0` (из `.nvmrc`), npm `12.2.0`, существующий lockfile, зависимости не менялись.
+Дата проверки: 2026-10-09 (первая версия) и повторная проверка 0B-2 в тот же день. Node `v24.15.0` (из `.nvmrc`), npm `12.2.0`, существующий lockfile, зависимости не менялись.
 
 ## Изменённые файлы
 
 | Файл | Что изменено |
 |---|---|
 | `src/core/ports/git.ts` | Единые типы запросов/результатов, `GitError`+`GitErrorCode`, `PreparedCandidate`, `GitOperation`, `GitOperationStore`, `GitFaultPoint`, `GitPort` (prepare/apply/reconcile) — ядро не импортирует адаптер |
-| `src/adapters/git/index.ts` | Новый протокол: `createWorkspace`/`prepareWorkspace`/`applyWorkspace`/`reconcileApply`, `createGitAdapter({ store, faultInjector })` |
+| `src/adapters/git/index.ts` | (0B-2: свежесть кандидата, строгая сверка, общая блокировка — см. раздел ниже.) Новый протокол: `createWorkspace`/`prepareWorkspace`/`applyWorkspace`/`reconcileApply`, `createGitAdapter({ store, faultInjector })` |
 | `tests/contracts/git-boundaries.ts` | Дубль контракта удалён: реэкспорт типов порта |
-| `tests/cases/git-boundaries.ts` | 14 исходных сценариев (вызовы адаптированы, assertions сохранены и усилены) + S2-B13…B33 (31 тест, из них 11 — матрица точек падения) |
-| `tests/spec-boundaries.md` | Таблица S2-B13…B33, границы доказательств, задачи G8–G10 |
+| `tests/cases/git-boundaries.ts` | 14 исходных сценариев (вызовы адаптированы, assertions сохранены и усилены) + S2-B13…B33 (31 тест, из них 11 — матрица точек падения) + 0B-2: S2-B24/*, S2-B30/strict, S2-B34…B36 (33 теста; всего 78) |
+| `tests/spec-boundaries.md` | Таблица S2-B13…B36 с новыми сценариями, границы доказательств, задачи G8–G10 |
 | `docs/STAGE-0B-REPORT.md` | Этот отчёт |
 
 Вход Vitest и Node-runner не менялись (оба вызывают общий `registerGitBoundaryTests`).
@@ -32,32 +32,51 @@
 2. Деревья базы и кандидата равны → `no_changes` (без коммита, checkpoint; сессия не закрывается).
 3. Запись намерения (`intent_saved`) → checkpoint `refs/vibestudio/<sessionId>/operations/<operationId>/pre-apply` (создаётся только при отсутствии) → squash-коммит `git commit-tree <candidateTree> -p <expectedBaseSha>` (объект, основная копия не меняется) → `git read-tree -m -u <base> <squash>` (индекс и файлы; отказывает при пересекающихся правках без потерь) → CAS `git update-ref refs/heads/<base> <squash> <base>` → проверка итогового состояния → результат.
 4. Точки инъекции вызываются по одной на каждую границу фазы. Безопасное окно: после `read-tree` до `update-ref` HEAD = база, индекс = кандидат, файлы = индексу. Обратный порядок (ref, затем файлы) отвергнут: он оставляет обратный staged-diff.
-5. `reconcileApply` не меняет Git: `applied` только если squash-коммит имеет единственного родителя = ожидаемая база, дерево = кандидат, нет незавершённых операций, а при HEAD = squash индекс и файлы изменённых путей совпадают с HEAD (иначе squash должен быть предком HEAD); всё остальное — `interrupted` с диагностикой. Автоматических `reset --hard`, `clean`, `stash` нет.
-6. Повтор `requestId` возвращает записанную/сверенную операцию; тот же ID с другим запросом → `request_conflict`. Сериализация — блокировка внутри процесса по общему Git-каталогу.
+5. `reconcileApply` не меняет Git (чтение с `--no-optional-locks`, байты `.git/index` не меняются): для незавершённой операции `applied` только если squash-коммит имеет единственного родителя = ожидаемая база, дерево = кандидат, **`HEAD == plannedSha` на ожидаемой ветке**, кандидат (workspace) актуален, `diff --cached` и `diff` по всему дереву пусты, нет untracked (кроме игнорируемых Git) и незавершённых операций; всё остальное, включая последующий HEAD, — `interrupted` с диагностикой. Записанный `completed`/`applied` возвращается как исторический факт. Автоматических `reset --hard`, `clean`, `stash` нет.
+6. Повтор `requestId` возвращает записанную/сверенную операцию; тот же ID с другим запросом → `request_conflict`. Сериализация — блокировка на уровне модуля по realpath Git common-dir, общая для всех экземпляров адаптера в процессе; проверка `requestId` у create/prepare/apply выполняется внутри блокировки.
 
-**Границы:** `update-ref`/CAS атомарен только для ref; `read-tree` может прерваться на файлах. Блокировка не защищает от внешнего Git и редактора: окно закрывается отказом git при расхождении базы или перекрывающей правке. Тестовый `GitOperationStore` — память процесса; исключение из `faultInjector` имитирует падение на границе фазы, а не посреди системного вызова. **Восстановление после реального падения приложения не доказано**; durable-хранилище и его приёмка — этап 1.
+**Границы:** `update-ref`/CAS атомарен только для ref; `read-tree` может прерваться на файлах. Блокировка не защищает от внешнего Git и редактора: окно закрывается отказом git при расхождении базы или перекрывающей правке. Тестовый `GitOperationStore` — память процесса; исключение из `faultInjector` имитирует падение на границе фазы, а не посреди системного вызова. Межпроцессной блокировки нет (второй процесс/окно, внешний Git и редактор не охвачены); повторные проверки workspace/основной копии перед `commit-tree`, `read-tree`, `update-ref` и записью результата сужают, но не закрывают окно гонки. **Восстановление после реального падения приложения не доказано**; durable-хранилище и его приёмка — этап 1.
+
+## Повторная проверка 0B-2 (2026-10-09): три пробела
+
+Расхождения со SPEC, найденные чтением кода после первой версии отчёта, проверены воспроизведениями. Красный прогон выполнен на **исходных** `src/adapters/git/index.ts` и `src/core/ports/git.ts` (копия `HEAD` во временном каталоге, новые тесты поверх): `node --test tests/run-git-boundaries.node.ts` → 78 tests, **48 pass, 30 fail, 0 skipped** (45 старых + 3 новых зелёных: ignored, `after_ref/merge-state`, S2-B35). Падения — поведенческие (`actual applied, expected interrupted`, `Missing expected rejection`, `request_conflict`, двойная запись), а не отсутствие метода или ошибка fixture.
+
+| Пробел | Подтверждено? | Воспроизведение (красное на исходном адаптере) | Исправление (A, `src/adapters/git/`) |
+|---|---|---|---|
+| 1. Устаревание кандидата | Да | S2-B24/{staged,unstaged,untracked}: `applyWorkspace` не отклонял грязный workspace; S2-B24/{before_commit,before_files,before_ref,before_result}/× 3: правка workspace во время apply завершалась `applied` | `assertCandidateCurrent` (грязные пути workspace, HEAD/tree, ветка, незавершённые операции) до intent → `candidate_changed` с файлами; в apply — перед checkpoint, commit-tree, read-tree, update-ref и записью результата → `interrupted` |
+| 2. Достоверность applied и сверки | Да | after_ref + staged/unstaged/untracked/другая ветка на том же SHA → `applied`; последующий коммит (грязный и чистый) → `applied`; S2-B30/strict и `before_result` (проверка стояла **до** инъекции) → `applied`. `merge-state` уже обрабатывался — не дефект | Строгая сверка: `HEAD == plannedSha`, ожидаемая ветка, актуальный кандидат, пустые `diff --cached`/`diff` по всему дереву, нет untracked и незавершённых операций; `before_result` перед финальной проверкой; `completed/applied` не переоценивается; чтение с `--no-optional-locks` |
+| 3. Сериализация между экземплярами | Да | S2-B36/create: второй экземпляр → `request_conflict`; prepare: две записи; apply-same-request: второй вернул преждевременный `interrupted` при приостановленном первом; apply-other-request: `operation_in_progress` вместо ожидания; apply-race: проигравший вернул `interrupted` | Карта `locks` на уровне модуля (ключ — realpath common-dir); `existingOperation` и инспекция create/prepare перенесены внутрь блокировки |
+
+Решение по спорному месту (A+B): последующий HEAD без записанного `completed` остаётся `interrupted` — это консервативно: данные сохраняются, но подтверждение требует ручного разбора. Прежний B30 не ослаблялся: добавлен S2-B30/strict, где та же гонка обязана дать не `applied`.
 
 ## Команды и результаты
 
+Текущая сессия, Node `v24.15.0` (`~/.nvm/versions/node/v24.15.0`; системный `node` по умолчанию — v26.11.0), npm `12.2.0`, `package.json`/lockfile не менялись.
+
 | Команда | Результат |
 |---|---|
-| `npm run test:node` | 45 passed, 0 failed, 0 skipped |
-| `npm test` (Vitest) | 45 passed (1 файл) |
-| `npm run typecheck` | OK |
-| `npm run lint` | OK, 0 warnings |
-| `npm run check:boundaries` | no dependency violations (19 modules) |
-| `npm run build` | OK |
-| `npm run smoke` | OK («Проверка окна Electron и preload пройдена») — в этом окружении; в соседнем окружении 0A/этой же сессии ранее наблюдался SIGABRT, это ограничение окружения |
-| `npm run check:sqlite` | `{"ok":true,"runtime":"node",...}` (Electron-проба не повторялась: зависимости не менялись) |
+| `npm run test:node` | exit 0: 78 tests, 78 pass, 0 fail, 0 skipped (45 прежних + 33 новых) |
+| `npm test` (Vitest) | exit 0: 1 файл, 78 passed |
+| `npm run typecheck` | exit 0 |
+| `npm run lint` | exit 0, `--max-warnings 0` |
+| `npm run check:boundaries` | exit 0: no dependency violations (19 modules, 18 dependencies) |
+| `npm run build` | exit 0 |
+| `npm run smoke` | exit 0: «Проверка окна Electron и preload пройдена» (в этом окружении; ранее наблюдавшийся SIGABRT в соседнем окружении — ограничение окружения, не воспроизведён) |
+| `npm run check:sqlite` | exit 0: `{"ok":true,"runtime":"node","node":"24.15.0",...,"sqliteVersion":"3.53.4"}`. Электрон-проба не повторялась: зависимости и окружение не менялись |
+| `git diff --check` | exit 0 |
+| S2-B36 + S2-B22 ×3 | 6 pass / 0 fail в каждом из 3 прогонов (проверка стабильности гонок) |
 
-Окружение: системный `node` по умолчанию v26 отклоняется `engine-strict`; использовался Node 24.15.0 из `.nvm`. Первичный `npm ci` одного из агентов упал на `postinstall` Electron (сеть/кеш) — зависимости установлены штатным способом после восстановления кеша.
+Ошибки окружения в этой сессии не возникали. Результаты прежних сессий (45 passed и т. п.) в таблицу не переносились.
 
 ## Критерии приёмки 0B
 
-Закрыты (проверяются фактические HEAD, индекс, файлы, refs и следы незавершённых операций):
-положительный squash (S2-B18), `no_changes` (B19), повтор запроса (B20, B21, B22), конфликт→разрешение→повторная подготовка (B17), ошибка коммита и частичное выполнение (B27, B28, B33), смена базы и устаревший кандидат (B23, B24, B25), сохранность staged/unstaged/untracked (B30, B31), HEAD ≠ выбранной базы (B13), принадлежность session/workspace (B15), неизменяемый checkpoint (B14, B32), старые refs сохраняются (B18, B32, B33), фазы и ошибки доступны ядру через порт, все исходные сценарии сохранены.
+Закрыты по SPEC §6–§7 в пределах одного процесса и in-memory Store (проверяются фактические HEAD, индекс, файлы, refs и следы незавершённых операций):
+положительный squash (S2-B18), `no_changes` (B19), повтор запроса (B20, B21, B22), конфликт→разрешение→повторная подготовка (B17), ошибка коммита и частичное выполнение (B27, B28, B33), смена базы и устаревший кандидат, включая незакоммиченные правки workspace до и во время apply (B23, B24/*, B25), сохранность staged/unstaged/untracked (B30, B30/strict, B31), достоверность applied и сверки по полному дереву/ветке/операциям (B34, B35), сериализация между экземплярами с общим Store (B36), HEAD ≠ выбранной базы (B13), принадлежность session/workspace (B15), неизменяемый checkpoint (B14, B32), старые refs сохраняются (B18, B32, B33), фазы и ошибки доступны ядру через порт, все исходные сценарии сохранены.
 
 Открыты:
+- Блокировка не межпроцессная: второй процесс/окно, внешний Git и редактор не охвачены; окно между повторной проверкой и системным вызовом Git остаётся. In-memory Store не доказывает восстановление после реального падения (этап 1).
+- Строгая сверка оставляет `interrupted`, если после прерванного apply появились коммиты пользователя: потребуется UI «Применение прервано» с ручным разбором (не реализован, этап 2+).
+- Не покрыто тестами: конкурирующий `prepare` двух разных сессий в одном common-dir; ручное разрешение `interrupted` после сверки.
 - Durable-персистентность intent/фаз и восстановление после реального падения процесса (этап 1).
 - G8 (push только в выбранный remote), G9 (таймауты, hooks/signing, preflight подписания), G10 (откат частичного `createWorkspace`: запись config после `worktree add` не компенсируется) — оформлены задачами в `tests/spec-boundaries.md`, не реализованы.
 - Отмена применения (revert) и `discard` — вне 0B.

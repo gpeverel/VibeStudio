@@ -57,6 +57,7 @@ export interface ApplyWorkspaceRequest {
 }
 export type GitApplyPhase = 'intent_saved' | 'checkpoint_created' | 'commit_created'
   | 'files_updated' | 'ref_updated' | 'completed';
+/** applied фиксирует доказанное завершение; повтор возвращает этот исторический результат. */
 export type ApplyWorkspaceResult =
   | { status: 'applied'; operationId: string; appliedSha: string; preApplyRef: string }
   | { status: 'no_changes'; operationId: string }
@@ -94,6 +95,7 @@ export interface GitAdapterOptions {
   store?: GitOperationStore;
   faultInjector?: (point: GitFaultPoint, operation: Readonly<GitOperation>) => void | Promise<void>;
 }
+/** Сверка не меняет Git; без записанного завершения требует точного согласованного итога. */
 export interface ReconcileApplyRequest { projectPath: string; operationId: string }
 export interface GitPort {
   inspectRepository(projectPath: string): Promise<{ head: string; warnings: GitWarning[] }>;

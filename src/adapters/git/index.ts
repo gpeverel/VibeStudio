@@ -29,6 +29,8 @@ async function git(cwd: string, ...args: string[]): Promise<string> {
     if (key.startsWith('GIT_') && key !== 'GIT_TERMINAL_PROMPT') delete env[key];
   }
   const { stdout } = await execute('git', [
+    // Чтение при сверке не обновляет stat-cache индекса; обязательные блокировки записи сохраняются.
+    '--no-optional-locks',
     '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgSign=false',
     '-c', 'merge.autoStash=false', ...args,
   ], { cwd, env, encoding: 'utf8', timeout: 60_000, maxBuffer: 16 * 1024 * 1024 });
@@ -176,9 +178,11 @@ function memoryStore(): GitOperationStore {
   };
 }
 
+// Общая очередь всех экземпляров этого модуля; ключ — realpath Git common-dir.
+const locks = new Map<string, Promise<unknown>>();
+
 export function createGitAdapter(options: GitAdapterOptions = {}): GitPort {
   const store = options.store ?? memoryStore();
-  const locks = new Map<string, Promise<unknown>>();
 
   /** Сериализация писателей внутри приложения; внешний Git и редакторы этой блокировкой не охвачены. */
   async function withLock<T>(key: string, action: () => Promise<T>): Promise<T> {
@@ -253,11 +257,12 @@ export function createGitAdapter(options: GitAdapterOptions = {}): GitPort {
     const { requestId, projectPath, workspacePath, sessionId, branch, baseRef } = request;
     const identity: WorkspaceIdentity = { projectPath, workspacePath, sessionId, branch, baseRef };
     const fingerprint = fingerprintOf(identity);
-    const repeated = await existingOperation(requestId, 'create', fingerprint);
-    if (repeated?.workspaceResult) return repeated.workspaceResult;
-    const repository = await inspectRepository(projectPath);
+    await assertRepository(projectPath);
     const repositoryId = await repositoryIdOf(projectPath);
     return withLock(repositoryId, async () => {
+      const repeated = await existingOperation(requestId, 'create', fingerprint);
+      if (repeated?.workspaceResult) return repeated.workspaceResult;
+      const repository = await inspectRepository(projectPath);
       validateSessionId(sessionId);
       await validateBranch(projectPath, branch);
       if (!branch.startsWith('vs/')) throw new GitError('invalid_branch', 'Ветка сессии должна начинаться с vs/.');
@@ -296,11 +301,11 @@ export function createGitAdapter(options: GitAdapterOptions = {}): GitPort {
     const { requestId, projectPath, workspacePath, sessionId, branch, baseRef } = request;
     const identity: WorkspaceIdentity = { projectPath, workspacePath, sessionId, branch, baseRef };
     const fingerprint = fingerprintOf(identity);
-    const repeated = await existingOperation(requestId, 'prepare', fingerprint);
-    if (repeated?.candidate) return repeated.candidate;
     await assertRepository(projectPath);
     const repositoryId = await repositoryIdOf(projectPath);
     return withLock(repositoryId, async () => {
+      const repeated = await existingOperation(requestId, 'prepare', fingerprint);
+      if (repeated?.candidate) return repeated.candidate;
       await assertWorkspaceBinding(identity);
       await requireClean(workspacePath);
       await validateBranch(projectPath, baseRef);
@@ -327,28 +332,27 @@ export function createGitAdapter(options: GitAdapterOptions = {}): GitPort {
     });
   }
 
-  /** Файлы, которые меняет применение; по ним проверяется согласованность дерева и индекса. */
-  async function changedPaths(path: string, base: string, planned: string): Promise<string[]> {
-    return (await git(path, 'diff-tree', '--no-commit-id', '--name-only', '-r', '-z', '--no-renames', base, planned))
-      .split('\0').filter(Boolean);
-  }
-
-  async function pathsMatch(path: string, paths: string[]): Promise<boolean> {
-    if (!paths.length) return true;
-    for (const args of [['diff', '--quiet', 'HEAD'], ['diff', '--cached', '--quiet']]) {
+  /** Сравнение всего индекса и файлов, без write-tree и обновления индекса при чтении. */
+  async function treeStateDiagnostic(path: string, expected: string): Promise<string | undefined> {
+    for (const args of [['diff', '--cached', '--quiet', expected], ['diff', '--quiet']]) {
       try {
-        await git(path, '--literal-pathspecs', ...args, '--', ...paths);
+        await git(path, ...args, '--');
       } catch (error) {
-        if (isCommandError(error) && error.code === 1) return false;
+        if (isCommandError(error) && error.code === 1) return 'Полное дерево индекса или tracked-файлы не соответствуют ожидаемому состоянию.';
         throw error;
       }
     }
-    return true;
+    if ((await git(path, 'ls-files', '--others', '--exclude-standard', '-z')).length) {
+      return 'В основной копии появились untracked-файлы.';
+    }
+    const unfinished = await unfinishedGitState(path);
+    if (unfinished.length) return `Есть незавершённая операция Git: ${unfinished.join(', ')}.`;
+    return undefined;
   }
 
   /**
-   * «Применено» — это согласованность HEAD, индекса и файлов изменённых путей без незавершённых операций.
-   * Если пользователь позже добавил коммиты, достаточно того, что squash-коммит остаётся предком HEAD.
+   * Для незавершённой операции нужен точный итог. Последующий HEAD не доказывает,
+   * что индекс и файлы когда-либо были согласованы с коммитом применения.
    */
   async function appliedStateDiagnostic(operation: GitOperation): Promise<string | undefined> {
     const { candidate, plannedSha, identity } = operation;
@@ -363,20 +367,22 @@ export function createGitAdapter(options: GitAdapterOptions = {}): GitPort {
     if (parents.length !== 1 || parents[0] !== candidate.expectedBaseSha || tree !== candidate.candidateTree) {
       return 'Итоговый коммит не соответствует кандидату.';
     }
-    const unfinished = await unfinishedGitState(projectPath);
-    if (unfinished.length) return `Есть незавершённая операция Git: ${unfinished.join(', ')}.`;
-    if (head === plannedSha) {
-      if (!await pathsMatch(projectPath, await changedPaths(projectPath, candidate.expectedBaseSha, plannedSha))) {
-        return 'Индекс или файлы не соответствуют итоговому коммиту.';
-      }
-      return undefined;
+    if (head !== plannedSha) return `HEAD находится на ${head.slice(0, 8)}: точное завершение применения не подтверждено.`;
+    if ((await git(projectPath, 'branch', '--show-current')).trim() !== identity.baseRef) {
+      return 'В основной копии выбрана другая ветка или HEAD отсоединён.';
     }
-    const descendant = await optionalGit(projectPath, 'merge-base', '--is-ancestor', plannedSha, head);
-    return descendant === undefined ? `HEAD находится на ${head.slice(0, 8)}, итоговый коммит применения не достигнут.` : undefined;
+    try {
+      await assertCandidateCurrent(candidate);
+    } catch (error) {
+      if (error instanceof GitError && error.code === 'candidate_changed') return error.message;
+      throw error;
+    }
+    return treeStateDiagnostic(projectPath, plannedSha);
   }
 
   async function reconcileOperation(operation: GitOperation): Promise<ApplyWorkspaceResult> {
-    if (operation.result && operation.result.status !== 'interrupted') return operation.result;
+    // Записанное завершение — исторический факт; поздние правки пользователя его не отменяют.
+    if (operation.phase === 'completed' && operation.result && operation.result.status !== 'interrupted') return operation.result;
     const diagnostic = await appliedStateDiagnostic(operation);
     if (diagnostic === undefined && operation.plannedSha && operation.preApplyRef) {
       const result: ApplyWorkspaceResult = {
@@ -439,12 +445,20 @@ export function createGitAdapter(options: GitAdapterOptions = {}): GitPort {
     if (baseSha !== candidate.expectedBaseSha || await commitSha(projectPath, 'HEAD') !== candidate.expectedBaseSha) {
       throw new GitError('base_changed', 'Базовая ветка изменилась после подготовки. Подготовьте кандидата заново.');
     }
-    if (revisionIdOf(candidate) !== candidate.revisionId
-      || await commitSha(candidate.workspacePath, 'HEAD') !== candidate.candidateSha
-      || (await git(candidate.workspacePath, 'rev-parse', 'HEAD^{tree}')).trim() !== candidate.candidateTree) {
-      throw new GitError('candidate_changed', 'Рабочая область изменилась после подготовки. Подготовьте кандидата заново.');
-    }
+    await assertCandidateCurrent(candidate);
     await requireAuthor(projectPath);
+  }
+
+  /** Подготовка допускает только чистый workspace: один HEAD не описывает проверенную ревизию. */
+  async function assertCandidateCurrent(candidate: PreparedCandidate): Promise<void> {
+    const files = await dirtyFiles(candidate.workspacePath);
+    if (files.length || revisionIdOf(candidate) !== candidate.revisionId
+      || await commitSha(candidate.workspacePath, 'HEAD') !== candidate.candidateSha
+      || (await git(candidate.workspacePath, 'rev-parse', 'HEAD^{tree}')).trim() !== candidate.candidateTree
+      || (await git(candidate.workspacePath, 'branch', '--show-current')).trim() !== candidate.branch
+      || (await unfinishedGitState(candidate.workspacePath)).length) {
+      throw new GitError('candidate_changed', 'Рабочая область изменилась после подготовки. Подготовьте кандидата заново.', files);
+    }
   }
 
   async function applyWorkspace(request: ApplyWorkspaceRequest): Promise<ApplyWorkspaceResult> {
@@ -489,6 +503,7 @@ export function createGitAdapter(options: GitAdapterOptions = {}): GitPort {
 
       try {
         await inject('before_checkpoint', operation);
+        await assertCandidateCurrent(candidate);
         const preApplyRef = sessionRefs(sessionId).checkpoint(operation.operationId);
         // Пустой old-value: checkpoint операции создаётся один раз и не перезаписывается.
         await git(projectPath, 'update-ref', preApplyRef, expectedBaseSha, '');
@@ -496,6 +511,7 @@ export function createGitAdapter(options: GitAdapterOptions = {}): GitPort {
         await inject('after_checkpoint', operation);
 
         await inject('before_commit', operation);
+        await assertCandidateCurrent(candidate);
         if (!await stillOnBase()) return await interrupted('База изменилась после создания checkpoint: основная копия не тронута.');
         const plannedSha = (await git(projectPath, 'commit-tree', candidate.candidateTree, '-p', expectedBaseSha,
           '-m', `Применение сессии ${sessionId}`)).trim();
@@ -503,25 +519,33 @@ export function createGitAdapter(options: GitAdapterOptions = {}): GitPort {
         await inject('after_commit', operation);
 
         await inject('before_files', operation);
+        await assertCandidateCurrent(candidate);
         if (!await stillOnBase()) return await interrupted('База изменилась перед обновлением файлов: основная копия не тронута.');
+        const beforeFilesDiagnostic = await treeStateDiagnostic(projectPath, expectedBaseSha);
+        if (beforeFilesDiagnostic !== undefined) return await interrupted(beforeFilesDiagnostic);
         // Двустороннее слияние деревьев обновляет индекс и файлы и отказывает при пересекающихся правках пользователя.
         await git(projectPath, 'read-tree', '-m', '-u', expectedBaseSha, plannedSha);
         await save('files_updated');
         await inject('after_files', operation);
 
         await inject('before_ref', operation);
+        await assertCandidateCurrent(candidate);
+        if (!await stillOnBase()) return await interrupted('База или текущая ветка изменились перед обновлением ref.');
+        const beforeRefDiagnostic = await treeStateDiagnostic(projectPath, plannedSha);
+        if (beforeRefDiagnostic !== undefined) return await interrupted(beforeRefDiagnostic);
         await git(projectPath, 'update-ref', '-m', `Применение сессии ${sessionId}`, `refs/heads/${baseRef}`, plannedSha, expectedBaseSha);
         await save('ref_updated');
         await inject('after_ref', operation);
 
+        await inject('before_result', operation);
         const diagnostic = await appliedStateDiagnostic(operation);
         if (diagnostic !== undefined) return await interrupted(diagnostic);
         const result: ApplyWorkspaceResult = { status: 'applied', operationId: operation.operationId, appliedSha: plannedSha, preApplyRef };
-        await inject('before_result', operation);
         await save('completed', { result });
         await inject('after_result', operation);
         return result;
       } catch (error) {
+        if (error instanceof GitError && error.code === 'candidate_changed') return interrupted(error.message);
         if (!isCommandError(error)) throw error;
         return interrupted(`Команда git завершилась ошибкой: ${firstLine(error)}`);
       }
