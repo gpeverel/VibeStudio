@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { existsSync, readFileSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
@@ -993,5 +994,463 @@ export function registerGitBoundaryTests({ beforeEach, afterEach, describe, it }
         assert.equal(git(project, 'rev-parse', legacyRef), candidate.expectedBaseSha);
       });
     }
+  });
+
+  describe('0B-2: устаревание кандидата по незакоммиченным изменениям workspace', () => {
+    type DirtyKind = 'staged' | 'unstaged' | 'untracked';
+    const DIRTY_KINDS: readonly DirtyKind[] = ['staged', 'unstaged', 'untracked'];
+
+    /** Пользовательская правка в workspace: возвращает файл и содержимое, которые не должны пропасть. */
+    async function dirtyWorkspace(kind: DirtyKind): Promise<{ file: string; content: string }> {
+      const file = kind === 'unstaged' ? 'session.txt' : kind === 'staged' ? 'staged-late.txt' : 'scratch.txt';
+      const content = `workspace ${kind}\n`;
+      await writeFile(join(workspace, file), content);
+      if (kind === 'staged') git(workspace, 'add', file);
+      return { file, content };
+    }
+
+    function workspaceState() {
+      return {
+        head: git(workspace, 'rev-parse', 'HEAD'),
+        status: git(workspace, 'status', '--porcelain=v1', '--untracked-files=all'),
+        cached: git(workspace, 'diff', '--cached'),
+        diff: git(workspace, 'diff'),
+      };
+    }
+
+    async function applyOperations(): Promise<GitOperation[]> {
+      return (await store.list()).filter((operation) => operation.kind === 'apply');
+    }
+
+    for (const kind of DIRTY_KINDS) {
+      it(`S2-B24/${kind}: незакоммиченная правка workspace после подготовки → candidate_changed, данные целы`, async () => {
+        await initRepository(project);
+        const sut = await adapterWithStore();
+        const candidate = await preparedSession(sut);
+        const { file, content } = await dirtyWorkspace(kind);
+        const before = fullSnapshot();
+        const workspaceBefore = workspaceState();
+        await assert.rejects(sut.applyWorkspace(applyRequest(candidate)), (error: unknown) => {
+          const failure = error as { code: string; files: string[] };
+          assert.equal(failure.code, 'candidate_changed');
+          assert.ok(failure.files.includes(file), `в ошибке перечислен ${file}`);
+          return true;
+        });
+        assert.deepEqual(fullSnapshot(), before, 'основная копия не меняется');
+        assert.deepEqual(workspaceState(), workspaceBefore, 'workspace не меняется');
+        assert.equal(await readFile(join(workspace, file), 'utf8'), content, 'правка пользователя сохранена');
+        assert.equal(existsSync(join(project, 'session.txt')), false);
+        assert.deepEqual(await applyOperations(), [], 'операция применения не начата');
+        assert.deepEqual(operationRefs(), []);
+
+        // Безопасный путь: пользователь фиксирует правку, кандидат готовится заново и применяется.
+        git(workspace, 'add', '--all');
+        git(workspace, 'commit', '-m', 'Правка пользователя');
+        const fresh = await prepare(sut, 'prepare-2');
+        assert.notEqual(fresh.revisionId, candidate.revisionId);
+        await rejectsWith(sut.applyWorkspace(applyRequest(candidate, 'apply-2')), 'candidate_changed');
+        const result = applied(await sut.applyWorkspace(applyRequest(fresh, 'apply-3')));
+        assertAppliedState(fresh, result.appliedSha);
+        assert.equal(await readFile(join(project, file), 'utf8'), content);
+      });
+    }
+
+    it('S2-B24/ignored: файл, игнорируемый Git, не делает кандидата устаревшим', async () => {
+      await initRepository(project);
+      const sut = await adapterWithStore();
+      await startSession(sut);
+      await sessionCommit('.gitignore', '*.log\n');
+      await sessionCommit('session.txt', 'session\n');
+      const candidate = await prepare(sut);
+      await writeFile(join(workspace, 'debug.log'), 'noise\n');
+      const result = applied(await sut.applyWorkspace(applyRequest(candidate)));
+      assertAppliedState(candidate, result.appliedSha);
+      assert.equal(await readFile(join(workspace, 'debug.log'), 'utf8'), 'noise\n');
+    });
+
+    for (const point of ['before_commit', 'before_files', 'before_ref', 'before_result'] as const) {
+      for (const kind of DIRTY_KINDS) {
+        it(`S2-B24/${point}/${kind}: правка workspace во время apply не доходит до основной копии`, async () => {
+          await initRepository(project);
+          let mutation: { file: string; content: string } | undefined;
+          const sut = await adapterWithStore({
+            faultInjector: async (current) => {
+              if (current === point) mutation = await dirtyWorkspace(kind);
+            },
+          });
+          const candidate = await preparedSession(sut);
+          const attempt = await outcome(sut.applyWorkspace(applyRequest(candidate)));
+          assert.ok(mutation, `точка ${point} достигнута`);
+          if (attempt.result) assert.equal(attempt.result.status, 'interrupted');
+          else assert.equal(errorCode(attempt.error), 'candidate_changed');
+          if (point === 'before_commit' || point === 'before_files') {
+            assertNotApplied(candidate, attempt);
+            assert.equal(existsSync(join(project, 'session.txt')), false);
+          } else {
+            // Файлы уже обновлены (before_ref) или ветка уже переведена (before_result): главное — не applied и без потерь.
+            if (attempt.result) assert.equal(attempt.result.status, 'interrupted');
+            else assert.equal(typeof errorCode(attempt.error), 'string');
+          }
+          assert.equal(await readFile(join(workspace, mutation.file), 'utf8'), mutation.content, 'правка пользователя сохранена');
+
+          const workspaceBefore = workspaceState();
+          for (const operation of await applyOperations()) {
+            assert.notEqual(operation.result?.status, 'applied');
+            for (const line of operationRefs()) assert.equal(line.split(' ')[1], candidate.expectedBaseSha);
+            const before = fullSnapshot();
+            const reconciled = await sut.reconcileApply({ projectPath: project, operationId: operation.operationId });
+            // До смены ветки основная копия не доведена до итогового состояния; позже сверка оценивает только основную копию.
+            if (point === 'before_commit' || point === 'before_files') assert.equal(reconciled.status, 'interrupted');
+            assert.deepEqual(fullSnapshot(), before, 'сверка не меняет Git');
+          }
+          assert.deepEqual(workspaceState(), workspaceBefore, 'workspace не меняется');
+        });
+      }
+    }
+
+    /** assertNotApplied определён в блоке сбоев; здесь та же проверка основной копии. */
+    function assertNotApplied(candidate: PreparedCandidate, attempt: Outcome): void {
+      if (attempt.result) assert.notEqual(attempt.result.status, 'applied');
+      else assert.equal(typeof errorCode(attempt.error), 'string');
+      assert.equal(git(project, 'rev-parse', 'HEAD'), candidate.expectedBaseSha);
+      assert.equal(git(project, 'diff'), '');
+      assert.equal(git(project, 'diff', '--cached'), '');
+      assert.equal(git(project, 'status', '--porcelain=v1', '--untracked-files=all'), '');
+      assert.deepEqual(unfinishedGitState(), []);
+    }
+  });
+
+  describe('0B-2: достоверность applied и сверки (§6: HEAD, индекс, tracked/untracked, ветка, операции)', () => {
+    async function applyOperation(): Promise<GitOperation> {
+      const operations = (await store.list()).filter((operation) => operation.kind === 'apply');
+      assert.equal(operations.length, 1, 'ровно одна операция применения');
+      return operations[0]!;
+    }
+
+    function indexBytes(): string {
+      return readFileSync(join(project, '.git', 'index')).toString('base64');
+    }
+
+    async function seedOtherFile(): Promise<void> {
+      await writeFile(join(project, 'other.txt'), 'other base\n');
+      git(project, 'add', 'other.txt');
+      git(project, 'commit', '-m', 'Второй файл базы');
+    }
+
+    type Residue = 'staged' | 'unstaged' | 'untracked' | 'other-branch' | 'merge-state';
+
+    /** Пользовательский остаток в основной копии; возвращает проверку, что его данные не потеряны. */
+    async function leaveResidue(kind: Residue): Promise<() => Promise<void>> {
+      switch (kind) {
+        case 'staged':
+          await writeFile(join(project, 'staged.txt'), 'staged\n');
+          git(project, 'add', 'staged.txt');
+          return async () => {
+            assert.equal(await readFile(join(project, 'staged.txt'), 'utf8'), 'staged\n');
+            assert.ok(git(project, 'diff', '--cached', '--name-only').split('\n').includes('staged.txt'));
+          };
+        case 'unstaged':
+          await writeFile(join(project, 'other.txt'), 'unstaged edit\n');
+          return async () => assert.equal(await readFile(join(project, 'other.txt'), 'utf8'), 'unstaged edit\n');
+        case 'untracked':
+          await writeFile(join(project, 'late.txt'), 'untracked\n');
+          return async () => assert.equal(await readFile(join(project, 'late.txt'), 'utf8'), 'untracked\n');
+        case 'other-branch':
+          git(project, 'checkout', '-q', '-b', 'elsewhere');
+          return async () => assert.equal(git(project, 'branch', '--show-current'), 'elsewhere');
+        case 'merge-state':
+          await writeFile(join(project, '.git', 'MERGE_HEAD'), `${git(project, 'rev-parse', 'HEAD')}\n`);
+          return async () => assert.ok(existsSync(join(project, '.git', 'MERGE_HEAD')));
+      }
+    }
+
+    const RESIDUES: readonly Residue[] = ['staged', 'unstaged', 'untracked', 'other-branch', 'merge-state'];
+
+    for (const kind of RESIDUES) {
+      it(`S2-B34/after_ref/${kind}: HEAD = итоговый коммит, но состояние не целое → не applied, Git не меняется`, async () => {
+        await initRepository(project);
+        await seedOtherFile();
+        let preserved: (() => Promise<void>) | undefined;
+        const sut = await adapterWithStore({
+          faultInjector: async (point) => {
+            if (point !== 'after_ref') return;
+            preserved = await leaveResidue(kind);
+            throw new SimulatedCrash(point);
+          },
+        });
+        const candidate = await preparedSession(sut);
+        const attempt = await outcome(sut.applyWorkspace(applyRequest(candidate)));
+        assert.ok(attempt.error instanceof SimulatedCrash);
+        assert.ok(preserved);
+        const operation = await applyOperation();
+        assert.equal(operation.plannedSha, git(project, 'rev-parse', 'HEAD'), 'ветка уже указывает на итоговый коммит');
+
+        const before = fullSnapshot();
+        const indexBefore = indexBytes();
+        const reconciled = await sut.reconcileApply({ projectPath: project, operationId: operation.operationId });
+        assert.equal(reconciled.status, 'interrupted', 'сохранность данных не доказывает applied');
+        assert.deepEqual(fullSnapshot(), before, 'сверка не меняет HEAD, ветку, refs и файлы');
+        assert.equal(indexBytes(), indexBefore, 'сверка не переписывает индекс');
+        await preserved();
+        assert.equal(git(project, 'stash', 'list'), '');
+        assert.notEqual((await applyOperation()).result?.status, 'applied', 'applied не записан в Store');
+
+        const retry = await outcome(sut.applyWorkspace(applyRequest(candidate)));
+        if (retry.result) assert.equal(retry.result.status, 'interrupted');
+        assert.deepEqual(fullSnapshot(), before);
+        assert.equal(indexBytes(), indexBefore);
+        assert.equal(commitCount(), 3, 'второго коммита нет');
+      });
+    }
+
+    for (const kind of ['staged', 'unstaged', 'untracked'] as const) {
+      it(`S2-B34/descendant/${kind}: последующий коммит и незавершённая правка → не applied, данные целы`, async () => {
+        await initRepository(project);
+        await seedOtherFile();
+        const sut = await adapterWithStore({
+          faultInjector: (point) => {
+            if (point === 'after_ref') throw new SimulatedCrash(point);
+          },
+        });
+        const candidate = await preparedSession(sut);
+        await outcome(sut.applyWorkspace(applyRequest(candidate)));
+        const operation = await applyOperation();
+        const external = await externalCommit('external.txt', 'external\n');
+        const preserved = await leaveResidue(kind);
+
+        const before = fullSnapshot();
+        const indexBefore = indexBytes();
+        const reconciled = await sut.reconcileApply({ projectPath: project, operationId: operation.operationId });
+        assert.equal(reconciled.status, 'interrupted');
+        assert.deepEqual(fullSnapshot(), before);
+        assert.equal(indexBytes(), indexBefore);
+        assert.equal(git(project, 'rev-parse', 'HEAD'), external, 'внешний коммит остаётся вершиной ветки');
+        await preserved();
+        assert.notEqual((await applyOperation()).result?.status, 'applied');
+      });
+    }
+
+    it('S2-B34/descendant/clean: после прерывания чистый потомок HEAD без записанного completed не подтверждается', async () => {
+      await initRepository(project);
+      const sut = await adapterWithStore({
+        faultInjector: (point) => {
+          if (point === 'after_ref') throw new SimulatedCrash(point);
+        },
+      });
+      const candidate = await preparedSession(sut);
+      await outcome(sut.applyWorkspace(applyRequest(candidate)));
+      const operation = await applyOperation();
+      const external = await externalCommit('external.txt', 'external\n');
+      const before = fullSnapshot();
+      const indexBefore = indexBytes();
+      const reconciled = await sut.reconcileApply({ projectPath: project, operationId: operation.operationId });
+      assert.equal(reconciled.status, 'interrupted', 'потомок не доказывает состояние на момент применения');
+      assert.deepEqual(fullSnapshot(), before);
+      assert.equal(indexBytes(), indexBefore);
+      assert.equal(git(project, 'rev-parse', 'HEAD'), external, 'внешний коммит не перезаписан');
+      assert.equal(await readFile(join(project, 'external.txt'), 'utf8'), 'external\n');
+      assert.equal(await readFile(join(project, 'session.txt'), 'utf8'), 'session\n');
+      assert.notEqual((await applyOperation()).result?.status, 'applied');
+    });
+
+    it('S2-B34/before_result: правка пользователя между проверкой и записью результата → не applied', async () => {
+      await initRepository(project);
+      const sut = await adapterWithStore({
+        faultInjector: async (point) => {
+          if (point !== 'before_result') return;
+          await writeFile(join(project, 'staged.txt'), 'staged\n');
+          git(project, 'add', 'staged.txt');
+        },
+      });
+      const candidate = await preparedSession(sut);
+      const attempt = await outcome(sut.applyWorkspace(applyRequest(candidate)));
+      if (attempt.result) assert.equal(attempt.result.status, 'interrupted');
+      else assert.equal(typeof errorCode(attempt.error), 'string');
+      assert.equal(await readFile(join(project, 'staged.txt'), 'utf8'), 'staged\n');
+      assert.ok(git(project, 'diff', '--cached', '--name-only').split('\n').includes('staged.txt'));
+      const operation = await applyOperation();
+      assert.notEqual(operation.result?.status, 'applied', 'applied не записан в Store');
+    });
+
+    it('S2-B30/strict: неотносящиеся к кандидату правки пользователя при apply → interrupted, а не applied', async () => {
+      await initRepository(project);
+      await seedOtherFile();
+      const sut = await adapterWithStore({
+        faultInjector: async (point) => {
+          if (point !== 'before_files') return;
+          await writeFile(join(project, 'other.txt'), 'unstaged edit\n');
+          await writeFile(join(project, 'late.txt'), 'untracked\n');
+          await writeFile(join(project, 'staged.txt'), 'staged\n');
+          git(project, 'add', 'staged.txt');
+        },
+      });
+      const candidate = await preparedSession(sut);
+      const attempt = await outcome(sut.applyWorkspace(applyRequest(candidate)));
+      if (attempt.result) assert.equal(attempt.result.status, 'interrupted');
+      else assert.equal(typeof errorCode(attempt.error), 'string');
+      assert.equal(await readFile(join(project, 'other.txt'), 'utf8'), 'unstaged edit\n');
+      assert.equal(await readFile(join(project, 'late.txt'), 'utf8'), 'untracked\n');
+      assert.equal(await readFile(join(project, 'staged.txt'), 'utf8'), 'staged\n');
+      assert.ok(git(project, 'diff', '--cached', '--name-only').split('\n').includes('staged.txt'));
+      assert.equal(git(project, 'stash', 'list'), '');
+      const operation = await applyOperation();
+      assert.notEqual(operation.result?.status, 'applied');
+      const before = fullSnapshot();
+      const reconciled = await sut.reconcileApply({ projectPath: project, operationId: operation.operationId });
+      assert.equal(reconciled.status, 'interrupted');
+      assert.deepEqual(fullSnapshot(), before);
+    });
+
+    it('S2-B35: ранее записанный applied — исторический факт, поздние правки его не отменяют', async () => {
+      await initRepository(project);
+      await seedOtherFile();
+      const sut = await adapterWithStore();
+      const candidate = await preparedSession(sut);
+      const result = applied(await sut.applyWorkspace(applyRequest(candidate)));
+      await writeFile(join(project, 'other.txt'), 'later edit\n');
+      await writeFile(join(project, 'late.txt'), 'later untracked\n');
+      await externalCommit('external.txt', 'external\n');
+      await writeFile(join(project, 'staged.txt'), 'staged\n');
+      git(project, 'add', 'staged.txt');
+      const before = fullSnapshot();
+      const indexBefore = indexBytes();
+      assert.deepEqual(await sut.reconcileApply({ projectPath: project, operationId: result.operationId }), result);
+      assert.deepEqual(await sut.applyWorkspace(applyRequest(candidate)), result, 'повтор requestId возвращает прежний результат');
+      assert.deepEqual(fullSnapshot(), before);
+      assert.equal(indexBytes(), indexBefore);
+      assert.equal(await readFile(join(project, 'other.txt'), 'utf8'), 'later edit\n');
+      assert.equal(operationRefs().length, 1);
+    });
+  });
+
+  describe('0B-2: два экземпляра адаптера с общим Store и одним common-dir', () => {
+    interface CountingStore extends GitOperationStore { saves: GitOperation['kind'][] }
+
+    function countingStore(): CountingStore {
+      const inner = memoryStore();
+      const saves: GitOperation['kind'][] = [];
+      return {
+        saves,
+        get: (requestId) => inner.get(requestId),
+        list: () => inner.list(),
+        async save(operation) {
+          saves.push(operation.kind);
+          await inner.save(operation);
+        },
+      };
+    }
+
+    /** Приостанавливает первый экземпляр сразу после сохранения intent, пока тест не отпустит его. */
+    function gate() {
+      let reach: () => void = () => undefined;
+      let release: () => void = () => undefined;
+      const reached = new Promise<void>((done) => { reach = done; });
+      const released = new Promise<void>((done) => { release = done; });
+      return {
+        reached, release,
+        faultInjector: async (point: GitFaultPoint) => {
+          if (point !== 'after_intent') return;
+          reach();
+          await released;
+        },
+      };
+    }
+
+    it('S2-B36/create: одновременный повтор requestId из двух экземпляров даёт один результат и одну точку возврата', async () => {
+      await initRepository(project);
+      const shared = countingStore();
+      const a = await adapter({ store: shared });
+      const b = await adapter({ store: shared });
+      const [first, second] = await Promise.all([a.createWorkspace(createRequest()), b.createWorkspace(createRequest())]);
+      assert.deepEqual(second, first);
+      assert.deepEqual(shared.saves.filter((kind) => kind === 'create'), ['create'], 'операция создания записана один раз');
+      assert.equal(git(project, 'for-each-ref', '--format=%(refname)', 'refs/vibestudio/boundary/base'),
+        'refs/vibestudio/boundary/base');
+      assert.equal(git(project, 'rev-parse', 'refs/vibestudio/boundary/base'), first.baseSha);
+      assert.equal(git(workspace, 'branch', '--show-current'), 'vs/boundary-task');
+    });
+
+    it('S2-B36/prepare: одновременный повтор requestId не запускает два слияния и две записи', async () => {
+      await initRepository(project);
+      const shared = countingStore();
+      const a = await adapter({ store: shared });
+      const b = await adapter({ store: shared });
+      await committedSession(a);
+      const [first, second] = await Promise.all([prepare(a), prepare(b)]);
+      assert.deepEqual(second, first);
+      assert.deepEqual(shared.saves.filter((kind) => kind === 'prepare'), ['prepare']);
+      assert.equal(git(workspace, 'rev-parse', 'HEAD'), first.candidateSha);
+    });
+
+    it('S2-B36/apply-same-request: повтор requestId во втором экземпляре ждёт первого и возвращает его результат', async () => {
+      await initRepository(project);
+      const shared = countingStore();
+      const paused = gate();
+      const a = await adapter({ store: shared, faultInjector: paused.faultInjector });
+      const b = await adapter({ store: shared });
+      const candidate = await preparedSession(a);
+      const request = applyRequest(candidate);
+
+      const first = a.applyWorkspace(request);
+      await paused.reached;
+      const second = b.applyWorkspace(request);
+      await sleep(250);
+      const heldBack = git(project, 'rev-parse', 'HEAD');
+      paused.release();
+      const [firstResult, secondResult] = await Promise.all([first, second]);
+      assert.equal(heldBack, candidate.expectedBaseSha, 'до отпускания первого основная копия на базе');
+      const result = applied(firstResult);
+      assert.deepEqual(secondResult, result, 'второй экземпляр видит тот же applied, а не interrupted');
+      assertAppliedState(candidate, result.appliedSha);
+      assert.equal(commitCount(), 2, 'один коммит применения');
+      assert.equal(operationRefs().length, 1, 'один checkpoint');
+      assert.equal((await shared.list()).filter((operation) => operation.kind === 'apply').length, 1);
+    });
+
+    it('S2-B36/apply-other-request: другой requestId через alias-путь проекта ждёт и получает session_applied', async () => {
+      await initRepository(project);
+      const shared = countingStore();
+      const paused = gate();
+      const a = await adapter({ store: shared, faultInjector: paused.faultInjector });
+      const b = await adapter({ store: shared });
+      const candidate = await preparedSession(a);
+      const alias = join(sandbox, 'project alias');
+      await symlink(project, alias);
+      const viaAlias = { ...candidate, projectPath: alias };
+
+      const first = a.applyWorkspace(applyRequest(candidate, 'apply-1'));
+      await paused.reached;
+      const second = outcome(b.applyWorkspace(applyRequest(viaAlias, 'apply-2')));
+      await sleep(250);
+      assert.equal(git(project, 'rev-parse', 'HEAD'), candidate.expectedBaseSha);
+      paused.release();
+      const result = applied(await first);
+      const rejected = await second;
+      assert.equal(errorCode(rejected.error), 'session_applied', 'второй писатель дождался первого и увидел закрытую сессию');
+      assertAppliedState(candidate, result.appliedSha);
+      assert.equal(commitCount(), 2);
+      assert.equal(operationRefs().length, 1, 'checkpoint не перезаписан и не продублирован');
+    });
+
+    it('S2-B36/apply-race: без пауз два экземпляра с разными requestId дают ровно одно применение', async () => {
+      await initRepository(project);
+      const shared = countingStore();
+      const a = await adapter({ store: shared });
+      const b = await adapter({ store: shared });
+      const candidate = await preparedSession(a);
+      const [first, second] = await Promise.all([
+        outcome(a.applyWorkspace(applyRequest(candidate, 'apply-1'))),
+        outcome(b.applyWorkspace(applyRequest(candidate, 'apply-2'))),
+      ]);
+      const winners = [first, second].filter((item) => item.result?.status === 'applied');
+      assert.equal(winners.length, 1, 'ровно одно применение');
+      const loser = first.result?.status === 'applied' ? second : first;
+      const loserOutcome = loser.error === undefined ? String(loser.result?.status) : String(errorCode(loser.error));
+      assert.ok(['session_applied', 'operation_in_progress'].includes(loserOutcome),
+        `проигравший получает доменный отказ, а не interrupted: ${loserOutcome}`);
+      assert.equal(commitCount(), 2);
+      assert.equal(operationRefs().length, 1);
+      assert.equal(git(project, 'rev-parse', 'HEAD^{tree}'), candidate.candidateTree);
+    });
   });
 }
