@@ -1,0 +1,13 @@
+.DS_Store
+node_modules/
+out/
+dist/
+release/
+coverage/
+*.log
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.tmp/
+.cache/
