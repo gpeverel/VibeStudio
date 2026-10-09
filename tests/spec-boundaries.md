@@ -93,3 +93,36 @@ LFS проверяется по атрибутам, без скачивания 
 
 Результаты запусков (команды, коды выхода, число пройденных сценариев) приведены в `docs/STAGE-0B-REPORT.md`.
 Исторический прогон 14 исходных сценариев (2026-10-08, Node `v24.15.0`): до реализации 0 passed / 14 failed (`RED_MISSING_IMPLEMENTATION`), после — 14 passed. Он не доказывает ни положительного применения, ни сверки.
+
+## Покрытие этапа 0C (протокол Claude CLI, диагностика, профиль доступа)
+
+Файлы: `tests/claude/*.test.ts` (Vitest, входят в `npm test`), `tests/helpers/claude/*` (двойник CLI, стенд), `tests/fixtures/claude/*` (README с происхождением), `tests/live/claude-live.live.ts` (только `LIVE=1`, `npm run test:live`, в `npm test` не входит).
+
+**Класс доказательства:** `синтетика` — двойник CLI/ручные JSONL: проверяет наш код, НЕ поведение настоящей CLI. `реальный процесс` — настоящие дочерние процессы ОС (`ProcessRunner`), но не Claude. `живая` — реальная CLI, выполняется только после явного разрешения и `LIVE=1`; **ни одна живая проба не выполнялась**.
+
+| Требование §10 (0C) / §3 / §4 | Файл тестов | Класс | Статус |
+|---|---|---|---|
+| Отсутствие бинарника отличается от остального (явный путь, относительный, без права исполнения) | `detect.test.ts` | синтетика | покрыто |
+| Отсутствие авторизации (`not_authenticated`) ≠ нет бинарника ≠ несовместимость (`capability_missing`) | `detect.test.ts` | синтетика | покрыто |
+| Ограниченный PATH (Finder), явный путь авторитетен | `detect.test.ts` | синтетика | покрыто |
+| Версия и возможности из help; наличие флага ≠ `readOnly=verified`; detect не делает модельного запроса | `detect.test.ts` | синтетика | покрыто |
+| Подтверждённая CLI-версия 2.1.295, наличие флагов в настоящем help | отчёт (`claude --version`, `--help`, без модели) | живая (без модели) | зафиксировано в отчёте; auth и поведение не проверены |
+| Поля запроса §2, `agentSessionId` ≠ `turnId`, `--session-id`/`--resume` | `access-profile.test.ts`, `adapter-lifecycle.test.ts` | синтетика | покрыто |
+| Промпт только через stdin; argv массивом; метасимволы без shell | `access-profile.test.ts`, `process-runner.test.ts` | синтетика + реальный процесс | покрыто |
+| Allowlist окружения, секреты авторизации сохранены, окружение родителя не копируется | `access-profile.test.ts`, `process-runner.test.ts`, `detect.test.ts` | синтетика + реальный процесс | покрыто |
+| Закрытый `--tools Read,Glob,Grep`; Bash/запись/делегирование недоступны; `allowedTools`/`dontAsk` не заменяют `--tools` | `access-profile.test.ts` | синтетика (argv) | покрыто на уровне argv; **эффект в CLI не доказан** |
+| hooks/MCP/plugins/settings отключены в argv; `--bare` не назначается | `access-profile.test.ts` | синтетика (argv) | покрыто на уровне argv; **эффект в CLI не доказан** |
+| Ослабленный профиль (Bash, запись, hooks/MCP, шире cwd, сеть) блокируется без запуска | `access-profile.test.ts`, `adapter-lifecycle.test.ts` | синтетика | покрыто |
+| Без подтверждения доступа (`verifyAccess`) запуск блокируется; `unsupported` не заменяется слабым профилем | `adapter-lifecycle.test.ts` | синтетика | покрыто |
+| script/symlink/hook/MCP/Git-каталог не обходят профиль; контрольные файлы основной копии и вне worktree сохранены | `access-stand.test.ts` (чувствительность стенда), `claude-live.live.ts` (сама проба) | стенд — реальные файлы; проба — живая | стенд проверен; **проба не выполнена → не закрыто** |
+| Фрагментация UTF-8/JSONL (посимвольно, 40 seed, CRLF, без LF в конце) | `stream-parser.test.ts`, `adapter-lifecycle.test.ts` | синтетика | покрыто |
+| Раздельные stdout/stderr, stderr ограничен и скрыт | `process-runner.test.ts`, `adapter-lifecycle.test.ts` | реальный процесс + синтетика | покрыто |
+| Неизвестные события → ограниченная диагностика | `stream-parser.test.ts`, `adapter-lifecycle.test.ts` | синтетика | покрыто |
+| Повреждённый/оборванный/без-result поток не success; ошибка при `is_error`/`api_error_status`/`terminal_reason` | `stream-parser.test.ts`, `adapter-lifecycle.test.ts` | синтетика | покрыто |
+| Ненулевой exit после success, отсутствие result, таймаут, spawn-ошибка | `adapter-lifecycle.test.ts`, `process-runner.test.ts` | синтетика + реальный процесс | покрыто |
+| delta/snapshot и usage не учитываются дважды | `stream-parser.test.ts` | синтетика | покрыто |
+| Лимиты строки/диагностики/состояния/очереди; медленный и отсутствующий потребитель; `done` не зависит от чтения | `stream-parser.test.ts`, `process-runner.test.ts`, `adapter-lifecycle.test.ts` | синтетика + реальный процесс | покрыто |
+| Остановка идемпотентна; терминал ровно один раз; stop до/после result; stop до создания процесса | `adapter-lifecycle.test.ts` | синтетика + реальный процесс | покрыто |
+| Остановка дочерних процессов запуска (SIGTERM→SIGKILL группы) | `process-runner.test.ts`, `adapter-lifecycle.test.ts` | реальный процесс | покрыто для обычных потомков; **`setsid`-потомки вне гарантии** |
+| Инструкции first/resume (§12): без исследовательской разметки, обещаний harness/отката | `instructions.test.ts` | синтетика | покрыто |
+| Первый ход без сохранения, сохраняемый ход, **resume с проверкой контекста** | `claude-live.live.ts` | живая | **НЕ выполнено** |
