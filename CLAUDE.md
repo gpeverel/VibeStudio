@@ -7,6 +7,7 @@
 ## Окружение
 
 - Node 24 для разработки (`engines`, `.nvmrc`; Node 26 отклоняется `engine-strict`); npm, не pnpm/yarn.
+- Для запуска без профиля оболочки использовать `sh scripts/with-node.sh npm …`: скрипт выбирает установленную версию из `.nvmrc` через PATH или NVM_DIR (по умолчанию `~/.nvm`). Подготовка и запуск workspace VibeForge заданы в `.vibeforge/workspace.json`; setup устанавливает зависимости через этот скрипт до автоматической проверки. Сам `.nvmrc` не переключает Node для обычного `npm install`. Не отключать `engine-strict` для обхода EBADENGINE.
 - В `.npmrc` задано `include=dev`; если в окружении `NODE_ENV=production`, на всякий случай ставить с `unset NODE_ENV`.
 - npm 12 блокирует install-скрипты без `allowScripts` (список в `package.json`). Бинарник Electron скачивает корневой `postinstall` (кеш `.cache/electron`); `better-sqlite3` работает на prebuilds без install-скрипта. Установка: `npm ci`.
 - Electron + TypeScript strict + React + electron-vite; SQLite через `better-sqlite3`.

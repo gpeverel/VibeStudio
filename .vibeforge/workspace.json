@@ -1,0 +1,4 @@
+{
+  "setup": "sh scripts/with-node.sh npm ci --no-audit --no-fund",
+  "run": "sh scripts/with-node.sh npm run dev"
+}
