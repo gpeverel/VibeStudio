@@ -1,0 +1,75 @@
+/* Единственный источник дизайн-токенов (docs/DESIGN.md). Компоненты используют только var(--*). */
+:root {
+  color-scheme: light dark;
+
+  /* Палитра: нейтральные поверхности и один акцент */
+  --color-bg: #fafaf9;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #f2f2f0;
+  --color-border: #e2e2de;
+  --color-text: #1b1b1a;
+  --color-text-muted: #6b6b66;
+  --color-accent: #2f5fd0;
+  --color-accent-contrast: #ffffff;
+  --color-focus-ring: #2f5fd0;
+
+  /* Статусы: используются вместе с текстом или иконкой, не только цветом */
+  --color-success: #2a7a4b;
+  --color-warning: #9a6a00;
+  --color-danger: #b3362d;
+
+  /* Типографика */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 13px;
+  --font-size-lg: 15px;
+  --font-size-xl: 20px;
+  --line-height-tight: 1.25;
+  --line-height-base: 1.5;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  /* Отступы (шаг 4px) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Скругления */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+
+  /* Анимации: не длиннее 150 мс */
+  --duration-fast: 80ms;
+  --duration-base: 150ms;
+  --easing: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #151514;
+    --color-surface: #1e1e1c;
+    --color-surface-sunken: #121211;
+    --color-border: #33332f;
+    --color-text: #ecece8;
+    --color-text-muted: #9a9a93;
+    --color-accent: #7ca0f2;
+    --color-accent-contrast: #0e1626;
+    --color-focus-ring: #7ca0f2;
+    --color-success: #5fbf86;
+    --color-warning: #d9a53a;
+    --color-danger: #e5796f;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+  }
+}

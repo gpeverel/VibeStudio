@@ -1,0 +1,54 @@
+{
+  "name": "vibestudio",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Локальное приложение для работы с изолированными Git-сессиями",
+  "type": "module",
+  "main": "out/main/index.js",
+  "engines": { "node": ">=24.15.0 <25", "npm": ">=11 <13" },
+  "packageManager": "npm@12.2.0",
+  "allowScripts": {
+    "@swc/core@1.13.5": true,
+    "esbuild@0.25.12 || 0.27.7": true,
+    "fsevents@2.3.3": true
+  },
+  "scripts": {
+    "postinstall": "electron_config_cache=.cache/electron install-electron",
+    "dev": "electron-vite dev",
+    "start": "electron-vite preview",
+    "build": "electron-vite build",
+    "smoke": "electron . --smoke-test",
+    "test": "vitest run",
+    "test:node": "node --test tests/run-git-boundaries.node.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "lint": "eslint . --max-warnings 0",
+    "check:boundaries": "depcruise --config .dependency-cruiser.cjs src",
+    "check:sqlite": "node scripts/check-sqlite.mjs",
+    "check:sqlite:electron": "ELECTRON_RUN_AS_NODE=1 electron scripts/check-sqlite.mjs",
+    "rebuild:native": "electron-rebuild -f -w better-sqlite3"
+  },
+  "dependencies": {
+    "better-sqlite3": "13.0.3",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "zod": "4.1.12"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "4.2.1",
+    "@eslint/js": "9.39.1",
+    "@swc/core": "1.13.5",
+    "@types/better-sqlite3": "7.6.13",
+    "@types/node": "24.10.1",
+    "@types/react": "19.2.15",
+    "@types/react-dom": "19.2.3",
+    "dependency-cruiser": "17.4.3",
+    "electron": "43.7.9",
+    "electron-vite": "5.0.0",
+    "eslint": "9.39.1",
+    "globals": "16.5.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.48.1",
+    "vite": "7.3.7",
+    "vitest": "4.1.11"
+  }
+}
