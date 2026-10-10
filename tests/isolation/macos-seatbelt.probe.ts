@@ -38,8 +38,8 @@ const servers: Server[] = [];
 const redact = (s: string): string => s.split(root).join('<STAND>').split(process.execPath).join('<NODE>');
 const quote = (s: string): string => JSON.stringify(s); // SBPL string, не shell.
 
-async function capture(executable: string, args: string[], env: Record<string, string> = {}): Promise<{ stdout: string; result: ProcessResult; stderrBytes: number }> {
-  const run = runner.start({ executable, args, cwd: workspace, env, stdin: '', timeoutMs: 5_000, stopGraceMs: 200, drainTimeoutMs: 300, maxQueueBytes: 65_536 });
+async function capture(executable: string, args: string[], stdin = ''): Promise<{ stdout: string; result: ProcessResult; stderrBytes: number }> {
+  const run = runner.start({ executable, args, cwd: workspace, env: {}, stdin, timeoutMs: 5_000, stopGraceMs: 200, drainTimeoutMs: 300, maxQueueBytes: 65_536 });
   const chunks: Buffer[] = [];
   let stderrBytes = 0;
   await Promise.all([
@@ -67,7 +67,7 @@ function profile(port: number): string {
     `(allow file-read* (subpath ${quote(workspace)}) (subpath ${quote(runtime)}))`,
     `(allow file-write* (subpath ${quote(runtime)}))`,
     `(deny file-write* (subpath ${quote(outside)}) (subpath ${quote(git)}) (subpath ${quote(workspace)}))`,
-    `(allow network-outbound (remote ip "127.0.0.1:${port}"))`,
+    `(allow network-outbound (remote ip "localhost:${port}"))`,
   ].join('\n');
 }
 let outcome = 'failed';
@@ -77,7 +77,7 @@ try {
   const sbpl = profile(allowed.port);
   writeFileSync(join(artifacts, 'profile.redacted.sb'), redact(sbpl));
   const probe = async (name: string, executable: string, args: string[], sandboxed = true) => {
-    const r = await capture(sandboxed ? '/usr/bin/sandbox-exec' : executable, sandboxed ? ['-p', sbpl, executable, ...args] : args);
+    const r = await capture(sandboxed ? '/usr/bin/sandbox-exec' : executable, sandboxed ? ['-p', sbpl, executable, ...args] : args, executable === '/usr/bin/nc' ? 'GET / HTTP/1.0\r\n\r\n' : '');
     records.push({ name, ...r.result, stdout: redact(r.stdout), stderrBytes: r.stderrBytes });
     assert.equal(r.result.error, undefined, name);
     assert.equal(r.result.signal, null, name);
@@ -99,12 +99,12 @@ try {
   // Проверка hardlink — наблюдение, а не ожидание защиты, которой SBPL не обещает.
   await probe('hardlink-read-observation', '/bin/cat', [join(workspace, 'hardlink')]);
   await probe('hardlink-write-observation', '/bin/sh', ['-c', 'printf CHANGED > "$1"', 'probe', join(runtime, 'hardlink')]);
-  const args = (port: number): string[] => ['--silent', '--show-error', '--noproxy', '*', '--max-time', '2', `http://127.0.0.1:${port}/`];
+  const args = (port: number): string[] => ['-w', '2', '127.0.0.1', String(port)];
   // Контроль: оба локальных сервера доступны вне исследуемого профиля.
-  assert.equal((await probe('network-positive-control', '/usr/bin/curl', args(denied.port), false)).stdout, 'LOCAL-CONTROL');
+  assert.match((await probe('network-positive-control', '/usr/bin/nc', args(denied.port), false)).stdout, /LOCAL-CONTROL/);
   const deniedHitsBefore = denied.hits();
-  assert.equal((await probe('network-allowed-port', '/usr/bin/curl', args(allowed.port))).stdout, 'LOCAL-CONTROL');
-  assert.notEqual((await probe('network-other-port-negative', '/usr/bin/curl', args(denied.port))).result.exitCode, 0);
+  assert.match((await probe('network-allowed-port', '/usr/bin/nc', args(allowed.port))).stdout, /LOCAL-CONTROL/);
+  assert.notEqual((await probe('network-other-port-negative', '/usr/bin/nc', args(denied.port))).result.exitCode, 0);
   assert.equal(denied.hits(), deniedHitsBefore);
   assert.equal(readFileSync(ref, 'utf8'), 'ref: refs/heads/main\n');
   outcome = 'observations-complete';

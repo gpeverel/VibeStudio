@@ -124,6 +124,21 @@ describe('0C ProcessRunner: жизненный цикл на реальных д
     expect(await waitFor(() => !pidAlive(childPid))).toBe(true);
   });
 
+  it('detached потомок выходит из POSIX-группы: done не гарантирует остановку всего дерева', async () => {
+    const s = stand();
+    const marker = s.path('detached-finished.json');
+    // Только собственный потомок; сам выходит через 1 с. PID не используется для убийства.
+    const descendant = `setTimeout(()=>{require('node:fs').writeFileSync(${JSON.stringify(marker)},String(Date.now()));process.exit(0)},1000)`;
+    const run = runner.start(base(s, {
+      args: node(`const {spawn}=require('node:child_process');const c=spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{detached:true,stdio:'ignore'});c.unref()`),
+    }));
+    expect(await run.done).toMatchObject({ exitCode: 0, signal: null });
+    const completedAt = Date.now();
+    expect(await waitFor(() => existsSync(marker))).toBe(true);
+    // Свой потомок совершил запись ПОСЛЕ done родителя: это открытое ограничение 0C.
+    expect(Number(readFileSync(marker, 'utf8'))).toBeGreaterThan(completedAt);
+  });
+
   it('потомок, держащий pipes после выхода родителя, не подвешивает done и не остаётся жить', async () => {
     const s = stand();
     const pidFile = s.path('orphan.pid');

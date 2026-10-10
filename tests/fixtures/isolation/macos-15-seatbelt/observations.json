@@ -1,0 +1,119 @@
+{
+  "kind": "laboratory-not-access-verification",
+  "outcome": "observations-complete",
+  "darwinRelease": "24.0.0",
+  "node": "v24.15.0",
+  "modelCalls": 0,
+  "claudeInvocations": 0,
+  "keychainQueries": 0,
+  "profileHash": "fdaa5544875f0d2c696b08c51787e87e65f4e3d4179f08a8a174ca6fc62300d1",
+  "records": [
+    {
+      "name": "read-inside-positive",
+      "exitCode": 0,
+      "signal": null,
+      "stdout": "WORKSPACE-CONTROL",
+      "stderrBytes": 0
+    },
+    {
+      "name": "read-outside-negative",
+      "exitCode": 1,
+      "signal": null,
+      "stdout": "",
+      "stderrBytes": 126
+    },
+    {
+      "name": "read-symlink-negative",
+      "exitCode": 1,
+      "signal": null,
+      "stdout": "",
+      "stderrBytes": 120
+    },
+    {
+      "name": "runtime-write-positive",
+      "exitCode": 0,
+      "signal": null,
+      "stdout": "",
+      "stderrBytes": 0
+    },
+    {
+      "name": "workspace-write-negative",
+      "exitCode": 1,
+      "signal": null,
+      "stdout": "",
+      "stderrBytes": 121
+    },
+    {
+      "name": "protected-write-negative",
+      "exitCode": 1,
+      "signal": null,
+      "stdout": "",
+      "stderrBytes": 128
+    },
+    {
+      "name": "git-write-negative",
+      "exitCode": 1,
+      "signal": null,
+      "stdout": "",
+      "stderrBytes": 123
+    },
+    {
+      "name": "runtime-symlink-write-negative",
+      "exitCode": 1,
+      "signal": null,
+      "stdout": "",
+      "stderrBytes": 121
+    },
+    {
+      "name": "child-read-negative",
+      "exitCode": 1,
+      "signal": null,
+      "stdout": "",
+      "stderrBytes": 188
+    },
+    {
+      "name": "hardlink-read-observation",
+      "exitCode": 0,
+      "signal": null,
+      "stdout": "OUTSIDE-CONTROL",
+      "stderrBytes": 0
+    },
+    {
+      "name": "hardlink-write-observation",
+      "exitCode": 0,
+      "signal": null,
+      "stdout": "",
+      "stderrBytes": 62
+    },
+    {
+      "name": "network-positive-control",
+      "exitCode": 0,
+      "signal": null,
+      "stdout": "HTTP/1.1 200 OK\r\nDate: Sat, 10 Oct 2026 15:28:17 GMT\r\nConnection: close\r\n\r\nLOCAL-CONTROL",
+      "stderrBytes": 0
+    },
+    {
+      "name": "network-allowed-port",
+      "exitCode": 0,
+      "signal": null,
+      "stdout": "HTTP/1.1 200 OK\r\nDate: Sat, 10 Oct 2026 15:28:17 GMT\r\nConnection: close\r\n\r\nLOCAL-CONTROL",
+      "stderrBytes": 0
+    },
+    {
+      "name": "network-other-port-negative",
+      "exitCode": 1,
+      "signal": null,
+      "stdout": "",
+      "stderrBytes": 0
+    }
+  ],
+  "outsideContentAfter": "CHANGED",
+  "limits": [
+    "No domain proxy tested",
+    "No native CLI/auth tested",
+    "System read exceptions",
+    "Hardlinks only observed",
+    "No managed policy audit",
+    "No setsid containment"
+  ]
+}
