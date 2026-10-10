@@ -1,0 +1,145 @@
+{
+  "origin": "real-redacted",
+  "reviewRequired": false,
+  "label": "03-resume",
+  "cliPath": "/opt/homebrew/bin/claude",
+  "cliVersion": "2.1.295 (Claude Code)",
+  "turnId": "<UUID-40>",
+  "agentSessionId": "<UUID-15>",
+  "argv": [
+    "--print",
+    "--verbose",
+    "--input-format",
+    "text",
+    "--output-format",
+    "stream-json",
+    "--include-partial-messages",
+    "--restricted",
+    "--safe-mode",
+    "--setting-sources",
+    "",
+    "--strict-mcp-config",
+    "--mcp-config",
+    "{\"mcpServers\":{}}",
+    "--tools",
+    "Read,Glob,Grep",
+    "--permission-mode",
+    "dontAsk",
+    "--permission-prompts",
+    "none",
+    "--disable-slash-commands",
+    "--no-chrome",
+    "--disallowedTools",
+    "Bash,PowerShell,Edit,Write,NotebookEdit,Agent,Task,Skill,WebFetch,WebSearch",
+    "--system-prompt-snapshot",
+    "off",
+    "--append-system-prompt",
+    "Это продолжение предыдущего диалога. Новая инструкция передана в сообщении пользователя.\n\n- ЯЗЫК ОБЩЕНИЯ: Пиши ВСЕ сообщения, пояснения, рассуждения вслух и — обязательно — финальный отчёт/итог на РУССКОМ языке. Задача, код, пути к файлам и команды могут быть на английском, но любой текст, который увидит пользователь (в том числе итоговое резюме), должен быть на русском. Технические идентификаторы (имена файлов, функций, команды) не переводи.\n- Используй только инструменты и доступ, предоставленные текущим запуском. Если задача требует недоступного действия, сообщи об ограничении текстом.\n- Если нужно уточнение пользователя, задай вопрос текстом. Ответ пользователя поступит отдельным следующим ходом.",
+    "--resume",
+    "<UUID-15>"
+  ],
+  "experimentalArgv": [],
+  "stdinBytes": 113,
+  "cwd": "<TEMP>/worktree",
+  "envNames": [
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+    "DISABLE_AUTOUPDATER",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "LOGNAME",
+    "PATH",
+    "TMPDIR",
+    "USER"
+  ],
+  "profile": {
+    "mode": "read-only",
+    "tools": [
+      "Read",
+      "Glob",
+      "Grep"
+    ],
+    "allow": [],
+    "deny": [],
+    "configPolicy": {
+      "settingSources": [],
+      "loadHooks": false,
+      "loadMcp": false,
+      "loadPlugins": false
+    },
+    "fs": {
+      "readRoots": [
+        "<TEMP>/worktree"
+      ],
+      "writeRoots": [],
+      "runtimeWriteRoots": [],
+      "protectedPaths": [
+        "<TEMP>/main",
+        "<TEMP>/outside"
+      ],
+      "gitCommonDir": "<TEMP>/main/.git"
+    },
+    "network": "provider-only"
+  },
+  "persist": true,
+  "resume": true,
+  "exitCode": 0,
+  "signal": null,
+  "stderrBytes": 0,
+  "groupAliveAfterExit": false,
+  "overBudget": false,
+  "normalizedEventTypes": [
+    "run_started",
+    "usage",
+    "text",
+    "text",
+    "usage",
+    "rate_limit",
+    "usage"
+  ],
+  "result": {
+    "kind": "success",
+    "text": "ЖЕТОН-62c64fd4",
+    "usage": {
+      "inputTokens": 2,
+      "outputTokens": 17,
+      "cacheReadTokens": 2906,
+      "cacheCreationTokens": 2128,
+      "costUsd": 0.027178,
+      "durationMs": 1478
+    }
+  },
+  "initShape": {
+    "tools": [
+      "Glob",
+      "Grep",
+      "Read"
+    ],
+    "mcp_servers": [],
+    "plugins": [
+      {
+        "name": "cc-plugin-agents-md",
+        "path": "builtin",
+        "source": "cc-plugin-agents-md@builtin"
+      },
+      {
+        "name": "cc-plugin-plugin-authoring",
+        "path": "builtin",
+        "source": "cc-plugin-plugin-authoring@builtin"
+      }
+    ],
+    "slash_commands": []
+  },
+  "controlsDiff": [],
+  "review": {
+    "date": "2026-10-10",
+    "scope": "Просмотрены все события собственных четырёх проб; пути, UUID, message/request IDs обезличены; секретов и пользовательского кода нет. Чужие транскрипты не читались."
+  },
+  "expected": {
+    "resultKind": "success",
+    "firstEvent": "run_started",
+    "controlsDiff": [],
+    "isolationVerified": false
+  }
+}

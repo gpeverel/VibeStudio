@@ -70,8 +70,13 @@ interface ProbeResult {
 let stand: AccessStand;
 let redactions: [string, string][] = [];
 const uuidAliases = new Map<string, string>();
+const protocolIdAliases = new Map<string, string>();
 const redact = (text: string): string => redactions.reduce((acc, [from, to]) => acc.split(from).join(to), text)
   .replace(/sk-ant-[A-Za-z0-9_-]+/g, '<REDACTED-KEY>')
+  .replace(/\b(?:msg|req|toolu)_[A-Za-z0-9]+/g, id => {
+    if (!protocolIdAliases.has(id)) protocolIdAliases.set(id, `<PROTOCOL-ID-${protocolIdAliases.size + 1}>`);
+    return protocolIdAliases.get(id)!;
+  })
   .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, uuid => {
     const key = uuid.toLowerCase();
     if (!uuidAliases.has(key)) uuidAliases.set(key, `<UUID-${uuidAliases.size + 1}>`);
