@@ -5,10 +5,16 @@ export const READ_ONLY_TOOLS = ['Read', 'Glob', 'Grep'] as const;
 export const BLOCKED_TOOLS = ['Bash', 'PowerShell', 'Edit', 'Write', 'NotebookEdit', 'Agent', 'Task', 'Skill', 'WebFetch', 'WebSearch'] as const;
 export interface ProfileIssue { reason: AgentErrorReason; detail: string }
 
+/** Причина отказа штатного запуска; успешные пробы сами по себе её не устраняют. */
+export const UNVERIFIED_ACCESS_DETAIL = 'Штатная среда запуска не обеспечивает файловые границы профиля и сеть provider-only; '
+  + 'эффективная managed-конфигурация не проверена. POSIX-группа не охватывает потомков, вышедших через setsid. '
+  + 'Нет AccessVerifier для обеспеченной и проверенной комбинации CLI, авторизации и профиля.';
+
 /** Это точка подключения проверенной среды исполнения, а не флаг из renderer.
  * Проверка должна привязываться ко всей комбинации CLI/авторизации/профиля/cwd/env,
- * включать script/symlink/hooks/MCP и отдельно общий Git-каталог.
- * Штатного подтверждения в 0C до живой приёмки нет. */
+ * учитывать эффективную managed-конфигурацию, обеспеченные файловые/сетевые границы,
+ * включать script/symlink/hooks/MCP/plugins и отдельно общий Git-каталог.
+ * Штатного подтверждения в 0C нет: живые пробы не заменяют механизм изоляции. */
 export interface AccessVerification {
   status: 'verified' | 'unverified' | 'unsupported';
   evidence: readonly string[];
