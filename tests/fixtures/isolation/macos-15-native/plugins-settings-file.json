@@ -1,0 +1,97 @@
+{
+  "origin": "local-nonmodel-auth-diagnostic",
+  "modelCalls": 0,
+  "results": [
+    {
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "--settings",
+        "<STAND>/one-run.settings.json",
+        "--help"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "stdoutBytes": 22116,
+      "stderrBytes": 0,
+      "authenticated": null,
+      "authMethod": null,
+      "builtinPlugins": null,
+      "diagnostic": ""
+    },
+    {
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "--setting-sources",
+        "",
+        "plugin",
+        "list",
+        "--help"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "stdoutBytes": 415,
+      "stderrBytes": 0,
+      "authenticated": null,
+      "authMethod": null,
+      "builtinPlugins": null,
+      "diagnostic": "",
+      "helpOptions": [
+        "--available",
+        "--json)",
+        "--data-size [plugin]",
+        "-h, --help",
+        "--json"
+      ]
+    },
+    {
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "--setting-sources",
+        "",
+        "plugin",
+        "list",
+        "--json"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "stdoutBytes": 3,
+      "stderrBytes": 0,
+      "authenticated": null,
+      "authMethod": null,
+      "builtinPlugins": [],
+      "diagnostic": ""
+    },
+    {
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "--setting-sources",
+        "",
+        "--settings",
+        "<STAND>/one-run.settings.json",
+        "plugin",
+        "list",
+        "--json"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "stdoutBytes": 3,
+      "stderrBytes": 0,
+      "authenticated": null,
+      "authMethod": null,
+      "builtinPlugins": [],
+      "diagnostic": ""
+    }
+  ],
+  "profile": "(version 1)\n(allow default)\n(deny network*)\n(deny file-write*)\n(deny file-read*)\n(allow file-read-metadata (vnode-type DIRECTORY))\n(allow file-read* (literal \"/\") (subpath \"/System/Library\") (subpath \"/usr/lib\") (subpath \"/usr/bin\") (subpath \"/bin\"))\n(allow file-read* (literal \"/dev/null\") (literal \"/dev/random\") (literal \"/dev/urandom\"))\n(allow file-write-data (literal \"/dev/null\"))\n(allow file-read* (subpath \"/usr/share/icu\"))\n(allow file-read* (subpath \"<HOME>/Library/Keychains\") (subpath \"/Library/Keychains\"))\n(allow file-read* (literal \"<CONFIG>/settings.json\") (literal \"<CONFIG>/plugins/installed_plugins.json\"))\n(allow file-read* (subpath \"/Library/Application Support/ClaudeCode\") (subpath \"/Library/Managed Preferences\"))\n(allow file-read* (literal \"<CLI>\") (literal \"<CONFIG>.json\") (literal \"<CONFIG>/.credentials.json\"))\n(allow file-read* file-write* (subpath \"<STAND>\"))",
+  "productionReady": false,
+  "limitations": [
+    "All non-file/non-network operations allowed, including Mach IPC",
+    "No token refresh/network tested",
+    "No effective managed policy attestation",
+    "No runtime-state writes tested"
+  ]
+}

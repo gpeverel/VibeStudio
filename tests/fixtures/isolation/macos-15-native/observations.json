@@ -1,0 +1,105 @@
+{
+  "modelCalls": 0,
+  "cliCalls": 0,
+  "productionReady": false,
+  "transport": "local-double-no-provider-contact",
+  "records": [
+    {
+      "name": "preexisting-hardlink-rejected",
+      "passed": true
+    },
+    {
+      "name": "inside-read",
+      "exitCode": 0,
+      "signal": null,
+      "stdout": "INSIDE",
+      "stderrBytes": 0
+    },
+    {
+      "name": "outside-read-denied",
+      "exitCode": 1,
+      "signal": null,
+      "stdout": "",
+      "stderrBytes": 120
+    },
+    {
+      "name": "common-git-write-denied",
+      "exitCode": 1,
+      "signal": null,
+      "stdout": "",
+      "stderrBytes": 122
+    },
+    {
+      "name": "runtime-write",
+      "exitCode": 0,
+      "signal": null,
+      "stdout": "",
+      "stderrBytes": 0
+    },
+    {
+      "name": "new-external-hardlink-denied",
+      "exitCode": 1,
+      "signal": null,
+      "stdout": "",
+      "stderrBytes": 119
+    },
+    {
+      "name": "api.anthropic.com:443",
+      "exitCode": 0,
+      "signal": null,
+      "stdout": "HTTP/1.1 200 Connection Established\r\n\r\nLOCAL-UPSTREAM",
+      "stderrBytes": 0
+    },
+    {
+      "name": "evil.invalid:443",
+      "exitCode": 0,
+      "signal": null,
+      "stdout": "HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
+      "stderrBytes": 0
+    },
+    {
+      "name": "private.invalid:443",
+      "exitCode": 0,
+      "signal": null,
+      "stdout": "HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
+      "stderrBytes": 0
+    },
+    {
+      "name": "direct-ipv4",
+      "exitCode": 1,
+      "signal": null,
+      "stdout": "",
+      "stderrBytes": 0
+    },
+    {
+      "name": "ipv6-positive-control-unwrapped",
+      "exitCode": 0,
+      "signal": null,
+      "stdout": "LOCAL-IPV6",
+      "stderrBytes": 0
+    },
+    {
+      "name": "direct-ipv6",
+      "exitCode": 1,
+      "signal": null,
+      "stdout": "",
+      "stderrBytes": 0
+    },
+    {
+      "name": "stop-result",
+      "exitCode": null,
+      "signal": "SIGTERM",
+      "stdout": "READY\n",
+      "stderrBytes": 0
+    },
+    {
+      "name": "setsid-survives-group-stop-under-same-seatbelt",
+      "exitCode": null,
+      "signal": "SIGTERM",
+      "stdout": "READY\n",
+      "stderrBytes": 0,
+      "markerAtDone": false,
+      "markerAfterDone": true
+    }
+  ]
+}

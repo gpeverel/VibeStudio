@@ -113,12 +113,12 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): AgentAd
           }
           const verification = await options.verifyAccess?.({ detection, request, args: built.args, env: built.env });
           if (finished || stopped) { finish({ kind: 'interrupted' }); return; }
-          if (!verification || verification.status !== 'verified' || !verification.evidence.length) {
+          if (!verification || verification.status !== 'verified' || !verification.evidence.length || typeof verification.launch !== 'function') {
             finish({ kind: 'error', reason: verification?.status === 'unsupported' ? 'profile_unsupported' : 'profile_unverified',
               detail: `Запуск заблокирован: ${verification?.detail.slice(0, 512) || UNVERIFIED_ACCESS_DETAIL}` }); return;
           }
           const parser = new ClaudeStreamParser({ ...options.parserLimits, expectedSessionId: request.agentSessionId });
-          processRun = runner.start({ executable: detection.binaryPath, args: built.args, cwd: request.cwd, stdin: built.stdin, env: built.env,
+          processRun = verification.launch({ executable: detection.binaryPath, args: built.args, cwd: request.cwd, stdin: built.stdin, env: built.env,
             timeoutMs: limits.timeoutMs, stopGraceMs: limits.stopGraceMs, drainTimeoutMs: limits.drainTimeoutMs, maxQueueBytes: limits.maxQueueBytes });
           emit({ type: 'run_started', agentSessionId: request.agentSessionId });
           const consume = async (stream: AsyncIterable<Uint8Array>, stderr: boolean): Promise<void> => {

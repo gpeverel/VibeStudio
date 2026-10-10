@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createClaudeAdapter } from '../../src/adapters/claude/index.ts';
 import type { ClaudeAdapterOptions } from '../../src/adapters/claude/index.ts';
 import type { AccessVerification } from '../../src/adapters/claude/profile.ts';
+import { createProcessRunner } from '../../src/adapters/process-runner/index.ts';
 import type { AgentCapabilities, AgentDetection, AgentEvent, AgentRun, AgentRunRequest, AgentRunResult } from '../../src/core/ports/agent.ts';
 import { readOnlyProfile, request } from '../helpers/claude/requests.ts';
 import { Stand, pidAlive, waitFor } from '../helpers/claude/stand.ts';
@@ -13,7 +14,8 @@ import type { FakeScenario, FakeStep } from '../helpers/claude/stand.ts';
 /*
  * ВАЖНО: это синтетическая проверка оркестрации адаптера на двойнике CLI (tests/helpers/claude/fake-claude.mjs).
  * Подтверждение доступа (verifyAccess) здесь — тестовая подстановка. Тесты НЕ доказывают ни формат потока
- * настоящей CLI, ни ограничения её профиля: это закрывается только живой приёмкой (LIVE=1).
+ * настоящей CLI, ни ограничения её профиля: нужны реальные fixtures и отдельные проверки ОС;
+ * успешная живая приёмка (LIVE=1) сама по себе не доказывает изоляцию.
  */
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'claude');
 const fixture = (name: string): string => readFileSync(join(FIXTURES, name), 'utf8');
@@ -32,7 +34,7 @@ const detection = (binaryPath: string | null, overrides: Partial<AgentDetection>
   status: 'unavailable', binaryPath, version: '2.1.295', auth: 'authenticated', capabilities: CAPS,
   unavailable: [{ reason: 'profile_unverified', detail: 'не подтверждено' }], ...overrides,
 });
-const VERIFIED: AccessVerification = { status: 'verified', evidence: ['synthetic-test-stub'], detail: 'подстановка теста' };
+const VERIFIED: AccessVerification = { status: 'verified', evidence: ['synthetic-test-stub'], detail: 'подстановка теста', launch: createProcessRunner().start };
 
 interface Harness { s: Stand; bin: string; adapter: ReturnType<typeof createClaudeAdapter>; req: (o?: Partial<AgentRunRequest>) => AgentRunRequest }
 function harness(scenario: FakeScenario, options: Partial<ClaudeAdapterOptions> = {}, det?: Partial<AgentDetection>): Harness {
@@ -387,6 +389,7 @@ describe('0C адаптер: диагностика блокирует запу�
   it('verified без доказательств, unverified и unsupported не запускают CLI; unsupported не заменяется слабым профилем', async () => {
     const cases: [AccessVerification, string][] = [
       [{ status: 'verified', evidence: [], detail: 'пусто' }, 'profile_unverified'],
+      [{ status: 'verified', evidence: ['unbound-strings'], detail: 'без изолированного launch' }, 'profile_unverified'],
       [{ status: 'unverified', evidence: ['x'], detail: '' }, 'profile_unverified'],
       [{ status: 'unsupported', evidence: [], detail: 'нельзя' }, 'profile_unsupported'],
     ];
@@ -394,6 +397,18 @@ describe('0C адаптер: диагностика блокирует запу�
       const h = harness({ steps: [out(fixture('success-simple.jsonl'))] }, { verifyAccess: async () => verification });
       expect(await blocked(h)).toMatchObject({ kind: 'error', reason });
     }
+  });
+
+  it('после проверки использует её launch, а не обычный runner', async () => {
+    let launches = 0;
+    const h = harness({ steps: [out(fixture('success-simple.jsonl'))] }, {
+      runner: { start: () => { throw new Error('Unverified spawn must not be used'); } },
+      verifyAccess: async () => ({ ...VERIFIED, launch: req => { launches++; return createProcessRunner().start(req); } }),
+    });
+    const run = await h.adapter.start(h.req());
+    await collect(run);
+    expect(await run.done).toMatchObject({ kind: 'success' });
+    expect(launches).toBe(1);
   });
 
   it('ослабленный профиль (Bash, запись, включённые hooks) отклоняется до диагностики и запуска', async () => {

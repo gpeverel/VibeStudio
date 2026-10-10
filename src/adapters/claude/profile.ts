@@ -1,5 +1,6 @@
 import { isAbsolute, relative, sep } from 'node:path';
 import type { AccessProfile, AgentErrorReason, AgentRunRequest, AgentDetection } from '../../core/ports/agent.ts';
+import type { ProcessRequest, ProcessRun } from '../../core/ports/process-runner.ts';
 
 export const READ_ONLY_TOOLS = ['Read', 'Glob', 'Grep'] as const;
 export const BLOCKED_TOOLS = ['Bash', 'PowerShell', 'Edit', 'Write', 'NotebookEdit', 'Agent', 'Task', 'Skill', 'WebFetch', 'WebSearch'] as const;
@@ -20,6 +21,9 @@ export interface AccessVerification {
   status: 'verified' | 'unverified' | 'unsupported';
   evidence: readonly string[];
   detail: string;
+  /** Возможность запуска от того же доверенного backend, который проверил границы.
+   * Одни строки evidence не разрешают обычный spawn. В production 0C реализации нет. */
+  launch?: (request: ProcessRequest) => ProcessRun;
 }
 export interface AccessVerificationContext {
   detection: AgentDetection;
