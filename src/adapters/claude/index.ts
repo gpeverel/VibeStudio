@@ -7,7 +7,7 @@ import { buildClaudeArgs, buildClaudeEnv } from './args.ts';
 import { detectClaude } from './detect.ts';
 import { ClaudeStreamParser } from './parser.ts';
 import type { ParserOptions } from './parser.ts';
-import { validateAccessProfile } from './profile.ts';
+import { UNVERIFIED_ACCESS_DETAIL, validateAccessProfile } from './profile.ts';
 import type { AccessVerifier } from './profile.ts';
 
 export interface ClaudeAdapterOptions {
@@ -115,7 +115,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): AgentAd
           if (finished || stopped) { finish({ kind: 'interrupted' }); return; }
           if (!verification || verification.status !== 'verified' || !verification.evidence.length) {
             finish({ kind: 'error', reason: verification?.status === 'unsupported' ? 'profile_unsupported' : 'profile_unverified',
-              detail: `Запуск заблокирован: ${verification?.detail.slice(0, 512) || 'обязательные границы доступа не подтверждены'}` }); return;
+              detail: `Запуск заблокирован: ${verification?.detail.slice(0, 512) || UNVERIFIED_ACCESS_DETAIL}` }); return;
           }
           const parser = new ClaudeStreamParser({ ...options.parserLimits, expectedSessionId: request.agentSessionId });
           processRun = runner.start({ executable: detection.binaryPath, args: built.args, cwd: request.cwd, stdin: built.stdin, env: built.env,
