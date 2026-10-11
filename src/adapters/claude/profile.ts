@@ -1,5 +1,6 @@
 import { isAbsolute, relative, sep } from 'node:path';
 import type { AccessProfile, AgentErrorReason, AgentRunRequest, AgentDetection } from '../../core/ports/agent.ts';
+import type { ProcessRequest, ProcessRun } from '../../core/ports/process-runner.ts';
 
 export const READ_ONLY_TOOLS = ['Read', 'Glob', 'Grep'] as const;
 export const BLOCKED_TOOLS = ['Bash', 'PowerShell', 'Edit', 'Write', 'NotebookEdit', 'Agent', 'Task', 'Skill', 'WebFetch', 'WebSearch'] as const;
@@ -7,7 +8,8 @@ export interface ProfileIssue { reason: AgentErrorReason; detail: string }
 
 /** Причина отказа штатного запуска; успешные пробы сами по себе её не устраняют. */
 export const UNVERIFIED_ACCESS_DETAIL = 'Штатная среда запуска не обеспечивает файловые границы профиля и сеть provider-only; '
-  + 'эффективная managed-конфигурация не проверена. POSIX-группа не охватывает потомков, вышедших через setsid. '
+  + 'эффективная managed-конфигурация не проверена, CLI-флаги не подтверждают отключение builtin plugins. '
+  + 'POSIX-группа не охватывает потомков, вышедших через setsid. '
   + 'Нет AccessVerifier для обеспеченной и проверенной комбинации CLI, авторизации и профиля.';
 
 /** Это точка подключения проверенной среды исполнения, а не флаг из renderer.
@@ -19,6 +21,9 @@ export interface AccessVerification {
   status: 'verified' | 'unverified' | 'unsupported';
   evidence: readonly string[];
   detail: string;
+  /** Возможность запуска от того же доверенного backend, который проверил границы.
+   * Одни строки evidence не разрешают обычный spawn. В production 0C реализации нет. */
+  launch?: (request: ProcessRequest) => ProcessRun;
 }
 export interface AccessVerificationContext {
   detection: AgentDetection;

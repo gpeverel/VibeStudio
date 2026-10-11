@@ -1,0 +1,284 @@
+{
+  "origin": "real-local-nonmodel-fork-probe",
+  "complete": true,
+  "darwin": "24.0.0",
+  "node": "v24.15.0",
+  "cliHash": "0116ee2e0a513900b633d9951367f18747686478e2b462805b8c31609f047f70",
+  "modelCalls": 0,
+  "cliCalls": 10,
+  "productionReady": false,
+  "records": [
+    {
+      "name": "fork-allow",
+      "exitCode": 0,
+      "signal": null,
+      "stdout": "CHILD_STARTED",
+      "stderrBytes": 0
+    },
+    {
+      "name": "fork-deny",
+      "exitCode": 42,
+      "signal": null,
+      "stdout": "DENIED errno=1",
+      "stderrBytes": 0
+    },
+    {
+      "name": "spawn-allow",
+      "exitCode": 0,
+      "signal": null,
+      "stdout": "CHILD_STARTED",
+      "stderrBytes": 0
+    },
+    {
+      "name": "spawn-deny",
+      "exitCode": 42,
+      "signal": null,
+      "stdout": "DENIED errno=1",
+      "stderrBytes": 0
+    },
+    {
+      "name": "help",
+      "denyFork": false,
+      "processOnly": false,
+      "trace": false,
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "--setting-sources",
+        "",
+        "--settings",
+        "<STAND>/settings.json",
+        "--help"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "stdoutBytes": 22116,
+      "stderrBytes": 0,
+      "authenticated": null,
+      "authMethod": null,
+      "securityTrace": []
+    },
+    {
+      "name": "auth-status",
+      "denyFork": false,
+      "processOnly": false,
+      "trace": false,
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "--setting-sources",
+        "",
+        "--settings",
+        "<STAND>/settings.json",
+        "auth",
+        "status"
+      ],
+      "exitCode": 1,
+      "signal": null,
+      "stdoutBytes": 217,
+      "stderrBytes": 0,
+      "authenticated": false,
+      "authMethod": "none",
+      "securityTrace": []
+    },
+    {
+      "name": "plugin-list",
+      "denyFork": false,
+      "processOnly": false,
+      "trace": false,
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "--setting-sources",
+        "",
+        "--settings",
+        "<STAND>/settings.json",
+        "plugin",
+        "list",
+        "--json"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "stdoutBytes": 3,
+      "stderrBytes": 0,
+      "authenticated": null,
+      "authMethod": null,
+      "securityTrace": []
+    },
+    {
+      "name": "help",
+      "denyFork": true,
+      "processOnly": false,
+      "trace": false,
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "--setting-sources",
+        "",
+        "--settings",
+        "<STAND>/settings.json",
+        "--help"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "stdoutBytes": 22116,
+      "stderrBytes": 0,
+      "authenticated": null,
+      "authMethod": null,
+      "securityTrace": []
+    },
+    {
+      "name": "auth-status",
+      "denyFork": true,
+      "processOnly": false,
+      "trace": false,
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "--setting-sources",
+        "",
+        "--settings",
+        "<STAND>/settings.json",
+        "auth",
+        "status"
+      ],
+      "exitCode": 1,
+      "signal": null,
+      "stdoutBytes": 217,
+      "stderrBytes": 0,
+      "authenticated": false,
+      "authMethod": "none",
+      "securityTrace": []
+    },
+    {
+      "name": "plugin-list",
+      "denyFork": true,
+      "processOnly": false,
+      "trace": false,
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "--setting-sources",
+        "",
+        "--settings",
+        "<STAND>/settings.json",
+        "plugin",
+        "list",
+        "--json"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "stdoutBytes": 3,
+      "stderrBytes": 0,
+      "authenticated": null,
+      "authMethod": null,
+      "securityTrace": []
+    },
+    {
+      "name": "auth-process-only",
+      "denyFork": false,
+      "processOnly": true,
+      "trace": false,
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "--setting-sources",
+        "",
+        "--settings",
+        "<STAND>/settings.json",
+        "auth",
+        "status"
+      ],
+      "exitCode": 1,
+      "signal": null,
+      "stdoutBytes": 217,
+      "stderrBytes": 0,
+      "authenticated": false,
+      "authMethod": "none",
+      "securityTrace": []
+    },
+    {
+      "name": "auth-process-only",
+      "denyFork": true,
+      "processOnly": true,
+      "trace": false,
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "--setting-sources",
+        "",
+        "--settings",
+        "<STAND>/settings.json",
+        "auth",
+        "status"
+      ],
+      "exitCode": 1,
+      "signal": null,
+      "stdoutBytes": 217,
+      "stderrBytes": 0,
+      "authenticated": false,
+      "authMethod": "none",
+      "securityTrace": []
+    },
+    {
+      "name": "auth-security-trace",
+      "denyFork": false,
+      "processOnly": true,
+      "trace": true,
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "--setting-sources",
+        "",
+        "--settings",
+        "<STAND>/settings.json",
+        "auth",
+        "status"
+      ],
+      "exitCode": 1,
+      "signal": null,
+      "stdoutBytes": 217,
+      "stderrBytes": 0,
+      "authenticated": false,
+      "authMethod": "none",
+      "securityTrace": [
+        "find-generic-password",
+        "find-generic-password",
+        "exit-44",
+        "exit-44"
+      ]
+    },
+    {
+      "name": "auth-security-trace",
+      "denyFork": true,
+      "processOnly": true,
+      "trace": true,
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "--setting-sources",
+        "",
+        "--settings",
+        "<STAND>/settings.json",
+        "auth",
+        "status"
+      ],
+      "exitCode": 1,
+      "signal": null,
+      "stdoutBytes": 217,
+      "stderrBytes": 0,
+      "authenticated": false,
+      "authMethod": "none",
+      "securityTrace": []
+    }
+  ],
+  "limitedAllowProfile": "(version 1)\n(allow default)\n(deny network*)\n(deny file-write*)\n(deny file-read*)\n(allow file-read-metadata (vnode-type DIRECTORY))\n(allow file-read* (literal \"/\") (subpath \"/System/Library\") (subpath \"/usr/lib\") (subpath \"/usr/share/icu\") (subpath \"/usr/bin\") (subpath \"/bin\"))\n(allow file-read* (literal \"/dev/null\") (literal \"/dev/random\") (literal \"/dev/urandom\"))\n(allow file-read* (literal \"<CLI>\") (literal \"<CONFIG>.json\") (literal \"<CONFIG>/.credentials.json\") (literal \"<CONFIG>/settings.json\"))\n(allow file-read* (subpath \"<HOME>/Library/Keychains\") (subpath \"/Library/Keychains\") (subpath \"/Library/Application Support/ClaudeCode\") (subpath \"/Library/Managed Preferences\"))\n(allow file-write-data (literal \"/dev/null\"))\n(allow file-read* file-write* (subpath \"<STAND>\"))",
+  "limitedDenyProfile": "(version 1)\n(allow default)\n(deny network*)\n(deny file-write*)\n(deny process-fork)\n(deny file-read*)\n(allow file-read-metadata (vnode-type DIRECTORY))\n(allow file-read* (literal \"/\") (subpath \"/System/Library\") (subpath \"/usr/lib\") (subpath \"/usr/share/icu\") (subpath \"/usr/bin\") (subpath \"/bin\"))\n(allow file-read* (literal \"/dev/null\") (literal \"/dev/random\") (literal \"/dev/urandom\"))\n(allow file-read* (literal \"<CLI>\") (literal \"<CONFIG>.json\") (literal \"<CONFIG>/.credentials.json\") (literal \"<CONFIG>/settings.json\"))\n(allow file-read* (subpath \"<HOME>/Library/Keychains\") (subpath \"/Library/Keychains\") (subpath \"/Library/Application Support/ClaudeCode\") (subpath \"/Library/Managed Preferences\"))\n(allow file-write-data (literal \"/dev/null\"))\n(allow file-read* file-write* (subpath \"<STAND>\"))",
+  "processOnlyDenyProfile": "(version 1)\n(allow default)\n(deny network*)\n(deny file-write*)\n(deny process-fork)\n(allow file-write-data (literal \"/dev/null\"))\n(allow file-read* file-write* (subpath \"<STAND>\"))",
+  "limitations": [
+    "Auth subcommands only; no transcript access intended",
+    "Diagnostic Mach IPC unrestricted",
+    "No Read/Glob/Grep/persistence/resume model verification",
+    "Managed/builtin/runtime/inode/provider gates remain open"
+  ]
+}

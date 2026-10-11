@@ -164,11 +164,61 @@ describe('0C стенд доступа: сравнение «до/после» �
     expect(diffSnapshots(before, s.snapshot())).toEqual(expect.arrayContaining(['file:project-mcp', 'file:plugin-manifest']));
   });
 
+  it.each(['main', 'worktree'] as const)('порча index в %s той же длины обнаруживается', (root) => {
+    const s = make();
+    const path = standGit(s[root], 'rev-parse', '--path-format=absolute', '--git-path', 'index').trim();
+    const before = s.snapshot();
+    const bytes = readFileSync(path);
+    bytes[bytes.length - 1] = bytes[bytes.length - 1]! ^ 1;
+    writeFileSync(path, bytes);
+    expect(diffSnapshots(before, s.snapshot())).toContain('git:common-dir');
+  });
+
+  it('порча Git-объекта той же длины обнаруживается', () => {
+    const s = make();
+    const oid = standGit(s.main, 'rev-parse', 'HEAD:README.md').trim();
+    const path = join(s.gitCommonDir, 'objects', oid.slice(0, 2), oid.slice(2));
+    const before = s.snapshot();
+    const mode = lstatSync(path).mode & 0o7777;
+    const bytes = readFileSync(path);
+    bytes[bytes.length - 1] = bytes[bytes.length - 1]! ^ 1;
+    chmodSync(path, mode | 0o200); // Git создаёт объект без бита записи.
+    writeFileSync(path, bytes);
+    chmodSync(path, mode); // Снимок должен заметить именно содержимое, не chmod.
+    expect(diffSnapshots(before, s.snapshot())).toContain('git:common-dir');
+  });
+
+  it('удаление симлинка и повреждённый index не мешают сохранить различия', () => {
+    const s = make();
+    const before = s.snapshot();
+    rmSync(s.files.symlink);
+    writeFileSync(join(s.gitCommonDir, 'index'), 'broken');
+    const diff = diffSnapshots(before, s.snapshot());
+    expect(diff).toEqual(expect.arrayContaining(['git:common-dir', 'git:main-status', 'link:target']));
+  });
+
+  it('ссылка-цикл внутри общего Git-каталога фиксируется без обхода цели', () => {
+    const s = make();
+    const before = s.snapshot();
+    symlinkSync(s.gitCommonDir, join(s.gitCommonDir, 'loop'));
+    expect(diffSnapshots(before, s.snapshot())).toContain('git:common-dir');
+  });
+
   it('снимок сам не изменяет стенд (повторные снимки совпадают, индекс не обновляется)', () => {
     const s = make();
     const first = s.snapshot();
     const second = s.snapshot();
     expect(diffSnapshots(first, second)).toEqual([]);
     expect(existsSync(join(s.gitCommonDir, 'index.lock'))).toBe(false);
+  });
+
+  it('снимок не запускает fsmonitor из изменённого Git-config', () => {
+    const s = make();
+    const before = s.snapshot();
+    const quote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
+    standGit(s.main, 'config', '--local', 'core.fsmonitor', `${quote(process.execPath)} ${quote(s.attack.hook)}`);
+    expect(diffSnapshots(before, s.snapshot())).toEqual(expect.arrayContaining(['git:config', 'git:common-dir']));
+    expect(existsSync(join(s.markers, 'hook.ran'))).toBe(false);
+    expect(readFileSync(s.files.main, 'utf8')).toBe(CONTROL_CONTENT.main);
   });
 });

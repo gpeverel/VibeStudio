@@ -1,0 +1,68 @@
+{
+  "origin": "real-local-nonmodel-fork-probe",
+  "complete": true,
+  "darwin": "24.0.0",
+  "node": "v24.15.0",
+  "cliHash": "0116ee2e0a513900b633d9951367f18747686478e2b462805b8c31609f047f70",
+  "modelCalls": 0,
+  "cliCalls": 2,
+  "productionReady": false,
+  "normalFilesAuthControl": true,
+  "records": [
+    {
+      "name": "auth-normal-files-control",
+      "denyFork": false,
+      "processOnly": true,
+      "trace": false,
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "--setting-sources",
+        "",
+        "--settings",
+        "<STAND>/settings.json",
+        "auth",
+        "status"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "stdoutBytes": 388,
+      "stderrBytes": 0,
+      "authenticated": true,
+      "authMethod": "claude.ai",
+      "securityTrace": []
+    },
+    {
+      "name": "auth-normal-files-control",
+      "denyFork": true,
+      "processOnly": true,
+      "trace": false,
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "--setting-sources",
+        "",
+        "--settings",
+        "<STAND>/settings.json",
+        "auth",
+        "status"
+      ],
+      "exitCode": 1,
+      "signal": null,
+      "stdoutBytes": 217,
+      "stderrBytes": 0,
+      "authenticated": false,
+      "authMethod": "none",
+      "securityTrace": []
+    }
+  ],
+  "limitedAllowProfile": "(version 1)\n(allow default)\n(deny network*)",
+  "limitedDenyProfile": "(version 1)\n(allow default)\n(deny network*)\n(deny process-fork)",
+  "processOnlyDenyProfile": "(version 1)\n(allow default)\n(deny network*)\n(deny process-fork)",
+  "limitations": [
+    "Auth subcommands only; no transcript access intended",
+    "Diagnostic Mach IPC unrestricted",
+    "No Read/Glob/Grep/persistence/resume model verification",
+    "Managed/builtin/runtime/inode/provider gates remain open"
+  ]
+}

@@ -1,0 +1,143 @@
+{
+  "origin": "real-redacted",
+  "reviewRequired": false,
+  "label": "02-persist",
+  "cliPath": "/opt/homebrew/bin/claude",
+  "cliVersion": "2.1.295 (Claude Code)",
+  "turnId": "<UUID-27>",
+  "agentSessionId": "<UUID-15>",
+  "argv": [
+    "--print",
+    "--verbose",
+    "--input-format",
+    "text",
+    "--output-format",
+    "stream-json",
+    "--include-partial-messages",
+    "--restricted",
+    "--safe-mode",
+    "--setting-sources",
+    "",
+    "--strict-mcp-config",
+    "--mcp-config",
+    "{\"mcpServers\":{}}",
+    "--tools",
+    "Read,Glob,Grep",
+    "--permission-mode",
+    "dontAsk",
+    "--permission-prompts",
+    "none",
+    "--disable-slash-commands",
+    "--no-chrome",
+    "--disallowedTools",
+    "Bash,PowerShell,Edit,Write,NotebookEdit,Agent,Task,Skill,WebFetch,WebSearch",
+    "--system-prompt-snapshot",
+    "off",
+    "--append-system-prompt",
+    "Твоя задача передана в сообщении пользователя.\n\n- ЯЗЫК ОБЩЕНИЯ: Пиши ВСЕ сообщения, пояснения, рассуждения вслух и — обязательно — финальный отчёт/итог на РУССКОМ языке. Задача, код, пути к файлам и команды могут быть на английском, но любой текст, который увидит пользователь (в том числе итоговое резюме), должен быть на русском. Технические идентификаторы (имена файлов, функций, команды) не переводи.\n- Используй только инструменты и доступ, предоставленные текущим запуском. Если задача требует недоступного действия, сообщи об ограничении текстом.\n- Если нужно уточнение пользователя, задай вопрос текстом. Ответ пользователя поступит отдельным следующим ходом.",
+    "--session-id",
+    "<UUID-15>"
+  ],
+  "experimentalArgv": [],
+  "stdinBytes": 91,
+  "cwd": "<TEMP>/worktree",
+  "envNames": [
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+    "DISABLE_AUTOUPDATER",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "LOGNAME",
+    "PATH",
+    "TMPDIR",
+    "USER"
+  ],
+  "profile": {
+    "mode": "read-only",
+    "tools": [
+      "Read",
+      "Glob",
+      "Grep"
+    ],
+    "allow": [],
+    "deny": [],
+    "configPolicy": {
+      "settingSources": [],
+      "loadHooks": false,
+      "loadMcp": false,
+      "loadPlugins": false
+    },
+    "fs": {
+      "readRoots": [
+        "<TEMP>/worktree"
+      ],
+      "writeRoots": [],
+      "runtimeWriteRoots": [],
+      "protectedPaths": [
+        "<TEMP>/main",
+        "<TEMP>/outside"
+      ],
+      "gitCommonDir": "<TEMP>/main/.git"
+    },
+    "network": "provider-only"
+  },
+  "persist": true,
+  "resume": false,
+  "exitCode": 0,
+  "signal": null,
+  "stderrBytes": 0,
+  "groupAliveAfterExit": false,
+  "overBudget": false,
+  "normalizedEventTypes": [
+    "run_started",
+    "usage",
+    "text",
+    "rate_limit",
+    "usage"
+  ],
+  "result": {
+    "kind": "success",
+    "text": "Запомнил.",
+    "usage": {
+      "inputTokens": 2,
+      "outputTokens": 8,
+      "cacheReadTokens": 3924,
+      "cacheCreationTokens": 1034,
+      "costUsd": 0.0092248,
+      "durationMs": 1365
+    }
+  },
+  "initShape": {
+    "tools": [
+      "Glob",
+      "Grep",
+      "Read"
+    ],
+    "mcp_servers": [],
+    "plugins": [
+      {
+        "name": "cc-plugin-agents-md",
+        "path": "builtin",
+        "source": "cc-plugin-agents-md@builtin"
+      },
+      {
+        "name": "cc-plugin-plugin-authoring",
+        "path": "builtin",
+        "source": "cc-plugin-plugin-authoring@builtin"
+      }
+    ],
+    "slash_commands": []
+  },
+  "controlsDiff": [],
+  "review": {
+    "date": "2026-10-10",
+    "scope": "Просмотрены все события собственных четырёх проб; пути, UUID, message/request IDs обезличены; секретов и пользовательского кода нет. Чужие транскрипты не читались."
+  },
+  "expected": {
+    "resultKind": "success",
+    "firstEvent": "run_started",
+    "controlsDiff": [],
+    "isolationVerified": false
+  }
+}
