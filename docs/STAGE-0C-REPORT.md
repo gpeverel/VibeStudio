@@ -314,3 +314,56 @@ Production **не готов к реальному доступу**, `profile_un
 **Не подтверждено:** полная изоляция native CLI с нормальной auth/runtime; полный stop (есть конкретный отрицательный результат); атомарность inode-профиля; эффективная managed/builtin конфигурация; provider-only с auth/Mach и TLS без обхода; замена инструкции при resume. Необязательные старые 05–07 не запускались, 04 не повторялась.
 
 **Завершить 0C нельзя.** Реализация остаётся profile_unverified. Нужна архитектурная замена process-group ownership и доказательства остальных gates, а не ещё один live-runner. Условный новый набор N1–N3 остаётся **не согласованным и не исполнимым**, пока native gate не готов; число модельных запусков сейчас нулевое. Этап 1 не затронут.
+
+## Заключительное исследование fork-deny, 2026-10-11
+
+Работа одним агентом, только в уже согласованном native-прототипе. Подробный конечный вывод и матрица — [последний раздел STAGE-0C-NATIVE.md](STAGE-0C-NATIVE.md#заключение-fork-deny-исследования-2026-10-11). Сначала git status был чистым; production adapter/ProcessRunner/AccessVerifier не менялись. Новые модельные вызовы, --version, login, --print/prompt, старый live-runner и повтор 04: **0**. Этап 1, VM, системные службы, переподпись и изменения политик ОС не реализовывались.
+
+### Готовность реализации и установленная обязательная зависимость
+
+Добавлена немодельная лаборатория `tests/isolation/macos-fork.probe.ts`, LIVE=1, собственный одноразовый Git repo, настоящий production ProcessRunner + Seatbelt. Фиксированный основной набор: четыре C-контроля fork/posix_spawn и **10 CLI subcommands**. Затем ровно **два** заключительных auth status для устранения файлового confound. Набор завершён, повторов/расширения модели не было. На process 10 с, stop/drain по 500 мс, queue 64 KiB. Исходные evidence directories оставлены; собственные repo/targets удалены. Чужие процессы/транскрипты не читались и не удалялись.
+
+- `(deny process-fork)` действительно запрещает **fork и posix_spawn**: EPERM errno 1, exit 42 у нашего helper; оба положительных allow-контроля exit 0, CHILD_STARTED.
+- Неизменённая CLI 2.1.295 запускается с запретом детей: help exit 0, stderr 0, plugin list exit 0. Это только диагностические subcommands, не Read/Glob/Grep/persistence/resume и не effective builtin inventory.
+- В прежнем ограниченном файловом профиле auth false **в обоих** процессных вариантах; эта пара не доказывает причину. Даже снятие ограничений чтения при сохранении write-deny не помогло; точный runtime/Keychain-write ресурс не локализован.
+- Runtime-инструментация PATH зарегистрировала **инициируемый самой CLI** `security find-generic-password`, а не project hook/script/tool. Сохранялись только предопределённые operation/exit markers, без account/service аргументов и credential stdout; настоящий `/usr/bin/security` передавал stdout в штатный pipe CLI. В ограниченном control helper exit 44, при fork-deny wrapper не стартует. Статическая последовательность этого вызова найдена в установленном бинарнике.
+- **Заключительный чистый A/B:** обычная файловая доступность, закрытая сеть, штатные HOME/Keychain, одинаковые CLI flags, никакого wrapper. Единственная разница профилей — deny process-fork, проверена сравнением. Allow: **authenticated true, claude.ai, CLI exit 0**. Deny: **false, none, exit 1**. Так установлена несовместимость именно **полного запрета детей и выбранной auth у установленной CLI**, а не невозможность native-auth вообще.
+
+Нормальный файловый auth-control — диагностическое исключение для локализации зависимости, **не production fs profile**; ему нельзя приписывать readRoots/protectedPaths/runtimeWriteRoots. HOME/configDir не менялись, secrets в иной auth источник не переносились. После проб отдельно проверены booleans: API/OAuth env отсутствуют, configDir не задан, fallback .credentials.json отсутствует; файл не читался. CLI SHA-256 совпадает с прежним 2.1.295. Raw CLI/security stdout/stderr и accounts/credentials не сохранены. Положительный auth status не доказывает provider request или token refresh.
+
+### Конечное решение
+
+Гипотеза «запретить всех детей у неизменённой CLI и сохранить нужный 0C со штатным Keychain» **опровергнута** обязательной auth операцией, независимо от будущего поведения Read/Glob/Grep. Получение credentials нужно для диагностики/запуска по SPEC §4/§10 и для выбранной пользователем комбинации. Help этого не заменяет.
+
+Сочетание разрешённого fork и POSIX-group stop уже опровергнуто прежним setsid-контрпримером. Исключение только на executable security/rg при полном fork-deny не помогает: child creation запрещено до exec. Если снова разрешить fork, exec allowlist сама по себе не предотвращает fork→setsid без exec. PID polling не получает гарантии владения.
+
+**Необходимое архитектурное изменение при сохранении неизменённой CLI/Keychain:** заменить владение одной POSIX-группой обеспеченным изолированным runtime backend, который разрешает необходимые helpers, но гарантирует stopAll для всех процессов своего runtime до done, независимо от setsid/reparent. Проверенный runtime-handle должен одновременно связывать prepare/start/stop/close и launch от AccessVerifier. Такого backend в текущей разрешённой native-комбинации нет; произвольная служба или supervisor автоматически им не становятся. Если сохранять полный fork-deny, вместо этого нужна другая CLI/auth-интеграция с обработкой Keychain внутри процесса; это меняет исходную комбинацию и не внедрялось. Подстановка secrets в API/OAuth env не выдаётся за сохранение штатного механизма.
+
+Это конечное решение по проверенным вариантам, не начало ещё одного общего исследовательского цикла. **0C остаётся заблокированным / profile_unverified**; production verifier/verified/evidence не добавлены. В текущих ограничениях рабочий вариант для неизменённой CLI со штатным Keychain не получен. Изменение архитектуры исполнения либо CLI/auth — решение отдельно от модельного бюджета.
+
+### Автоматические проверки после изменения лаборатории
+
+Все команды через **scripts/with-node.sh / Node v24.15.0**. Production код, зависимости, lockfile и SQLite/ABI не менялись; тесты не ослаблялись.
+
+| Проверка | Фактический результат |
+|---|---|
+| `npm test` | **exit 0, 262/262**, 11 файлов, 127,65 с |
+| `npm run test:node` | **exit 0, 78/78**, fail/cancelled/skipped/todo 0, 125,52 с |
+| `npm run typecheck` | exit 0 |
+| `npm run lint` | exit 0, max-warnings 0 |
+| `npm run check:boundaries` | exit 0, 31 модуль / 50 зависимостей |
+| `npm run build` | exit 0 |
+| `npm run smoke` после сборки | **exit 0**, окно/preload проверены с техническими GUI-правами |
+| Основная fork-лаборатория | exit 0 скрипта наблюдений, 14 records: четыре ОС-контроля и десять CLI diagnostics |
+| Дополнительный normal-files auth-control | exit 0 скрипта наблюдений, два records; реальные CLI exit **0 / 1**, не общий «profile passed» |
+| `git diff --check` | exit 0 |
+
+Логи: `/tmp/vs-0c-fork-vitest.log`, `/tmp/vs-0c-fork-node.log`. Новые обезличенные **реальные немодельные** fixtures: `tests/fixtures/isolation/macos-15-fork/`, отдельно от synthetic/real model streams и предыдущих OS-проб. Исторические успешные smoke, 01–03 и четыре real Claude fixtures сохранены без изменений.
+
+### Подтверждённые и неподтверждённые критерии
+
+**Новое подтверждение:** прямой kernel fork/spawn denial; help/plugin list без детей; доступность штатной локальной auth в normal-files control; её отказ от единственного добавления fork-deny; конкретный инициатор/операция Keychain helper. Это не живая приёмка read-only профиля.
+
+**Прежние живые подтверждения:** протокол, сохранение, настоящий resume по 01–03. **Не подтверждены новым профилем:** Read/Glob/Grep, persistence/resume, замена инструкции при resume; provider request/refresh. Нельзя выводить необходимость rg-child для 0C без выполнения конкретной операции.
+
+**Другие открытые gates сохранены:** effective managed/builtin (init.plugins [] не ослаблен), точные штатные runtime-write исключения, атомарность inode-области, полный provider-only включая auth/Mach/TLS. Прямой fork-deny не доказывает закрытие запуска через все IPC и не закрывает эти границы. Новые модели/05–07/N1–N3 пока не запускаются. Завершить 0C нельзя.
