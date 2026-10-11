@@ -1,0 +1,42 @@
+{
+  "origin": "local-nonmodel-auth-diagnostic",
+  "modelCalls": 0,
+  "results": [
+    {
+      "argv": [
+        "--help"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "stdoutBytes": 22116,
+      "stderrBytes": 0,
+      "authenticated": null,
+      "authMethod": null,
+      "builtinPlugins": null,
+      "diagnostic": ""
+    },
+    {
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "auth",
+        "status"
+      ],
+      "exitCode": 1,
+      "signal": null,
+      "stdoutBytes": 217,
+      "stderrBytes": 0,
+      "authenticated": false,
+      "authMethod": "none",
+      "builtinPlugins": null
+    }
+  ],
+  "profile": "(version 1)\n(allow default)\n(deny network*)\n(deny file-write*)\n(deny file-read*)\n(allow file-read-metadata (vnode-type DIRECTORY))\n(allow file-read* (literal \"/\") (subpath \"/System/Library\") (subpath \"/usr/lib\") (subpath \"/usr/bin\") (subpath \"/bin\"))\n(allow file-read* (literal \"/dev/null\") (literal \"/dev/random\") (literal \"/dev/urandom\"))\n(allow file-write-data (literal \"/dev/null\"))\n(allow file-read* (subpath \"/usr/share/icu\"))\n(allow file-read* (subpath \"<HOME>/Library/Keychains\") (subpath \"/Library/Keychains\"))\n(allow file-read* (literal \"<CLI>\") (literal \"<CONFIG>.json\") (literal \"<CONFIG>/.credentials.json\"))\n(allow file-read* file-write* (subpath \"<STAND>\"))",
+  "productionReady": false,
+  "limitations": [
+    "All non-file/non-network operations allowed, including Mach IPC",
+    "No token refresh/network tested",
+    "No effective managed policy attestation",
+    "No runtime-state writes tested"
+  ]
+}

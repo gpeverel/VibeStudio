@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildClaudeArgs, buildClaudeEnv } from '../../src/adapters/claude/args.ts';
 import { ClaudeStreamParser } from '../../src/adapters/claude/parser.ts';
 import { createProcessRunner } from '../../src/adapters/process-runner/index.ts';
@@ -11,6 +11,8 @@ import type { ProcessResult } from '../../src/core/ports/process-runner.ts';
 import { createAccessStand, diffSnapshots } from '../helpers/claude/access-stand.ts';
 import type { AccessStand } from '../helpers/claude/access-stand.ts';
 import { readOnlyProfile, request } from '../helpers/claude/requests.ts';
+import { collectProbeStdout } from '../helpers/claude/probe-output.ts';
+import type { ProbeOutput } from '../helpers/claude/probe-output.ts';
 
 /*
  * ЖИВАЯ приёмка Claude CLI (этап 0C). Запускается ТОЛЬКО так:
@@ -68,8 +70,13 @@ interface ProbeResult {
 let stand: AccessStand;
 let redactions: [string, string][] = [];
 const uuidAliases = new Map<string, string>();
+const protocolIdAliases = new Map<string, string>();
 const redact = (text: string): string => redactions.reduce((acc, [from, to]) => acc.split(from).join(to), text)
   .replace(/sk-ant-[A-Za-z0-9_-]+/g, '<REDACTED-KEY>')
+  .replace(/\b(?:msg|req|toolu)_[A-Za-z0-9]+/g, id => {
+    if (!protocolIdAliases.has(id)) protocolIdAliases.set(id, `<PROTOCOL-ID-${protocolIdAliases.size + 1}>`);
+    return protocolIdAliases.get(id)!;
+  })
   .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, uuid => {
     const key = uuid.toLowerCase();
     if (!uuidAliases.has(key)) uuidAliases.set(key, `<UUID-${uuidAliases.size + 1}>`);
@@ -92,6 +99,7 @@ interface ProbeOptions { prompt: string; agentSessionId: string; resume?: boolea
 async function probe(label: string, options: ProbeOptions): Promise<ProbeResult> {
   const profile = liveProfile();
   const req = request(stand.worktree, {
+    turnId: randomUUID(),
     prompt: options.prompt, agentSessionId: options.agentSessionId, resume: options.resume ?? false,
     persistSession: options.persist ?? true, model: options.model, profile,
     env: Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
@@ -100,60 +108,39 @@ async function probe(label: string, options: ProbeOptions): Promise<ProbeResult>
   const args = [...built.args, ...(options.extraArgs ?? [])];
   const before = stand.snapshot();
   const parser = new ClaudeStreamParser({ expectedSessionId: options.agentSessionId });
-  const payloads: NormalizedPayload[] = [];
-  const rawLines: string[] = [];
-  let buffer = '';
+  let output: ProbeOutput;
   let stderrBytes = 0;
-  let stdoutBytes = 0;
-  let overBudget = false;
   let init: InitEvent | undefined;
-  const decoder = new TextDecoder();
-  const takeLine = (line: string): void => {
-    rawLines.push(line);
-    try {
-      const value = JSON.parse(line) as { type?: string; subtype?: string };
-      if (value.type === 'system' && value.subtype === 'init') init = value as InitEvent;
-    } catch { /* ошибку протокола фиксирует parser */ }
-  };
   let done: ProcessResult;
   let alive = false;
   let controlsDiff: string[] = [];
   try {
     const run = runner.start({ executable: CLAUDE, args, cwd: stand.worktree, env: built.env, stdin: built.stdin, timeoutMs: 90_000, stopGraceMs: 2_000, drainTimeoutMs: 2_000, maxQueueBytes: 8_388_608 });
-    await Promise.all([
-      (async () => {
-        for await (const chunk of run.stdout) {
-          stdoutBytes += chunk.byteLength;
-          if (stdoutBytes > MAX_STDOUT_BYTES) { overBudget = true; void run.kill(); break; }
-          payloads.push(...parser.feed(chunk));
-          if (parser.error) { void run.kill(); break; }
-          buffer += decoder.decode(chunk, { stream: true });
-          let index: number;
-          while ((index = buffer.indexOf('\n')) !== -1) {
-            takeLine(buffer.slice(0, index));
-            buffer = buffer.slice(index + 1);
-          }
-        }
-        buffer += decoder.decode();
-        if (buffer.length) takeLine(buffer);
-      })(),
+    [output] = await Promise.all([
+      collectProbeStdout(run, parser, MAX_STDOUT_BYTES),
       (async () => { for await (const chunk of run.stderr) stderrBytes += chunk.byteLength; })(),
     ]);
-    payloads.push(...parser.end());
     done = await run.done;
     alive = groupAlive(run.pid);
   } finally {
-    // Сравнение — до восстановления: иначе вмешательство в контроль пропало бы незамеченным.
-    controlsDiff = diffSnapshots(before, stand.snapshot());
-    stand.restoreControls();
+    // Живая проба не восстанавливает контроль: при нарушении bail останавливает набор.
+    // Это также исключает запись через подменённый CLI симлинк при восстановлении.
+    try { controlsDiff = diffSnapshots(before, stand.snapshot()); }
+    catch { controlsDiff = ['snapshot:unreadable']; } // Артефакт сохраняется, приёмка падает.
+  }
+  const { rawText, payloads, overBudget } = output;
+  for (const line of rawText.split('\n')) {
+    try {
+      const value = JSON.parse(line) as { type?: string; subtype?: string } | null;
+      if (value?.type === 'system' && value.subtype === 'init') init = value as InitEvent;
+    } catch { /* ошибку протокола фиксирует parser; сырой текст сохранён */ }
   }
   mkdirSync(OUT_DIR, { recursive: true });
-  const rawText = rawLines.join('\n');
-  writeFileSync(join(OUT_DIR, `${label}.stdout.redacted.jsonl`), redact(rawText) + '\n');
+  writeFileSync(join(OUT_DIR, `${label}.stdout.redacted.jsonl`), redact(rawText));
   // stderr не сохраняется (возможны секреты) — только размер.
   writeFileSync(join(OUT_DIR, `${label}.meta.json`), redact(JSON.stringify({
     origin: 'real-redacted', reviewRequired: true, label, note: options.note,
-    cliPath: CLAUDE, cliVersion,
+    cliPath: CLAUDE, cliVersion, turnId: req.turnId, agentSessionId: req.agentSessionId,
     argv: args, experimentalArgv: options.extraArgs ?? [], stdinBytes: Buffer.byteLength(built.stdin),
     cwd: stand.worktree, envNames: Object.keys(built.env).sort(), profile,
     persist: options.persist ?? true, resume: options.resume ?? false,
@@ -184,7 +171,8 @@ async function readCliVersion(): Promise<string> {
     (async () => { for await (const c of run.stderr) void c; })(),
   ]);
   const done = await run.done;
-  return done.exitCode === 0 && !tooLong ? Buffer.concat(parts).toString('utf8').trim() : 'unknown';
+  return done.exitCode === 0 && done.signal === null && !done.error && !tooLong
+    ? Buffer.concat(parts).toString('utf8').trim() : 'unknown';
 }
 
 /** Процесс завершился штатно и вернул обязательный успешный result; сохранившийся при таймауте/ошибке текст успехом не считается. */
@@ -202,11 +190,11 @@ function expectCompleted(r: ProbeResult): void {
 
 beforeAll(async () => {
   cliVersion = await readCliVersion();
+  if (!cliVersion || cliVersion === 'unknown') throw new Error('Версия CLI не получена штатно; модельные пробы не запущены');
   stand = createAccessStand();
   const secrets = [process.env.ANTHROPIC_API_KEY, process.env.CLAUDE_CODE_OAUTH_TOKEN].filter((v): v is string => !!v && v.length >= 8);
   redactions = [[stand.root, '<TEMP>'], [homedir(), '<HOME>'], [userInfo().username, '<USER>'], ...secrets.map((v): [string, string] => [v, '<REDACTED-SECRET>'])];
 });
-afterEach(() => { stand.restoreControls(); });
 afterAll(() => {
   stand?.cleanup();
   console.info(`Обезличенные артефакты проб: ${OUT_DIR} (в репозиторий переносить только после ручного просмотра; stderr не сохраняется)`);

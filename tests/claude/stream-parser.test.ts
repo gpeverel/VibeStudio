@@ -23,6 +23,26 @@ const textOf = (events: NormalizedPayload[]): string =>
   events.flatMap(e => (e.type === 'text' ? [e] : [])).reduce((acc, e) => (e.mode === 'delta' ? acc + e.text : e.text), '');
 const types = (events: NormalizedPayload[]): string[] => events.map(e => e.type);
 
+describe('0C реальные обезличенные записи CLI 2.1.295', () => {
+  for (const name of ['01-no-persist', '02-persist', '03-resume', '04-script']) {
+    it(`${name}: фрагментация сохраняет результат настоящего потока`, () => {
+      const fixture = `real/${name}.jsonl`;
+      const expected = whole(fixture);
+      expect(expected.parser.error).toBeUndefined();
+      expect(expected.events[0]?.type).toBe('run_started');
+      expect(expected.parser.result?.kind).toBe(name === '04-script' ? 'error' : 'success');
+      for (const seed of [1, 7, 29]) {
+        const got = parse(fragment(load(fixture), seed, 11));
+        expect(got.parser.error).toBeUndefined();
+        expect(got.events).toEqual(expected.events);
+        expect(got.parser.result).toEqual(expected.parser.result);
+      }
+      if (name === '01-no-persist') expect(textOf(expected.events)).toBe('ПРОБА-0C');
+      if (name === '03-resume') expect(textOf(expected.events)).toMatch(/^ЖЕТОН-/);
+    });
+  }
+});
+
 describe('0C парсер потока: нормализация событий', () => {
   it('простой успешный запуск: run_started, текст, usage, success', () => {
     const { parser, events } = whole('success-simple.jsonl');

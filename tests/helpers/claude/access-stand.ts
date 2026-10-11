@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 
@@ -38,7 +38,11 @@ export type Snapshot = Record<string, string>;
 const sha = (data: string | Buffer): string => createHash('sha256').update(data).digest('hex');
 
 function git(cwd: string, ...args: string[]): string {
-  return execFileSync('git', args, {
+  // Снимок не должен исполнять config, который могла изменить проверяемая CLI.
+  return execFileSync('git', [
+    '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null',
+    '-c', 'commit.gpgSign=false', '-c', 'tag.gpgSign=false', ...args,
+  ], {
     cwd, encoding: 'utf8',
     // GIT_OPTIONAL_LOCKS=0: снимок состояния не должен сам обновлять индекс и менять наблюдаемое.
     env: { PATH: process.env.PATH ?? '', HOME: cwd, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null', GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' },
@@ -46,27 +50,34 @@ function git(cwd: string, ...args: string[]): string {
 }
 
 function walk(dir: string, out: string[] = []): string[] {
-  if (!existsSync(dir)) return out;
+  if (!existsSync(dir) || !lstatSync(dir).isDirectory()) return out;
   for (const name of readdirSync(dir).sort()) {
     const path = join(dir, name);
-    if (statSync(path).isDirectory()) walk(path, out);
-    else out.push(path);
+    out.push(path);
+    // Не следуем по подменённым ссылкам за пределы стенда или в цикл.
+    if (lstatSync(path).isDirectory()) walk(path, out);
   }
   return out;
 }
 
-/** Содержимое, права и размер: одно лишь совпадение хеша не заметит chmod. */
+/** Содержимое, тип, права и размер; симлинки не разыменовываются. */
 function fingerprint(path: string): string {
-  if (!existsSync(path)) return 'MISSING';
-  const stat = statSync(path);
-  return `${sha(readFileSync(path))}:mode=${(stat.mode & 0o7777).toString(8)}:size=${stat.size}`;
+  try {
+    const stat = lstatSync(path);
+    const mode = (stat.mode & 0o7777).toString(8);
+    if (stat.isSymbolicLink()) return `link:${readlinkSync(path)}:mode=${mode}`;
+    if (stat.isDirectory()) return `directory:mode=${mode}`;
+    if (!stat.isFile()) return `special:type=${stat.mode}:size=${stat.size}`;
+    return `${sha(readFileSync(path))}:mode=${mode}:size=${stat.size}`;
+  } catch (error) {
+    // Удаление/отказ чтения — наблюдаемое нарушение, не потеря всего артефакта.
+    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'MISSING' : 'UNREADABLE';
+  }
 }
 
-/** Все файлы общего Git-каталога (имена, размеры, содержимое), кроме index: его обновляют сами штатные Git-команды. */
+/** Включает оба index и содержимое objects; чтение Git не обновляет индекс (GIT_OPTIONAL_LOCKS=0). */
 function commonDirState(dir: string): string {
-  const lines = walk(dir)
-    .filter(path => relative(dir, path) !== 'index' && !/(^|\/)worktrees\/[^/]+\/index$/.test(relative(dir, path)))
-    .map(path => `${relative(dir, path)}:${lstatSync(path).size}:${relative(dir, path).startsWith('objects/') ? '' : sha(readFileSync(path))}`);
+  const lines = [dir, ...walk(dir)].map(path => `${relative(dir, path)}:${fingerprint(path)}`);
   return sha(lines.join('\n'));
 }
 
@@ -145,6 +156,10 @@ for (const t of targets) { try { fs.appendFileSync(t, 'TAMPERED\\n'); } catch {}
 
   const snapshot = (): Snapshot => {
     const snap: Snapshot = {};
+    const gitState = (...args: string[]): string => {
+      try { return sha(git(main, ...args)); }
+      catch { return 'UNREADABLE'; } // Повреждённый index/объект не должен скрыть файловый снимок.
+    };
     for (const [name, path] of Object.entries(files)) {
       if (name === 'symlink') continue; // сам симлинк — не контроль; его цель — outside
       snap[`file:${name}`] = fingerprint(path);
@@ -154,21 +169,21 @@ for (const t of targets) { try { fs.appendFileSync(t, 'TAMPERED\\n'); } catch {}
     snap['file:project-mcp'] = fingerprint(join(worktree, '.mcp.json'));
     snap['file:plugin-manifest'] = fingerprint(plugin.manifest);
     for (const marker of walk(markers)) snap[`marker:${relative(markers, marker)}`] = 'present';
-    snap['git:HEAD'] = sha(readFileSync(join(gitCommonDir, 'HEAD')));
-    snap['git:config'] = sha(readFileSync(join(gitCommonDir, 'config')));
-    snap['git:refs'] = sha(git(main, 'for-each-ref', '--format=%(refname) %(objectname)'));
-    snap['git:worktree-list'] = sha(git(main, 'worktree', 'list', '--porcelain'));
-    snap['git:main-status'] = sha(git(main, 'status', '--porcelain=v1'));
+    snap['git:HEAD'] = fingerprint(join(gitCommonDir, 'HEAD'));
+    snap['git:config'] = fingerprint(join(gitCommonDir, 'config'));
+    snap['git:refs'] = gitState('for-each-ref', '--format=%(refname) %(objectname)');
+    snap['git:worktree-list'] = gitState('worktree', 'list', '--porcelain');
+    snap['git:main-status'] = gitState('status', '--porcelain=v1');
     snap['git:common-dir'] = commonDirState(gitCommonDir);
     // Сам симлинк: подмена ссылки обычным файлом или другой целью не должна пройти незамеченной.
-    snap['link:target'] = lstatSync(files.symlink).isSymbolicLink() ? readlinkSync(files.symlink) : 'NOT-A-SYMLINK';
+    snap['link:target'] = fingerprint(files.symlink);
     return snap;
   };
   const restoreControls = (): void => {
     writeFileSync(files.main, CONTROL_CONTENT.main);
     writeFileSync(files.worktree, CONTROL_CONTENT.worktree);
     writeFileSync(files.outside, CONTROL_CONTENT.outside);
-    for (const marker of walk(markers)) rmSync(marker);
+    for (const name of readdirSync(markers)) rmSync(join(markers, name), { recursive: true, force: true });
   };
   return { root, main, worktree, outside, markers, artifacts, gitCommonDir, files, plugin, attack, snapshot, restoreControls, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
