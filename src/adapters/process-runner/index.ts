@@ -1,6 +1,9 @@
 import { spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import type { ProcessErrorCode, ProcessRequest, ProcessResult, ProcessRun, ProcessRunner } from '../../core/ports/process-runner.ts';
+import type {
+  ProcessCompletion, ProcessCompletionIssue, ProcessCompletionIssueCode, ProcessErrorCode, ProcessRequest, ProcessResult,
+  ProcessRun, ProcessRunner, ProcessSignalResult, ProcessStreamState,
+} from '../../core/ports/process-runner.ts';
 import { BoundedQueue } from './queue.ts';
 
 export const DEFAULT_PROCESS_LIMITS = {
@@ -12,6 +15,12 @@ export const DEFAULT_PROCESS_LIMITS = {
 
 function limit(value: number | undefined, fallback: number): number {
   return value !== undefined && Number.isSafeInteger(value) && value > 0 && value <= 2_147_483_647 ? value : fallback;
+}
+
+/** Только безопасные метаданные: errno-код без текста исходной ошибки. */
+function errnoCode(cause: unknown): string | undefined {
+  const code = (cause as { code?: unknown } | null | undefined)?.code;
+  return typeof code === 'string' ? code.slice(0, 32) : undefined;
 }
 
 /** Группа принадлежит этому spawn. Процессы, покинувшие её через setsid, не охвачены. */
@@ -28,24 +37,74 @@ export function createProcessRunner(defaults: Partial<typeof DEFAULT_PROCESS_LIM
     let killed = false;
     let exitCode: number | null = null;
     let signal: string | null = null;
+    /** Legacy-причина: только первая. Полная совокупность — в issues. */
     let error: ProcessErrorCode | undefined;
+    // Факты завершения. Отсутствие наблюдения никогда не становится подтверждением.
+    let spawned = false;
+    let exitObserved = false;
+    let exitInfo: { exitCode: number | null; signal: string | null } | undefined;
+    let stdoutState: ProcessStreamState = 'not_started';
+    let stderrState: ProcessStreamState = 'not_started';
+    let waitExhausted = false;
+    const signals: ProcessSignalResult[] = [];
+    const issues: ProcessCompletionIssue[] = [];
     let timer: ReturnType<typeof setTimeout> | undefined;
     let escalation: ReturnType<typeof setTimeout> | undefined;
     let drain: ReturnType<typeof setTimeout> | undefined;
     let resolveDone!: (result: ProcessResult) => void;
     const done = new Promise<ProcessResult>(resolve => { resolveDone = resolve; });
 
-    const signalGroup = (name: NodeJS.Signals): void => {
+    const note = (code: ProcessCompletionIssueCode, detail: string, operation?: ProcessCompletionIssue['operation'], errorCode?: string): void => {
+      if (issues.some(item => item.code === code && item.operation === operation && item.errorCode === errorCode)) return;
+      issues.push({ code, ...(operation ? { operation } : {}), ...(errorCode ? { errorCode } : {}), detail });
+    };
+    const fail = (legacy: ProcessErrorCode, detail: string, operation?: ProcessCompletionIssue['operation'], errorCode?: string): void => {
+      error ??= legacy;
+      note(legacy, detail, operation, errorCode);
+    };
+    const streamFailed = (operation: 'stdout' | 'stderr', cause: unknown): void => {
+      if (operation === 'stdout') stdoutState = 'errored'; else stderrState = 'errored';
+      fail('stream_failed', 'Ошибка чтения потока процесса', operation, errnoCode(cause));
+      force();
+    };
+
+    /** Сигнал только своей группе (pid собственного spawn). Результат отправки записывается, а не глотается. */
+    const signalGroup = (name: 'SIGTERM' | 'SIGKILL', operation: 'interrupt' | 'kill'): void => {
       if (!child?.pid || finished) return;
-      try { process.kill(-child.pid, name); }
-      catch (cause) {
-        if ((cause as NodeJS.ErrnoException).code !== 'ESRCH') error ??= 'spawn_failed';
+      try {
+        process.kill(-child.pid, name);
+        signals.push({ signal: name, target: 'group', status: 'sent' });
+      } catch (cause) {
+        const code = errnoCode(cause);
+        if (code === 'ESRCH') {
+          // ESRCH не доказывает exit: это лишь «группы больше нет» на момент вызова.
+          signals.push({ signal: name, target: 'group', status: 'not_found', errorCode: 'ESRCH' });
+        } else {
+          signals.push({ signal: name, target: 'group', status: 'failed', ...(code ? { errorCode: code } : {}) });
+          fail('signal_failed', 'Не удалось отправить сигнал процессу', operation, code);
+        }
       }
+    };
+    const completion = (): ProcessCompletion => {
+      const exited = spawned && exitObserved && exitInfo !== undefined;
+      const streamState = (state: ProcessStreamState): ProcessStreamState => (!spawned ? 'not_started' : state === 'unconfirmed' || state === 'not_started' ? 'forced_closed' : state);
+      return Object.freeze({
+        process: Object.freeze(!spawned ? { state: 'not_started' as const }
+          : exited ? { state: 'exited' as const, exitCode: exitInfo!.exitCode, signal: exitInfo!.signal }
+          : { state: 'unconfirmed' as const }),
+        stdout: streamState(stdoutState),
+        stderr: streamState(stderrState),
+        signals: Object.freeze(signals.map(item => Object.freeze({ ...item }))),
+        wait: waitExhausted ? 'deadline' as const : 'settled' as const,
+        issues: Object.freeze(issues.map(item => Object.freeze({ ...item }))),
+        descendants: 'not_guaranteed' as const,
+      });
     };
     const finish = (): void => {
       if (finished) return;
       // Не оставляем обычных потомков, даже если они закрыли унаследованные pipes.
-      signalGroup('SIGKILL');
+      // Финальная отправка тоже попадает в signals; not_found после exit штатен и не ошибка остановки.
+      signalGroup('SIGKILL', 'kill');
       finished = true;
       clearTimeout(timer);
       clearTimeout(escalation);
@@ -55,25 +114,28 @@ export function createProcessRunner(defaults: Partial<typeof DEFAULT_PROCESS_LIM
       child?.stderr.destroy();
       stdout.finish();
       stderr.finish();
-      resolveDone({ exitCode, signal, ...(error ? { error } : {}) });
+      if (spawned && !exitObserved) fail('exit_unconfirmed','Выход основного процесса не подтверждён', 'wait');
+      // Принудительное закрытие потоков не штатный EOF: состояние фиксирует completion().
+      resolveDone({ exitCode, signal, ...(error ? { error } : {}), completion: completion() });
     };
     const boundDrain = (): void => {
       if (drain || finished) return;
       drain = setTimeout(() => {
-        error ??= 'drain_timeout';
+        waitExhausted = true;
+        fail('drain_timeout', 'Потоки или выход процесса не завершились за отведённое время', 'wait');
         finish();
       }, limit(request.drainTimeoutMs, settings.drainTimeoutMs));
     };
     const force = (): void => {
       if (finished || killed) return;
       killed = true;
-      signalGroup('SIGKILL');
+      signalGroup('SIGKILL', 'kill');
       boundDrain();
     };
     const soft = (): void => {
-      if (finished || interrupted) return;
+      if (finished || interrupted || killed) return;
       interrupted = true;
-      signalGroup('SIGTERM');
+      signalGroup('SIGTERM', 'interrupt');
       escalation = setTimeout(force, limit(request.stopGraceMs, settings.stopGraceMs));
     };
     const run: ProcessRun = {
@@ -83,7 +145,7 @@ export function createProcessRunner(defaults: Partial<typeof DEFAULT_PROCESS_LIM
       kill: async () => { force(); await done; },
     };
     if (process.platform === 'win32') {
-      error = 'unsupported_platform';
+      fail('unsupported_platform', 'Платформа не поддерживается', 'spawn');
       finish();
       return run;
     }
@@ -95,35 +157,41 @@ export function createProcessRunner(defaults: Partial<typeof DEFAULT_PROCESS_LIM
         shell: false,
         stdio: ['pipe', 'pipe', 'pipe'],
       });
-      const receive = (queue: BoundedQueue<Uint8Array>, chunk: Buffer): void => {
+      // pid есть только у реально запущенного процесса; ENOENT и подобное дают error/close без запуска.
+      if (child.pid !== undefined) {
+        spawned = true;
+        stdoutState = 'unconfirmed';
+        stderrState = 'unconfirmed';
+      }
+      const receive = (queue: BoundedQueue<Uint8Array>, operation: 'stdout' | 'stderr', chunk: Buffer): void => {
         if (finished || error === 'output_limit') return;
-        if (!queue.push(chunk)) { error = 'output_limit'; force(); }
+        if (!queue.push(chunk)) { fail('output_limit', 'Превышен лимит очереди вывода', operation); force(); }
       };
-      child.stdout.on('data', (chunk: Buffer) => receive(stdout, chunk));
-      child.stderr.on('data', (chunk: Buffer) => receive(stderr, chunk));
-      child.stdout.on('end', () => stdout.finish());
-      child.stderr.on('end', () => stderr.finish());
-      child.stdout.on('error', () => { error ??= 'drain_timeout'; force(); });
-      child.stderr.on('error', () => { error ??= 'drain_timeout'; force(); });
-      child.on('error', () => { error ??= 'spawn_failed'; boundDrain(); });
+      child.stdout.on('data', (chunk: Buffer) => receive(stdout, 'stdout', chunk));
+      child.stderr.on('data', (chunk: Buffer) => receive(stderr, 'stderr', chunk));
+      // Штатный EOF после ошибки чтения не отменяет саму ошибку.
+      child.stdout.on('end', () => { if (stdoutState === 'unconfirmed') stdoutState = 'ended'; stdout.finish(); });
+      child.stderr.on('end', () => { if (stderrState === 'unconfirmed') stderrState = 'ended'; stderr.finish(); });
+      child.stdout.on('error', cause => streamFailed('stdout', cause));
+      child.stderr.on('error', cause => streamFailed('stderr', cause));
+      child.on('error', cause => { fail('spawn_failed', 'Ошибка процесса CLI', 'spawn', errnoCode(cause)); boundDrain(); });
       child.on('exit', (code, exitSignal) => {
+        exitObserved = true;
+        exitInfo = { exitCode: code, signal: exitSignal };
         exitCode = code;
         signal = exitSignal;
         boundDrain();
       });
-      child.on('close', (code, exitSignal) => {
-        exitCode = code;
-        signal = exitSignal;
-        finish();
-      });
-      child.stdin.on('error', () => { error ??= 'stdin_failed'; force(); });
+      // close без exit не подтверждает выход и не даёт exitCode/signal: их проецирует только наблюдённый exit.
+      child.on('close', () => finish());
+      child.stdin.on('error', cause => { fail('stdin_failed', 'Не удалось передать stdin процессу', 'stdin', errnoCode(cause)); force(); });
       child.stdin.end(request.stdin, 'utf8');
       timer = setTimeout(() => {
-        error ??= 'timeout';
+        fail('timeout', 'Превышено время работы процесса', 'wait');
         soft();
       }, limit(request.timeoutMs, settings.timeoutMs));
-    } catch {
-      error = 'spawn_failed';
+    } catch (cause) {
+      fail('spawn_failed', 'Не удалось запустить процесс', 'spawn', errnoCode(cause));
       finish();
     }
     return run;

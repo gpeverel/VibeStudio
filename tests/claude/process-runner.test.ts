@@ -1,14 +1,39 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { afterEach, describe, expect, it } from 'vitest';
+import { spawn } from 'node:child_process';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createProcessRunner } from '../../src/adapters/process-runner/index.ts';
-import type { ProcessRequest, ProcessRun } from '../../src/core/ports/process-runner.ts';
+import type { ProcessRequest, ProcessRun, ProcessRunner } from '../../src/core/ports/process-runner.ts';
 import { Stand, pidAlive, waitFor } from '../helpers/claude/stand.ts';
 
-const stands: Stand[] = [];
-function stand(): Stand { const s = new Stand(); stands.push(s); return s; }
-afterEach(() => { while (stands.length) stands.pop()?.cleanup(); });
+// Обычные тесты вызывают настоящий spawn; fault-тесты подставляют только свой child.
+vi.mock('node:child_process', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return { ...actual, spawn: vi.fn(actual.spawn) };
+});
 
-const runner = createProcessRunner();
+const stands: Stand[] = [];
+const managed = new Set<ProcessRun>();
+function stand(): Stand { const s = new Stand(); stands.push(s); return s; }
+afterEach(async () => {
+  // Даже упавший assertion не должен оставлять собственный управляемый запуск.
+  const stopping = Promise.all([...managed].map(run => run.kill()));
+  if (vi.isFakeTimers()) await vi.advanceTimersByTimeAsync(30_000);
+  await stopping;
+  managed.clear();
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+  while (stands.length) stands.pop()?.cleanup();
+});
+
+const nativeRunner = createProcessRunner();
+const runner: ProcessRunner = { start: request => {
+  const run = nativeRunner.start(request);
+  managed.add(run);
+  return run;
+} };
 const base = (s: Stand, overrides: Partial<ProcessRequest> = {}): ProcessRequest => ({
   executable: process.execPath, args: [], cwd: s.dir, env: { PATH: '' }, stdin: '', ...overrides,
 });
@@ -18,6 +43,131 @@ async function collect(stream: AsyncIterable<Uint8Array>): Promise<string> {
   return Buffer.concat(parts).toString('utf8');
 }
 const node = (script: string): string[] => ['-e', script];
+
+/** Ни один PID этого double не передаётся настоящему process.kill. */
+function simulatedChild(errno?: 'EPERM' | 'ESRCH') {
+  vi.useFakeTimers();
+  const child = Object.assign(new EventEmitter(), {
+    pid: 424242, exitCode: null, signalCode: null,
+    stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough(),
+  });
+  vi.mocked(spawn).mockReturnValueOnce(child as unknown as ChildProcessWithoutNullStreams);
+  const send = vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
+    expect(pid).toBe(-child.pid);
+    expect(['SIGTERM', 'SIGKILL']).toContain(signal);
+    if (errno) throw Object.assign(new Error('synthetic signal failure'), { code: errno });
+    return true;
+  });
+  const run = runner.start(base(stand(), { timeoutMs: 100, stopGraceMs: 10, drainTimeoutMs: 20 }));
+  child.emit('spawn');
+  return { child, send, run };
+}
+
+describe('P2a ProcessRunner: ошибки на doubles без сигналов реальным PID', () => {
+  it.each(['EPERM', 'ESRCH'] as const)('%s не доказывает exit; deadline конечен и сохраняет результаты обеих попыток', async errno => {
+    const { run, child, send } = simulatedChild(errno);
+    const stop = run.interrupt();
+    await vi.advanceTimersByTimeAsync(200);
+    await stop;
+    const result = await run.done;
+    expect(result.completion).toMatchObject({
+      process: { state: 'unconfirmed' }, wait: 'deadline',
+      stdout: 'forced_closed', stderr: 'forced_closed', descendants: 'not_guaranteed',
+    });
+    for (const signal of ['SIGTERM', 'SIGKILL']) {
+      expect(result.completion.signals).toContainEqual(expect.objectContaining({
+        signal, target: 'group', status: errno === 'EPERM' ? 'failed' : 'not_found', errorCode: errno,
+      }));
+    }
+    expect(result.completion.signals.map(item => [item.target === 'group' ? -child.pid : child.pid, item.signal])).toEqual(send.mock.calls);
+    expect(result.completion.issues).toContainEqual(expect.objectContaining({ code: 'exit_unconfirmed' }));
+    expect(result.completion.issues).toContainEqual(expect.objectContaining({ code: 'drain_timeout' }));
+    if (errno === 'EPERM') {
+      expect(result.completion.issues).toContainEqual(expect.objectContaining({ code: 'signal_failed', errorCode: errno }));
+    }
+    const snapshot = JSON.stringify(result);
+    const count = send.mock.calls.length;
+    child.emit('exit', 0, null);
+    child.stdout.emit('end');
+    child.stderr.emit('end');
+    child.emit('close', 0, null);
+    await run.interrupt();
+    await run.kill();
+    expect(send).toHaveBeenCalledTimes(count);
+    expect(JSON.stringify(await run.done)).toBe(snapshot);
+  });
+
+  it('успешная отправка SIGKILL без exit не становится подтверждённой остановкой', async () => {
+    const { run } = simulatedChild();
+    const stopped = run.kill();
+    await vi.advanceTimersByTimeAsync(200);
+    await stopped;
+    expect((await run.done).completion).toMatchObject({ process: { state: 'unconfirmed' }, wait: 'deadline' });
+    expect((await run.done).completion.signals).toContainEqual(expect.objectContaining({ signal: 'SIGKILL', status: 'sent' }));
+  });
+
+  it('close без exit не доказывает выход основного процесса', async () => {
+    const { child, run } = simulatedChild();
+    child.stdout.emit('end');
+    child.stderr.emit('end');
+    child.emit('close', 0, null);
+    await vi.advanceTimersByTimeAsync(200);
+    const result = await run.done;
+    expect(result.error).toBe('exit_unconfirmed');
+    expect(result.exitCode).toBeNull();
+    expect(result.signal).toBeNull();
+    expect(result.completion.process).toEqual({ state: 'unconfirmed' });
+    expect(result.completion.issues).toContainEqual(expect.objectContaining({ code: 'exit_unconfirmed' }));
+  });
+
+  it('ESRCH финальной уборки после exit сохраняется как not_found, не стирая подтверждённый выход', async () => {
+    const { child, run, send } = simulatedChild('ESRCH');
+    child.stdout.emit('end');
+    child.stderr.emit('end');
+    child.emit('exit', 0, null);
+    child.emit('close', 0, null);
+    await vi.advanceTimersByTimeAsync(1);
+    const result = await run.done;
+    expect(result).toMatchObject({ exitCode: 0, signal: null, completion: {
+      process: { state: 'exited', exitCode: 0, signal: null }, stdout: 'ended', stderr: 'ended', wait: 'settled', issues: [],
+    } });
+    expect(result.error).toBeUndefined();
+    expect(send.mock.calls).toEqual([[-child.pid, 'SIGKILL']]);
+    expect(result.completion.signals).toHaveLength(send.mock.calls.length);
+    expect(result.completion.signals[0]).toMatchObject({ signal: 'SIGKILL', target: 'group', status: 'not_found', errorCode: 'ESRCH' });
+  });
+
+  it.each([
+    ['stdout', false], ['stderr', false], ['stdout', true], ['stderr', true],
+  ] as const)('%s read error сохраняется отдельно от EOF второго потока, Stop=%s', async (stream, stopped) => {
+    const { child, run } = simulatedChild();
+    const stopping = stopped ? run.interrupt() : undefined;
+    const other = stream === 'stdout' ? 'stderr' : 'stdout';
+    child[other].emit('end');
+    child[stream].emit('error', Object.assign(new Error('synthetic read failure'), { code: 'EIO' }));
+    child[stream].emit('end'); // поздний EOF не стирает уже наблюдавшуюся ошибку
+    child.emit('exit', null, 'SIGKILL');
+    child.emit('close', null, 'SIGKILL');
+    await vi.advanceTimersByTimeAsync(200);
+    await stopping;
+    const result = await run.done;
+    expect(result.completion[stream]).toBe('errored');
+    expect(result.completion[other]).toBe('ended');
+    expect(result.completion.issues).toContainEqual(expect.objectContaining({ code: 'stream_failed', operation: stream, errorCode: 'EIO' }));
+    expect(result.completion.process).toEqual({ state: 'exited', exitCode: null, signal: 'SIGKILL' });
+  });
+
+  it('exit + stdout EOF не превращают принудительное закрытие stderr в штатный EOF', async () => {
+    const { child, run } = simulatedChild();
+    child.stdout.emit('end');
+    child.emit('exit', 0, null);
+    await vi.advanceTimersByTimeAsync(200);
+    expect((await run.done).completion).toMatchObject({
+      process: { state: 'exited', exitCode: 0, signal: null }, stdout: 'ended', stderr: 'forced_closed', wait: 'deadline',
+    });
+    expect((await run.done).completion.issues).toContainEqual(expect.objectContaining({ code: 'drain_timeout' }));
+  });
+});
 
 describe('0C ProcessRunner: жизненный цикл на реальных дочерних процессах', () => {
   it('stdout и stderr разделены; большой промпт доходит через stdin, а не argv', async () => {
@@ -32,6 +182,10 @@ describe('0C ProcessRunner: жизненный цикл на реальных д
     expect(err).toBe('E');
     expect(result).toMatchObject({ exitCode: 0, signal: null });
     expect(result.error).toBeUndefined();
+    expect(result.completion).toMatchObject({
+      process: { state: 'exited', exitCode: 0, signal: null }, stdout: 'ended', stderr: 'ended',
+      wait: 'settled', issues: [], descendants: 'not_guaranteed',
+    });
   });
 
   it('аргументы с метасимволами shell передаются буквально (без shell)', async () => {
@@ -64,6 +218,8 @@ describe('0C ProcessRunner: жизненный цикл на реальных д
     const result = await run.done;
     expect(result.error).toBe('spawn_failed');
     expect(result.exitCode).not.toBe(0);
+    expect(result.completion.process).toEqual({ state: 'not_started' });
+    expect(result.completion.issues).toContainEqual(expect.objectContaining({ code: 'spawn_failed' }));
     await expect(collect(run.stdout)).resolves.toBe('');
   });
 
@@ -79,6 +235,8 @@ describe('0C ProcessRunner: жизненный цикл на реальных д
     const run = runner.start(base(s, { args: node('setInterval(()=>{},1000)'), timeoutMs: 200, stopGraceMs: 100, drainTimeoutMs: 200 }));
     const result = await run.done;
     expect(result.error).toBe('timeout');
+    expect(result.completion.issues).toContainEqual(expect.objectContaining({ code: 'timeout' }));
+    expect(result.completion.process.state).toBe('exited');
     expect(Date.now() - started).toBeLessThan(5_000);
   });
 
@@ -98,6 +256,12 @@ describe('0C ProcessRunner: жизненный цикл на реальных д
     await run.kill();
     expect(await run.done).toBe(first);
     expect(first.signal).toBe('SIGKILL');
+    expect(first.completion.process).toEqual({ state: 'exited', exitCode: null, signal: 'SIGKILL' });
+    expect(first.completion.signals).toEqual(expect.arrayContaining([
+      expect.objectContaining({ signal: 'SIGTERM', target: 'group', status: 'sent' }),
+      expect.objectContaining({ signal: 'SIGKILL', target: 'group', status: 'sent' }),
+    ]));
+    expect(first.completion.signals.filter(item => item.signal === 'SIGTERM')).toHaveLength(1);
   });
 
   it('kill и interrupt после завершения безопасны и не меняют результат', async () => {
@@ -120,7 +284,7 @@ describe('0C ProcessRunner: жизненный цикл на реальных д
     const childPid = Number(readFileSync(pidFile, 'utf8'));
     expect(pidAlive(childPid)).toBe(true);
     await run.interrupt();
-    await run.done;
+    expect((await run.done).completion.process.state).toBe('exited');
     expect(await waitFor(() => !pidAlive(childPid))).toBe(true);
   });
 
@@ -132,7 +296,8 @@ describe('0C ProcessRunner: жизненный цикл на реальных д
     const run = runner.start(base(s, {
       args: node(`const {spawn}=require('node:child_process');const c=spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{detached:true,stdio:'ignore'});c.unref()`),
     }));
-    expect(await run.done).toMatchObject({ exitCode: 0, signal: null });
+    expect(await run.done).toMatchObject({ exitCode: 0, signal: null,
+      completion: { process: { state: 'exited' }, descendants: 'not_guaranteed' } });
     const completedAt = Date.now();
     expect(await waitFor(() => existsSync(marker))).toBe(true);
     // Свой потомок совершил запись ПОСЛЕ done родителя: это открытое ограничение 0C.
@@ -147,7 +312,11 @@ describe('0C ProcessRunner: жизненный цикл на реальных д
       drainTimeoutMs: 300,
     }));
     const started = Date.now();
-    await run.done;
+    const result = await run.done;
+    expect(result.completion.process).toEqual({ state: 'exited', exitCode: 0, signal: null });
+    expect(result.completion.issues).toContainEqual(expect.objectContaining({ code: 'drain_timeout' }));
+    expect(result.completion.stdout).toBe('forced_closed');
+    expect(result.completion.stderr).toBe('forced_closed');
     expect(Date.now() - started).toBeLessThan(5_000);
     expect(await waitFor(() => existsSync(pidFile))).toBe(true);
     expect(await waitFor(() => !pidAlive(Number(readFileSync(pidFile, 'utf8'))))).toBe(true);

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import type { AgentAdapter, AgentDetection, AgentDetectOptions, AgentDiagnostic, AgentEnvironment, AgentEvent, AgentRun, AgentRunRequest, AgentRunResult, NormalizedPayload } from '../../core/ports/agent.ts';
-import type { ProcessRequest, ProcessRun, ProcessRunner } from '../../core/ports/process-runner.ts';
+import type { AgentAdapter, AgentDetection, AgentDetectOptions, AgentDiagnostic, AgentEnvironment, AgentErrorReason, AgentEvent, AgentRun, AgentRunCompletion, AgentRunRequest, AgentRunResult, NormalizedPayload, ProcessCompletion, ProcessCompletionIssue } from '../../core/ports/agent.ts';
+import type { ProcessRequest, ProcessResult, ProcessRun, ProcessRunner } from '../../core/ports/process-runner.ts';
 import { createProcessRunner } from '../process-runner/index.ts';
 import { BoundedQueue } from '../process-runner/queue.ts';
 import { buildClaudeArgs, buildClaudeEnv, forbiddenEnvNames } from './args.ts';
@@ -50,6 +50,21 @@ function snapshot<T>(value: T): T | undefined {
   try { return deepFreeze(structuredClone(value)); } catch { return undefined; }
 }
 const PRACTICAL_DETAIL_LIMIT = 512;
+
+/** Только безопасный errno-код: текст исходной ошибки в completion не попадает. */
+function errnoCode(cause: unknown): string | undefined {
+  const code = (cause as { code?: unknown } | null | undefined)?.code;
+  return typeof code === 'string' ? code.slice(0, 32) : undefined;
+}
+/** Причина процесса → причина исхода; прежнее сопоставление stdin/платформы сохранено. */
+function reasonOf(code: ProcessCompletionIssue['code']): AgentErrorReason {
+  return code === 'stdin_failed' || code === 'unsupported_platform' ? 'spawn_failed' : code;
+}
+/** Чистое завершение: подтверждённый exit(0), штатный EOF обоих потоков, без ошибок и deadline. */
+function isCleanCompletion(completion: ProcessCompletion): boolean {
+  return completion.process.state === 'exited' && completion.process.exitCode === 0 && completion.process.signal === null
+    && completion.stdout === 'ended' && completion.stderr === 'ended' && completion.wait === 'settled' && completion.issues.length === 0;
+}
 
 const PRACTICAL_REASONS: readonly PracticalAdmissionReason[] = ['assessment_missing', 'project_untrusted', 'prerequisite_unknown', 'configuration_conflict', 'cli_unsupported', 'assessment_failed'];
 /** Все три ограничения безусловны для practical-local-v1: пропуск не означает их отсутствие. */
@@ -108,15 +123,74 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): AgentAd
       let diagnosticBytes = 0;
       let processRun: ProcessRun | undefined;
       let finished = false;
+      /** Только принятый пользовательский Stop; внутренняя очистка при ошибке им не является. */
       let stopped = false;
       let failure: AgentRunResult | undefined;
-      let resolveDone!: (result: AgentRunResult) => void;
-      const done = new Promise<AgentRunResult>(resolve => { resolveDone = resolve; });
+      // Факты завершения. Отсутствие наблюдения остаётся unconfirmed, а не подтверждением.
+      let launchAttempted = false;
+      let processResult: ProcessResult | undefined;
+      let deadlineFired = false;
+      let drainForced = false;
+      const readFailed = { stdout: false, stderr: false };      const completionIssues: ProcessCompletionIssue[] = [];
+      const pendingStops = new Map<Promise<void>, 'interrupt' | 'kill'>();
+      let resolveDone!: (result: AgentRunCompletion) => void;
+      const done = new Promise<AgentRunCompletion>(resolve => { resolveDone = resolve; });
+      const sameIssue = (a: ProcessCompletionIssue, b: ProcessCompletionIssue): boolean => a.code === b.code && a.operation === b.operation && a.errorCode === b.errorCode;
+      const addIssue = (item: ProcessCompletionIssue): void => {
+        if (!finished && !completionIssues.some(known => sameIssue(known, item))) completionIssues.push(item);
+      };
+      /** Throw и rejection interrupt()/kill() сохраняются; успешная отправка здесь не выдумывается. */
       const stopProcess = (hard = true): void => {
+        const operation = hard ? 'kill' : 'interrupt';
+        const lost = (cause: unknown): void => {
+          const errorCode = errnoCode(cause);
+          addIssue({ code: 'signal_failed', operation, ...(errorCode ? { errorCode } : {}), detail: 'Остановка процесса завершилась ошибкой' });
+        };
         try {
           const stopping = hard ? processRun?.kill() : processRun?.interrupt();
-          void stopping?.catch(() => { /* Общий deadline ограничивает неисправный runner. */ });
-        } catch { /* Контроль done остаётся у общего deadline. */ }
+          if (stopping) {
+            const tracked: Promise<void> = Promise.resolve(stopping).then(() => undefined, lost).finally(() => { pendingStops.delete(tracked); });
+            pendingStops.set(tracked, operation);
+          }
+        } catch (cause) { lost(cause); }
+      };
+      /** Отказ stop-метода может прийти после done: ждём его, но не дольше drain-лимита. */
+      const settleStops = async (): Promise<void> => {
+        if (!pendingStops.size) return;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        await Promise.race([Promise.allSettled([...pendingStops.keys()]), new Promise(resolve => { timer = setTimeout(resolve, limits.drainTimeoutMs); })]);
+        clearTimeout(timer);
+      };
+      const assembleCompletion = (): ProcessCompletion => {
+        const base = processResult?.completion;
+        const issues = (base?.issues ?? []).map(item => ({ ...item }));
+        for (const item of completionIssues) if (!issues.some(known => sameIssue(known, item))) issues.push({ ...item });
+        // Stop-метод, не давший результата к снимку, не считается успешной отправкой: ожидание исчерпано.
+        for (const operation of new Set(pendingStops.values())) {
+          issues.push({ code: 'timeout', operation, detail: 'Результат остановки не получен к завершению; отправка сигнала не подтверждена' });
+        }
+        const wait = deadlineFired || drainForced || pendingStops.size > 0 || base?.wait === 'deadline' ? 'deadline' as const : 'settled' as const;
+        const frozen = (): readonly ProcessCompletionIssue[] => Object.freeze(issues.map(item => Object.freeze({ ...item })));
+        if (base) {
+          // Копия, а не ссылки runner: поздняя мутация его объектов не меняет выданный terminal.
+          const baseProcess = base.process.state === 'exited'
+            ? Object.freeze({ state: 'exited' as const, exitCode: base.process.exitCode, signal: base.process.signal })
+            : Object.freeze({ state: base.process.state });
+          const stream = (name: 'stdout' | 'stderr'): ProcessCompletion['stdout'] => (readFailed[name] ? 'errored' : base[name]);
+          return Object.freeze({ process: baseProcess, stdout: stream('stdout'), stderr: stream('stderr'),
+            signals: Object.freeze(base.signals.map(item => Object.freeze({ ...item }))), wait, issues: frozen(), descendants: 'not_guaranteed' as const });
+        }
+        if (!launchAttempted) {
+          return Object.freeze({ process: Object.freeze({ state: 'not_started' as const }), stdout: 'not_started' as const, stderr: 'not_started' as const,
+            signals: Object.freeze([]), wait, issues: frozen(), descendants: 'not_guaranteed' as const });
+        }
+        // Запуск начат, но достоверного результата runner нет: exit и потоки не подтверждены.
+        if (!issues.some(item => item.code === 'process_result_failed' || item.code === 'spawn_failed')) {
+          issues.push({ code: 'exit_unconfirmed', operation: 'wait', detail: 'Результат завершения процесса не получен' });
+        }
+        const stream = (name: 'stdout' | 'stderr'): ProcessCompletion['stdout'] => (readFailed[name] ? 'errored' : 'unconfirmed');
+        return Object.freeze({ process: Object.freeze({ state: 'unconfirmed' as const }), stdout: stream('stdout'), stderr: stream('stderr'),
+          signals: Object.freeze([]), wait, issues: frozen(), descendants: 'not_guaranteed' as const });
       };
       const envelope = (payload: NormalizedPayload): AgentEvent => {
         const seq = (sequences.get(request.sessionId) ?? 0) + 1;
@@ -130,9 +204,19 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): AgentAd
       };
       const finish = (result: AgentRunResult): void => {
         if (finished) return;
+        // Снимок собирается до finished=true: addIssue после него уже игнорируется.
+        const completion = assembleCompletion();
         finished = true;
         clearTimeout(deadline);
-        const final = stopped ? { kind: 'interrupted' as const } : failure ?? result;
+        let outcome: AgentRunResult = stopped ? { kind: 'interrupted' } : failure ?? result;
+        // Success без подтверждённого exit/EOF и без ошибок — не success. Принятый Stop исключил его выше.
+        if (outcome.kind === 'success' && !isCleanCompletion(completion)) {
+          const first = completion.issues[0];
+          outcome = { kind: 'error', reason: first ? reasonOf(first.code) : completion.process.state !== 'exited' ? 'exit_unconfirmed' : 'drain_timeout',
+            detail: 'Завершение процесса не подтверждает успешный result' };
+        }
+        // Один неизменяемый снимок: done и единственный run_finished получают тот же объект.
+        const final: AgentRunCompletion = Object.freeze({ ...outcome, stopAccepted: stopped, completion });
         queue.finish(envelope({ type: 'run_finished', result: final }));
         resolveDone(final);
       };
@@ -140,6 +224,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): AgentAd
         if (finished || failure) return;
         if (!queue.push(envelope(payload))) {
           failure = { kind: 'error', reason: 'output_limit', detail: 'Потребитель не успевает читать ограниченную очередь событий' };
+          addIssue({ code: 'output_limit', detail: failure.detail });
           stopProcess();
         }
       };
@@ -213,8 +298,24 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): AgentAd
             launch = verification.launch;
           }
           const parser = new ClaudeStreamParser({ ...options.parserLimits, expectedSessionId: request.agentSessionId });
-          processRun = launch({ executable, args: launchArgs, cwd: request.cwd, stdin: built.stdin, env: launchEnv,
-            timeoutMs: limits.timeoutMs, stopGraceMs: limits.stopGraceMs, drainTimeoutMs: limits.drainTimeoutMs, maxQueueBytes: limits.maxQueueBytes });
+          // До этого вызова процесс заведомо не запускался; после неизвестного throw факт запуска не доказан.
+          launchAttempted = true;
+          try {
+            processRun = launch({ executable, args: launchArgs, cwd: request.cwd, stdin: built.stdin, env: launchEnv,
+              timeoutMs: limits.timeoutMs, stopGraceMs: limits.stopGraceMs, drainTimeoutMs: limits.drainTimeoutMs, maxQueueBytes: limits.maxQueueBytes });
+          } catch (cause) {
+            const errorCode = errnoCode(cause);
+            addIssue({ code: 'spawn_failed', operation: 'spawn', ...(errorCode ? { errorCode } : {}), detail: 'Запуск процесса завершился исключением' });
+            throw cause;
+          }
+          // Результат фиксируется сразу: отказ done или результат без completion не равны подтверждению.
+          processRun.done.then(settled => {
+            if (settled?.completion) processResult = settled;
+            else addIssue({ code: 'process_result_failed', operation: 'done', detail: 'Runner не вернул данные завершения' });
+          }, cause => {
+            const errorCode = errnoCode(cause);
+            addIssue({ code: 'process_result_failed', operation: 'done', ...(errorCode ? { errorCode } : {}), detail: 'Ожидание завершения процесса завершилось ошибкой' });
+          });
           emit({ type: 'run_started', agentSessionId: request.agentSessionId });
           const consume = async (stream: AsyncIterable<Uint8Array>, stderr: boolean): Promise<void> => {
             for await (const chunk of stream) {
@@ -228,14 +329,16 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): AgentAd
               if (parser.error) { failure ??= { kind: 'error', ...parser.error }; stopProcess(); break; }
             }
           };
-          const streams = Promise.all([consume(processRun.stdout, false), consume(processRun.stderr, true)]);
-          // Подписываемся сразу, чтобы ошибка чтения не стала unhandled rejection.
-          const drained = streams.then(() => true, () => {
+          // Ошибка каждого потока фиксируется отдельно; подписка сразу исключает unhandled rejection.
+          const track = (stream: AsyncIterable<Uint8Array>, name: 'stdout' | 'stderr'): Promise<void> => consume(stream, name === 'stderr').catch(cause => {
+            readFailed[name] = true;
+            const errorCode = errnoCode(cause);
+            addIssue({ code: 'stream_failed', operation: name, ...(errorCode ? { errorCode } : {}), detail: 'Ошибка чтения потока процесса' });
             failure ??= { kind: 'error', reason: 'protocol_incompatible', detail: 'Ошибка чтения потока процесса' };
             stopProcess();
-            return true;
           });
-          const processResult = await processRun.done;
+          const drained = Promise.all([track(processRun.stdout, 'stdout'), track(processRun.stderr, 'stderr')]).then(() => true);
+          const processDone = await processRun.done;
           let timer: ReturnType<typeof setTimeout> | undefined;
           const complete = await Promise.race([
             drained,
@@ -243,17 +346,21 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): AgentAd
           ]);
           clearTimeout(timer);
           if (!complete) {
+            drainForced = true;
+            addIssue({ code: 'drain_timeout', operation: 'wait', detail: 'Потоки не закрылись за отведённое время' });
             stopProcess();
+            await settleStops();
             finish({ kind: 'error', reason: 'drain_timeout', detail: 'Потоки не закрылись за отведённое время' }); return;
           }
           for (const payload of parser.end()) if (payload.type !== 'run_started') emit(payload);
           for (const item of parser.diagnostics) diagnostic(item);
-          if (processResult.error) {
-            const reason = processResult.error === 'stdin_failed' || processResult.error === 'unsupported_platform' ? 'spawn_failed' : processResult.error;
-            finish({ kind: 'error', reason, detail: 'Процесс CLI завершился с ошибкой' });
+          // Отказ stop-метода мог прийти после done, но до терминального снимка.
+          await settleStops();
+          if (processDone.error) {
+            finish({ kind: 'error', reason: reasonOf(processDone.error), detail: 'Процесс CLI завершился с ошибкой' });
           } else if (parser.error) finish({ kind: 'error', ...parser.error });
           else if (!parser.result) finish({ kind: 'error', reason: 'missing_result', detail: 'CLI не вернул обязательный result' });
-          else if (processResult.signal || (processResult.exitCode !== 0 && parser.result.kind === 'success')) finish({ kind: 'error', reason: 'nonzero_exit', detail: 'Завершение процесса не подтверждает успешный result' });
+          else if (processDone.signal || (processDone.exitCode !== 0 && parser.result.kind === 'success')) finish({ kind: 'error', reason: 'nonzero_exit', detail: 'Завершение процесса не подтверждает успешный result' });
           else finish(parser.result);
         } catch {
           stopProcess();
@@ -264,13 +371,18 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): AgentAd
               new Promise(resolve => { timer = setTimeout(resolve, limits.drainTimeoutMs); }),
             ]);
             clearTimeout(timer);
+            await settleStops();
           }
-          finish({ kind: 'error', reason: 'spawn_failed', detail: 'Не удалось выполнить запуск CLI' });
+          const resultLost = completionIssues.some(item => item.code === 'process_result_failed');
+          finish(resultLost ? { kind: 'error', reason: 'process_result_failed', detail: 'Не удалось получить результат завершения процесса' }
+            : { kind: 'error', reason: 'spawn_failed', detail: 'Не удалось выполнить запуск CLI' });
         }
       };
       // Бюджет включает диагностику/проверку профиля, даже при неисправной внедрённой зависимости.
       const deadline = setTimeout(() => {
+        deadlineFired = true;
         failure ??= { kind: 'error', reason: 'timeout', detail: 'Превышено время запуска' };
+        addIssue({ code: 'timeout', operation: 'wait', detail: 'Превышено время запуска' });
         stopProcess();
         setTimeout(() => finish(failure!), limits.drainTimeoutMs);
       }, limits.timeoutMs + limits.stopGraceMs + limits.drainTimeoutMs);

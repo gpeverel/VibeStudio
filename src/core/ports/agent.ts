@@ -1,5 +1,6 @@
-import type { AgentDiagnostic, AgentErrorReason, AgentEvent, AgentRunResult } from '../../shared/agent.ts';
-export type { AgentDiagnostic, AgentErrorReason, AgentEvent, AgentRunResult, AgentUsage, NormalizedPayload } from '../../shared/agent.ts';
+import type { AgentDiagnostic, AgentErrorReason, AgentEvent, AgentRunCompletion } from '../../shared/agent.ts';
+export type { AgentDiagnostic, AgentErrorReason, AgentEvent, AgentRunCompletion, AgentRunResult, AgentUsage, NormalizedPayload,
+  ProcessCompletion, ProcessCompletionIssue, ProcessCompletionIssueCode, ProcessSignalResult, ProcessStreamState } from '../../shared/agent.ts';
 
 export type ReadTool = 'Read' | 'Glob' | 'Grep';
 /** Legacy strict: отсутствие kind сохраняет прежние требования изоляции. */
@@ -91,9 +92,11 @@ export interface AgentDetection {
 export interface AgentDetectOptions { binaryPath?: string; env?: AgentEnvironment }
 export interface AgentRun {
   events: AsyncIterable<AgentEvent>;
+  /** Принятый до завершения Stop запрещает success; повтор не меняет терминальный снимок. */
   interrupt(): Promise<void>;
   kill(): Promise<void>;
-  done: Promise<AgentRunResult>;
+  /** Тот же исход и completion, что у единственного run_finished; не гарантия очистки. */
+  done: Promise<AgentRunCompletion>;
   readonly diagnostics: readonly AgentDiagnostic[];
 }
 export interface AgentAdapter {
