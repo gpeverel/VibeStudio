@@ -478,3 +478,99 @@ C проверил изменения B чтением и независимым
 Parser, инструкции модели, ProcessRunner и его порт, Git, main/preload/UI, SQLite, Codex, Swarm, live-runner, fixtures, лаборатории, SPEC, конфигурация и зависимости в P1 не изменялись. Реальные CLI/auth/model, test:live и OS-стенды не запускались; ПО не устанавливалось. Общий Vitest сохранил существующие unit-тесты лабораторной политики и setsid-контрпример на собственных временных процессах; это не новый запуск OS-лабораторий.
 
 Реальная effective-конфигурация, builtin/managed-совместимость и штатная auth практического Claude остаются P2b; отдельный Stop outcome остаётся P2a. Практический read-only не обещает файловую/сетевую ОС-изоляцию или остановку detached-потомков. **0C не закрыт; следующий пакет автоматически не начинается.**
+
+## P2a: различимый Stop и lifecycle — 2026-10-13
+
+Контрактный срез P2a реализован; итоговая независимая матрица проходит: **целевые 220/220, полный Vitest 380/380, Node 78/78**. Четыре обнаруженных C сбоя устранены. Итоговые ревью A→C и B→A завершены без блокирующих замечаний; различие EOF runner и чтения очереди адаптером уточнено явно. Статические проверки и сборка успешны. **Smoke завершился SIGABRT и не считается пройденным**; успешный GUI-запуск остаётся незакрытым критерием. Результаты P1 выше сохранены как исторические и не заменяют проверки P2a. Среда текущего прогона: Node `v24.15.0`, npm `12.2.0`, существующие зависимости.
+
+### Владение и изменённые файлы
+
+| Владелец | Файлы P2a | Область |
+|---|---|---|
+| A | `src/core/ports/process-runner.ts`, `src/shared/agent.ts`, `src/core/ports/agent.ts` | Сериализуемый completion и тип конечного результата агента |
+| B | `src/adapters/process-runner/index.ts`, `src/adapters/claude/index.ts` | Наблюдение exit/потоков/сигналов, deadline, сохранение причин после Stop |
+| C | `tests/claude/process-runner.test.ts`, `tests/claude/adapter-lifecycle.test.ts`, `tests/claude/practical-profile.test.ts`, этот отчёт и `docs/IMPLEMENTATION-PLAN.md` | Независимая матрица, регрессии P1, проверки и фактический статус |
+
+Новых файлов нет. `detect.test.ts`, `access-profile.test.ts` и helpers сохранены без правок и участвуют в целевом прогоне. Проверена область изменений: ровно 10 путей из таблицы, посторонних tracked/untracked изменений нет.
+
+### Согласованный контракт
+
+`AgentRunResult` остаётся исходом задачи/протокола; parser не меняется. `AgentRunCompletion = AgentRunResult & { stopAccepted: boolean; completion: ProcessCompletion }` обязателен для `AgentRun.done` и `run_finished.result`. `ProcessResult` сохраняет совместимые `exitCode/signal/error/diagnostic` и получает обязательный `completion`. DTO размещён в shared, core импортирует и реэкспортирует его без обратной зависимости shared → core.
+
+`ProcessCompletion.process` различает `not_started`, наблюдённый `exited` с кодом/сигналом и `unconfirmed`. У stdout/stderr отдельные состояния `not_started/ended/errored/forced_closed/unconfirmed`. `signals` хранит отправленный сигнал, цель process/group, результат sent/not_found/failed и известный errno; ESRCH и sent не доказывают exit. `wait` различает settled/deadline. `issues` сохраняет все наблюдённые причины независимо от первой legacy-ошибки: spawn_failed, timeout, drain_timeout, output_limit, stdin_failed, unsupported_platform, signal_failed, stream_failed, process_result_failed, exit_unconfirmed. `descendants` всегда `not_guaranteed`.
+
+Принятый пользовательский Stop даёт interrupted и `stopAccepted=true`, сохраняя completion. Внутренний kill из-за ошибки сам по себе не является пользовательским Stop. Один терминальный снимок должен поступать в done и единственный run_finished и не меняться от поздних событий. Success требует result протокола, подтверждённого exit(0), штатного EOF обоих потоков, отсутствия ошибок и deadline. Разрешение done или закрытие очереди не заменяет ни одного из этих фактов.
+
+`ended` отражает EOF процесса, наблюдённый runner, и не доказывает, что адаптер прочитал всю очередь. При зависшем чтении итоговая реализация сохраняет известный ended и отдельно сообщает drain_timeout/deadline; success исключён. При отсутствии сведений runner состояние остаётся unconfirmed. Принудительное закрытие нельзя выводить из одного вызова kill. Зависший Promise stop-метода даёт timeout с operation interrupt/kill; signal_failed требует наблюдённого throw/rejection.
+
+По проверке B: текущий runner отправляет сигналы группе своего запуска; предусмотренный DTO target=process сейчас не используется. Финальная попытка SIGKILL по группе записывается в signals, в том числе как not_found после exit; сама запись не является ошибкой Stop. Operation wait применяется для timeout, drain_timeout и exit_unconfirmed, которые различаются по code. stdin_failed и unsupported_platform сохраняются в completion, а в исходе задачи отображаются как spawn_failed. Throw из внедрённого launch оставляет process=unconfirmed: зависимость могла запустить процесс до исключения.
+
+### Независимая матрица C
+
+| Сценарий | Проверяемое свидетельство |
+|---|---|
+| Обычный успех, nonzero exit, spawn failure | Исход согласован с process/EOF; отсутствующий бинарник даёт not_started |
+| Stop обычного процесса и обычного ребёнка | Собственные временные Node-процессы; подтверждение exit и прекращения жизни ребёнка |
+| Игнорирование SIGTERM | Реальный процесс устанавливает обработчик до Stop; видны SIGTERM, SIGKILL и exit по SIGKILL |
+| EPERM/ESRCH и отправленный сигнал без exit | Mock Node spawn/process.kill без системных сигналов; конечный deadline, exit остаётся unconfirmed |
+| close без exit | Закрытие child не превращается в доказанный exit |
+| Совместимые поля и полнота сигналов | close без exit даёт legacy exit_unconfirmed/null; каждой попытке process.kill соответствует запись signals, включая ESRCH финальной уборки |
+| Drain timeout | Собственный потомок удерживает pipes после exit родителя; runner сообщает forced_closed отдельно от EOF |
+| Ошибки stdout/stderr до/после Stop | Раздельные stream states, errno EIO, поздний EOF не стирает ошибку |
+| Throw/rejected interrupt и kill; rejected done | Причины и операции сохранены, в том числе при гонке stop rejection с done |
+| Stop вместе с отказом сигнала, ошибкой stdout и deadline | Все причины должны сохраняться одновременно с interrupted |
+| Stop до prompt, во время detect и strict/practical допуска | Нет позднего launch после готового допуска; not_started отличается от exited |
+| Поздний result, поздние done/EOF, повтор Stop | Нет success после Stop, единственный terminal, неизменный снимок |
+| Зависший stop Promise при готовых done/EOF | wait=deadline и issue timeout с operation interrupt/kill; поздний rejection не меняет снимок |
+| Мутация process/signals внедрённым runner после terminal | Адаптер копирует вложенные данные; опубликованный результат остаётся прежним |
+| Зависший iterator после заявленного runner EOF | Точный ended сохраняет наблюдённый EOF; error, drain_timeout/deadline и неизменный снимок обязательны; kill не выдаётся за destroy |
+| Detached/setsid-контрпример | Собственный конечный потомок пишет marker после done родителя; descendants остаётся not_guaranteed |
+| Регрессии P1 | Strict без verifier/evidence/launch блокируется; practical-ready только synthetic, права и argv/env не расширены |
+
+Все строки матрицы, включая отдельный ESRCH финальной уборки после наблюдённого exit, прошли в целевом и полном прогоне. Последнее усиление assertion до точного ended подтверждено отдельным целевым прогоном 220/220 после полного 380/380; реализация между ними не менялась. Обычные процессы проверяются на временных Node-стендах. Ошибки сигналов и неподтверждённый exit воспроизводятся на doubles; их PID никогда не передаётся настоящему process.kill. Runner- и adapter-тесты завершают реальные управляемые запуски также в afterEach, используя только собственные ProcessRun. Detached-потомок конечен по своему таймеру; его PID не используется для убийства.
+
+### Перекрёстная проверка и команды
+
+C проверил B чтением и независимыми тестами. Первые 212 целевых тестов прошли. Дополнительные прогоны, затем полный Vitest воспроизвели четыре failed в трёх местах: `settleStops` скрывал deadline в обоих stop-методах; `assembleCompletion` разделял изменяемые process/signals с producer и выдавал forced_closed без фактического закрытия потока адаптером. B исправил причины: незавершённый stop-метод даёт deadline и timeout соответствующей операции, вложенные данные копируются, неподтверждённый destroy больше не выдумывается. Повторная матрица 219/219 и полный набор 379/379 подтвердили исправления; assertions не ослаблялись.
+
+A завершил проверку полной матрицы чтением без блокирующих замечаний: все обязательные сценарии представлены, terminal helper проверяет один объект done/run_finished, оба маршрута допуска и detached-marker сохранены, fault-тесты не посылают реальные сигналы. Внесены legacy error/null при close без exit, отдельный ESRCH финальной уборки после наблюдённого exit с числом signals, равным числу вызовов process.kill, и уборка собственных процессов даже при падении assertion. Teardown распространяется на runner и реальные launch адаптера. A также сообщил успешную изолированную проверку трёх контрактных файлов через TypeScript (exit 0) и их diff-check (exit 0).
+
+Первоначальное требование A заменить явный ended на unconfirmed при зависшем iterator снято после уточнения: EOF runner и чтение его очереди — разные факты. По окончательному решению A известный ended сохраняется; C проверяет его точным assertion вместе с error, drain_timeout/deadline, отсутствием destroy и неизменностью terminal. Временный допуск двух состояний удалён. Промежуточные отказы из-за несовпавших ожиданий и параллельных изменений записаны ниже, не объявлены успешными и не считаются оставшейся ошибкой реализации.
+
+B завершил ревью контрактов A без блокирующих замечаний: проверены реализуемость ProcessCompletion/AgentRunCompletion, единый замороженный terminal, сохранение отказов и deadlines, закрытые коды причин и отсутствие shared → core. Особенности проекции кодов, сигналов группы и throw из launch включены в описание контракта выше. C→B завершена чтением реализации и окончательными целевым/полным прогонами.
+
+SHA-256 реализаций до и после окончательного полного прогона 380/380 совпали: `src/adapters/claude/index.ts` — `9443305752387627adeb40c92e68007b37dff8c8b9ce6763c455441c8b47cb72`; `src/adapters/process-runner/index.ts` — `6dd2b2937c2785b99eead1fd728f819ad9f6427a080e6b015d60e92a4c55448b`.
+
+Все npm-команды выполняются через `sh scripts/with-node.sh`; установка пакетов не выполнялась. Целевой запуск:
+
+```sh
+sh scripts/with-node.sh npm exec --offline --no -- vitest run tests/claude/process-runner.test.ts tests/claude/adapter-lifecycle.test.ts tests/claude/practical-profile.test.ts tests/claude/detect.test.ts tests/claude/access-profile.test.ts
+```
+
+| Команда / прогон | Фактический результат P2a |
+|---|---|
+| Первый интеграционный целевой Vitest | exit 0; 5 файлов, 212/212; 19,50 с |
+| Дополнительный фильтр `-t 'зависший\|terminal не разделяет\|P2a: Stop'` в adapter-lifecycle/practical-profile | exit 1; 4 passed, 3 failed; 132 остальных не выбраны фильтром |
+| Тот же фильтр с добавлением `\|Stop сохраняет одновременно\|deadline чтения` | exit 1; 5 passed, 4 failed; 132 остальных не выбраны фильтром |
+| Целевой Vitest после первых исправлений B, до финального уточнения A | exit 0; 5 файлов, 219/219; 19,61 с |
+| `npm exec --offline --no -- vitest run tests/claude/process-runner.test.ts tests/claude/adapter-lifecycle.test.ts -t 'финальной уборки после exit\|deadline чтения'` с первоначальным требованием A | exit 1; 1 passed (ESRCH после exit), 1 failed (stderr ended вместо unconfirmed), 83 остальных не выбраны фильтром; 0,287 с |
+| Промежуточные целевые прогоны при согласовании ended/unconfirmed | оба exit 1; каждый 219 passed, 1 failed из 220; 30,60 с и 19,17 с |
+| Целевой Vitest с новым случаем ESRCH и временным допуском ended/unconfirmed | exit 0; 5 файлов, 220/220; 19,43 с |
+| Окончательный целевой Vitest с точным ended по решению A | exit 0; 5 файлов, 220/220; 22,15 с |
+| `npm run typecheck`, включая повтор после последних правок B/C | exit 0 |
+| `npm run lint`, включая повтор после последних правок B/C | exit 0 |
+| `npm run check:boundaries`, включая повтор после исправлений B | exit 0; 31 модуль, 50 зависимостей, нарушений нет |
+| Первый полный `npm test`, до исправлений B | exit 1; 12 файлов: 11 passed, 1 failed; 375 passed, 4 failed из 379; 174,30 с |
+| Полный `npm test` после первых исправлений B, до финального уточнения A | exit 0; 12 файлов, 379/379; 188,77 с |
+| Последний полный `npm test`, до усиления assertion до точного ended | exit 0; 12 файлов, 380/380; 190,24 с |
+| `npm run test:node` | exit 0; 7 suites, 78/78; fail/cancelled/skipped/todo = 0; 163,00 с |
+| `npm run build`, включая повтор после исправлений B | exit 0; main/preload/renderer собраны |
+| `npm run smoke` | exit 1; Electron завершился SIGABRT, успешный GUI-запуск не подтверждён |
+| `git diff --check` | exit 0 |
+| Контроль tracked/untracked области | 10 разрешённых файлов, новых и посторонних файлов нет |
+
+Полный Vitest повторялся после исправлений B, затем после нового случая ESRCH; одинаковые полные наборы не выполнялись одновременно. Последнее усиление одного assertion до точного ended проверено целевым набором; полный набор повторно не запускался, поскольку реализация и остальные тесты не менялись. Typecheck и lint повторены после этого усиления; check:boundaries и build прошли на той же реализации. Node-набор и smoke не повторялись: их пути после прогона не менялись. В Git-части полного Vitest наблюдалось предупреждение `confstr() failed ... DARWIN_USER_TEMP_DIR; using /tmp instead`; Git-тесты завершились успешно. Причина SIGABRT дополнительно не установлена, sandbox не отключался; проверки запрещённого success, потери ошибок, ложного exit/destroy и strict/practical допуска сохранены.
+
+### Ограничения и незакрытые критерии
+
+Незакрытым остаётся успешный smoke; зелёные тесты его не заменяют. Незакрытых замечаний перекрёстного ревью и падающих lifecycle-тестов в итоговом прогоне нет. Гарантия остановки detached-потомков не добавлена; новая ОС-песочница и полный tree-kill не реализуются. Данные completion предназначены для будущего решения engine; блокировка изменяющего слота workspace относится к P5 и здесь не подключена. Production-ready practical, реальные CLI/auth/model, `test:live`, OS-лаборатории, Codex, SessionEngine, UI и продуктовый Swarm не запускались и не реализовывались. Полный Vitest сохраняет прежние unit-проверки лабораторной политики и setsid-контрпример; это не запуск OS-лабораторий. Parser, инструкции, fixtures, Git, Electron, зависимости и конфигурация не изменялись. **Весь 0C не закрывается; следующий пакет автоматически не начинается.**

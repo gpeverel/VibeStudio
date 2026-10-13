@@ -61,6 +61,11 @@ async function outcome(run: AgentRun) {
   expect(terminal).toHaveLength(1);
   expect(terminal[0]).toMatchObject({ result });
   expect(events.at(-1)?.type).toBe('run_finished');
+  expect(result.completion.descendants).toBe('not_guaranteed');
+  expect(typeof result.stopAccepted).toBe('boolean');
+  if (result.kind === 'success') expect(result).toMatchObject({ stopAccepted: false, completion: {
+    process: { state: 'exited', exitCode: 0, signal: null }, stdout: 'ended', stderr: 'ended', wait: 'settled', issues: [],
+  } });
   return { events, result };
 }
 
@@ -68,6 +73,7 @@ async function blocked(h: ReturnType<typeof harness>, req = h.req()) {
   const run = await h.adapter.start(req);
   const result = await outcome(run);
   expect(result.result.kind).toBe('error');
+  expect(result.result.completion).toMatchObject({ process: { state: 'not_started' }, stdout: 'not_started', stderr: 'not_started', signals: [] });
   expect(h.launch).not.toHaveBeenCalled();
   expect(h.s.records().filter(record => record.probe === 'run')).toEqual([]);
   expect(result.events.some(event => event.type === 'run_started')).toBe(false);
@@ -400,6 +406,26 @@ describe('P1: synthetic practical-ready запускает только точн
 });
 
 describe('P1: stop/error/deadline оценки запрещают поздний prompt', () => {
+  it.each(['strict', 'practical'] as const)('P2a: Stop во время detect для %s не допускает поздний prompt', async profile => {
+    vi.useFakeTimers();
+    const detected = deferred<AgentDetection>();
+    const h = harness({ detect: () => detected.promise, timeoutMs: 100, stopGraceMs: 10, drainTimeoutMs: 20 });
+    const run = await h.adapter.start(profile === 'strict' ? legacyStrictRequest(h.s.dir) : h.req());
+    const stopping = run.interrupt();
+    await vi.advanceTimersByTimeAsync(500);
+    await stopping;
+    const before = await outcome(run);
+    expect(before.result).toMatchObject({ kind: 'interrupted', stopAccepted: true,
+      completion: { process: { state: 'not_started' }, stdout: 'not_started', stderr: 'not_started', signals: [] } });
+    detected.resolve(h.detection);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await run.done).toBe(before.result);
+    expect(h.launch).not.toHaveBeenCalled();
+    expect(h.assess).not.toHaveBeenCalled();
+    expect(h.verify).not.toHaveBeenCalled();
+    expect(h.s.records()).toEqual([]);
+  });
+
   it.each(['interrupt', 'kill'] as const)('%s во время оценки: поздний ready не запускает runner', async method => {
     const entered = deferred<PracticalAdmissionContext>();
     const admission = deferred<PracticalAdmission>();
@@ -410,7 +436,9 @@ describe('P1: stop/error/deadline оценки запрещают поздний
     admission.resolve(SYNTHETIC_READY);
     await stopped;
     const { result } = await outcome(run);
-    expect(result).toEqual({ kind: 'interrupted' });
+    expect(result).toMatchObject({ kind: 'interrupted', stopAccepted: true, completion: {
+      process: { state: 'not_started' }, stdout: 'not_started', stderr: 'not_started', signals: [],
+    } });
     expect(h.launch).not.toHaveBeenCalled();
     expect(h.s.records()).toEqual([]);
   });
@@ -424,7 +452,8 @@ describe('P1: stop/error/deadline оценки запрещают поздний
     const stopped = run.interrupt();
     admission.reject(new Error('synthetic failure after stop'));
     await stopped;
-    expect((await outcome(run)).result).toEqual({ kind: 'interrupted' });
+    expect((await outcome(run)).result).toMatchObject({ kind: 'interrupted', stopAccepted: true,
+      completion: { process: { state: 'not_started' }, signals: [] } });
     expect(h.launch).not.toHaveBeenCalled();
   });
 

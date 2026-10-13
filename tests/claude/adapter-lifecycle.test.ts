@@ -1,12 +1,14 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { PassThrough } from 'node:stream';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createClaudeAdapter } from '../../src/adapters/claude/index.ts';
 import type { ClaudeAdapterOptions } from '../../src/adapters/claude/index.ts';
 import type { AccessVerification } from '../../src/adapters/claude/profile.ts';
 import { createProcessRunner } from '../../src/adapters/process-runner/index.ts';
 import type { AgentCapabilities, AgentDetection, AgentEvent, AgentRun, AgentRunRequest, AgentRunResult } from '../../src/core/ports/agent.ts';
+import type { ProcessCompletion, ProcessRequest, ProcessResult, ProcessRun } from '../../src/core/ports/process-runner.ts';
 import { readOnlyProfile, request } from '../helpers/claude/requests.ts';
 import { Stand, pidAlive, waitFor } from '../helpers/claude/stand.ts';
 import type { FakeScenario, FakeStep } from '../helpers/claude/stand.ts';
@@ -22,8 +24,16 @@ const fixture = (name: string): string => readFileSync(join(FIXTURES, name), 'ut
 const FIXTURE_SESSION = '11111111-1111-4111-8111-111111111111';
 
 const stands: Stand[] = [];
+const managed = new Set<ProcessRun>();
 function stand(): Stand { const s = new Stand(); stands.push(s); return s; }
-afterEach(() => { while (stands.length) stands.pop()?.cleanup(); });
+afterEach(async () => {
+  const stopping = Promise.all([...managed].map(run => run.kill()));
+  if (vi.isFakeTimers()) await vi.advanceTimersByTimeAsync(30_000);
+  await stopping;
+  managed.clear();
+  vi.useRealTimers();
+  while (stands.length) stands.pop()?.cleanup();
+});
 
 const CAPS: AgentCapabilities = {
   streamJson: true, partialMessages: true, sessionId: true, resume: true, noSessionPersistence: true, maxTurns: true,
@@ -34,7 +44,13 @@ const detection = (binaryPath: string | null, overrides: Partial<AgentDetection>
   status: 'available', binaryPath, version: '2.1.295', auth: 'authenticated', capabilities: CAPS,
   unavailable: [], ...overrides,
 });
-const VERIFIED: AccessVerification = { status: 'verified', evidence: ['synthetic-test-stub'], detail: 'подстановка теста', launch: createProcessRunner().start };
+const realRunner = createProcessRunner();
+const launchReal = (input: ProcessRequest): ProcessRun => {
+  const run = realRunner.start(input);
+  managed.add(run);
+  return run;
+};
+const VERIFIED: AccessVerification = { status: 'verified', evidence: ['synthetic-test-stub'], detail: 'подстановка теста', launch: launchReal };
 
 interface Harness { s: Stand; bin: string; adapter: ReturnType<typeof createClaudeAdapter>; req: (o?: Partial<AgentRunRequest>) => AgentRunRequest }
 function harness(scenario: FakeScenario, options: Partial<ClaudeAdapterOptions> = {}, det?: Partial<AgentDetection>): Harness {
@@ -59,12 +75,300 @@ const finished = (events: AgentEvent[]): AgentEvent[] => events.filter(e => e.ty
 const text = (events: AgentEvent[]): string => events.reduce((acc, e) => (e.type === 'text' ? (e.mode === 'delta' ? acc + e.text : e.text) : acc), '');
 const runs = (s: Stand) => s.records().filter(r => r.probe === 'run');
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+const exitedCompletion = (patch: Partial<ProcessCompletion> = {}): ProcessCompletion => ({
+  process: { state: 'exited', exitCode: 0, signal: null }, stdout: 'ended', stderr: 'ended',
+  signals: [], wait: 'settled', issues: [], descendants: 'not_guaranteed', ...patch,
+});
+const processResult = (completion = exitedCompletion()): ProcessResult => ({ exitCode: 0, signal: null, completion });
+
+/** Управляемый ProcessRun: ни одного процесса или системного сигнала. */
+async function lifecycleDouble() {
+  vi.useFakeTimers();
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  const pending = deferred<ProcessResult>();
+  const launched = deferred<void>();
+  const interrupt = vi.fn(async () => {});
+  const kill = vi.fn(async () => {});
+  const processRun: ProcessRun = { stdout, stderr, done: pending.promise, interrupt, kill };
+  const h = harness({}, { timeoutMs: 100, stopGraceMs: 10, drainTimeoutMs: 20,
+    verifyAccess: async () => ({ ...VERIFIED, launch: () => { launched.resolve(); return processRun; } }),
+  });
+  const run = await h.adapter.start(h.req());
+  const events: AgentEvent[] = [];
+  const reading = (async () => { for await (const event of run.events) events.push(event); })();
+  await launched.promise;
+  return { run, stdout, stderr, pending, interrupt, kill, events, reading };
+}
+
+async function terminal(d: Awaited<ReturnType<typeof lifecycleDouble>>) {
+  const result = await d.run.done;
+  await d.reading;
+  expect(finished(d.events)).toHaveLength(1);
+  const last = d.events.at(-1);
+  expect(last?.type).toBe('run_finished');
+  expect(last?.type === 'run_finished' ? last.result : undefined).toBe(result);
+  expect(result.completion.descendants).toBe('not_guaranteed');
+  return result;
+}
+
+describe('P2a адаптер: независимая матрица ошибок и гонок на ProcessRun doubles', () => {
+  it.each([
+    ['interrupt', 'throw'], ['interrupt', 'reject'], ['kill', 'throw'], ['kill', 'reject'],
+  ] as const)('%s %s сохраняет errno одновременно с deadline и неподтверждённым exit', async (method, mode) => {
+    const d = await lifecycleDouble();
+    const cause = Object.assign(new Error('synthetic signal failure'), { code: 'EPERM' });
+    d[method].mockImplementation(() => { if (mode === 'throw') throw cause; return Promise.reject(cause); });
+    const stopped = d.run[method]();
+    d.stdout.end();
+    d.stderr.end();
+    await vi.advanceTimersByTimeAsync(500);
+    await stopped;
+    const result = await terminal(d);
+    expect(result).toMatchObject({ kind: 'interrupted', stopAccepted: true,
+      completion: { process: { state: 'unconfirmed' }, wait: 'deadline' } });
+    expect(result.completion.issues).toContainEqual(expect.objectContaining({ code: 'signal_failed', operation: method, errorCode: 'EPERM' }));
+    expect(result.completion.issues).toContainEqual(expect.objectContaining({ code: 'exit_unconfirmed' }));
+    expect(result.completion.issues).toContainEqual(expect.objectContaining({ code: 'timeout' }));
+  });
+
+  it('Stop сохраняет одновременно отказ сигнала, ошибку stdout и исчерпание deadline', async () => {
+    const d = await lifecycleDouble();
+    d.interrupt.mockRejectedValue(Object.assign(new Error('synthetic signal failure'), { code: 'EPERM' }));
+    const stopping = d.run.interrupt();
+    d.stdout.destroy(Object.assign(new Error('synthetic read failure'), { code: 'EIO' }));
+    await vi.advanceTimersByTimeAsync(500);
+    await stopping;
+    const result = await terminal(d);
+    expect(result).toMatchObject({ kind: 'interrupted', stopAccepted: true, completion: {
+      process: { state: 'unconfirmed' }, stdout: 'errored', stderr: 'unconfirmed', wait: 'deadline',
+    } });
+    expect(result.completion.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'signal_failed', operation: 'interrupt', errorCode: 'EPERM' }),
+      expect.objectContaining({ code: 'stream_failed', operation: 'stdout', errorCode: 'EIO' }),
+      expect.objectContaining({ code: 'timeout' }),
+      expect.objectContaining({ code: 'exit_unconfirmed' }),
+    ]));
+    d.stderr.end();
+    await vi.advanceTimersByTimeAsync(1);
+  });
+
+  it.each(['interrupt', 'kill'] as const)('%s rejection рядом с done не теряется при формировании terminal', async method => {
+    const d = await lifecycleDouble();
+    d.stdout.end(fixture('success-simple.jsonl'));
+    d.stderr.end();
+    d[method].mockImplementation(() => {
+      d.pending.resolve(processResult());
+      return Promise.reject(Object.assign(new Error('synthetic denial'), { code: 'EACCES' }));
+    });
+    const stopped = d.run[method]();
+    await vi.advanceTimersByTimeAsync(1);
+    await stopped;
+    const result = await terminal(d);
+    expect(result).toMatchObject({ kind: 'interrupted', stopAccepted: true });
+    expect(result.completion.issues).toContainEqual(expect.objectContaining({ code: 'signal_failed', operation: method, errorCode: 'EACCES' }));
+  });
+
+  it.each([false, true])('rejected process.done сохраняет причину, Stop=%s', async stopped => {
+    const d = await lifecycleDouble();
+    const stopping = stopped ? d.run.interrupt() : undefined;
+    d.stdout.end();
+    d.stderr.end();
+    d.pending.reject(Object.assign(new Error('synthetic done rejection'), { code: 'EIO' }));
+    await vi.advanceTimersByTimeAsync(500);
+    await stopping;
+    const result = await terminal(d);
+    expect(result.kind).toBe(stopped ? 'interrupted' : 'error');
+    expect(result.stopAccepted).toBe(stopped);
+    expect(result.completion.process).toEqual({ state: 'unconfirmed' });
+    expect(result.completion.issues).toContainEqual(expect.objectContaining({ code: 'process_result_failed', operation: 'done', errorCode: 'EIO' }));
+  });
+
+  it.each([
+    ['stdout', false], ['stderr', false], ['stdout', true], ['stderr', true],
+  ] as const)('ошибка итератора %s сохраняется, Stop=%s; EOF второго потока независим', async (stream, stopped) => {
+    const d = await lifecycleDouble();
+    const stopping = stopped ? d.run.interrupt() : undefined;
+    const other = stream === 'stdout' ? 'stderr' : 'stdout';
+    d[other].end();
+    d[stream].destroy(Object.assign(new Error('synthetic read failure'), { code: 'EIO' }));
+    d.pending.resolve(processResult());
+    await vi.advanceTimersByTimeAsync(100);
+    await stopping;
+    const result = await terminal(d);
+    expect(result.kind).toBe(stopped ? 'interrupted' : 'error');
+    expect(result.completion[stream]).toBe('errored');
+    expect(result.completion[other]).toBe('ended');
+    expect(result.completion.issues).toContainEqual(expect.objectContaining({ code: 'stream_failed', operation: stream, errorCode: 'EIO' }));
+  });
+
+  it.each([false, true])('exit и result не скрывают зависший stderr, Stop=%s', async stopped => {
+    const d = await lifecycleDouble();
+    const stopping = stopped ? d.run.interrupt() : undefined;
+    d.stdout.end(fixture('success-simple.jsonl'));
+    d.pending.resolve(processResult(exitedCompletion({ stderr: 'unconfirmed' })));
+    await vi.advanceTimersByTimeAsync(500);
+    await stopping;
+    const result = await terminal(d);
+    expect(result.kind).toBe(stopped ? 'interrupted' : 'error');
+    expect(result.completion).toMatchObject({ process: { state: 'exited' }, stdout: 'ended', stderr: 'unconfirmed', wait: 'deadline' });
+    expect(result.completion.issues).toContainEqual(expect.objectContaining({ code: 'drain_timeout' }));
+    const snapshot = JSON.stringify(result);
+    d.stderr.end();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(JSON.stringify(await d.run.done)).toBe(snapshot);
+    expect(finished(d.events)).toHaveLength(1);
+  });
+
+  it('deadline чтения не выдаёт вызов kill за фактическое закрытие итератора', async () => {
+    const d = await lifecycleDouble();
+    d.stdout.end(fixture('success-simple.jsonl'));
+    // Известный EOF runner сохраняется; незавершённое чтение очереди отражается отдельно как drain_timeout.
+    d.pending.resolve(processResult());
+    await vi.advanceTimersByTimeAsync(500);
+    const result = await terminal(d);
+    expect(result.kind).toBe('error');
+    expect(result.completion.wait).toBe('deadline');
+    expect(result.completion.issues).toContainEqual(expect.objectContaining({ code: 'drain_timeout' }));
+    expect(d.stderr.destroyed).toBe(false);
+    expect(result.completion.stdout).toBe('ended');
+    expect(result.completion.stderr).toBe('ended');
+    const snapshot = JSON.stringify(result);
+    d.stderr.end();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(JSON.stringify(await d.run.done)).toBe(snapshot);
+  });
+
+  it('пустые сведения о процессе не становятся exit(0) из-за resolved done', async () => {
+    const d = await lifecycleDouble();
+    d.stdout.end(fixture('success-simple.jsonl'));
+    d.stderr.end();
+    // Несовместимая внедрённая зависимость: отсутствие обязательного completion на runtime-границе.
+    d.pending.resolve({ exitCode: 0, signal: null } as ProcessResult);
+    await vi.advanceTimersByTimeAsync(500);
+    const result = await terminal(d);
+    expect(result.kind).toBe('error');
+    expect(result.completion.process).toEqual({ state: 'unconfirmed' });
+  });
+
+  it.each(['interrupt', 'kill'] as const)('зависший %s при полученных done/EOF оставляет deadline, а не чистое завершение', async method => {
+    const d = await lifecycleDouble();
+    const pendingStop = deferred<void>();
+    d[method].mockImplementation(() => pendingStop.promise);
+    const stopping = d.run[method]();
+    d.stdout.end(fixture('success-simple.jsonl'));
+    d.stderr.end();
+    d.pending.resolve(processResult());
+    await vi.advanceTimersByTimeAsync(500);
+    await stopping;
+    const result = await terminal(d);
+    expect(result).toMatchObject({ kind: 'interrupted', stopAccepted: true, completion: {
+      process: { state: 'exited' }, stdout: 'ended', stderr: 'ended', wait: 'deadline',
+    } });
+    expect(result.completion.issues.some(issue => issue.code === 'timeout' || issue.code === 'drain_timeout')).toBe(true);
+    const snapshot = JSON.stringify(result);
+    pendingStop.reject(Object.assign(new Error('late rejection'), { code: 'EPERM' }));
+    await vi.advanceTimersByTimeAsync(1);
+    expect(JSON.stringify(await d.run.done)).toBe(snapshot);
+  });
+
+  it('terminal не разделяет изменяемые process/signals с результатом внедрённого runner', async () => {
+    const d = await lifecycleDouble();
+    const observed = { state: 'exited' as const, exitCode: 0, signal: null };
+    const signals = [{ signal: 'SIGTERM' as const, target: 'group' as const, status: 'sent' as const }];
+    d.stdout.end(fixture('success-simple.jsonl'));
+    d.stderr.end();
+    d.pending.resolve(processResult(exitedCompletion({ process: observed, signals })));
+    await vi.advanceTimersByTimeAsync(1);
+    const result = await terminal(d);
+    expect(result.kind).toBe('success');
+    const snapshot = JSON.stringify(result);
+    // Допустимы копирование либо замораживание. Мутабельный producer не меняет опубликованный снимок.
+    if (!Object.isFrozen(observed)) observed.exitCode = 9;
+    if (!Object.isFrozen(signals)) signals.push({ signal: 'SIGTERM', target: 'group', status: 'sent' });
+    expect(JSON.stringify(await d.run.done)).toBe(snapshot);
+  });
+
+  it('поздний success после Stop не меняет interrupted и не создаёт второй terminal', async () => {
+    const d = await lifecycleDouble();
+    const stopping = d.run.interrupt();
+    d.stdout.end(fixture('success-simple.jsonl'));
+    d.stderr.end();
+    d.pending.resolve(processResult());
+    await vi.advanceTimersByTimeAsync(1);
+    await stopping;
+    const result = await terminal(d);
+    expect(result).toMatchObject({ kind: 'interrupted', stopAccepted: true, completion: { process: { state: 'exited' } } });
+    const signals = d.interrupt.mock.calls.length + d.kill.mock.calls.length;
+    await d.run.interrupt();
+    await d.run.kill();
+    expect(await d.run.done).toBe(result);
+    expect(d.interrupt.mock.calls.length + d.kill.mock.calls.length).toBe(signals);
+  });
+
+  it('deadline фиксирует снимок: поздний done/EOF и повтор Stop не меняют его', async () => {
+    const d = await lifecycleDouble();
+    const stopping = d.run.interrupt();
+    await vi.advanceTimersByTimeAsync(500);
+    await stopping;
+    const result = await terminal(d);
+    expect(result).toMatchObject({ kind: 'interrupted', stopAccepted: true,
+      completion: { process: { state: 'unconfirmed' }, stdout: 'unconfirmed', stderr: 'unconfirmed', wait: 'deadline' } });
+    const snapshot = JSON.stringify(result);
+    d.stdout.end(fixture('success-simple.jsonl'));
+    d.stderr.end();
+    d.pending.resolve(processResult());
+    await vi.advanceTimersByTimeAsync(100);
+    await d.run.interrupt();
+    await d.run.kill();
+    expect(JSON.stringify(await d.run.done)).toBe(snapshot);
+    expect(finished(d.events)).toHaveLength(1);
+  });
+
+  it.each(['interrupt', 'kill'] as const)('%s во время strict verifyAccess запрещает поздний launch', async method => {
+    vi.useFakeTimers();
+    const entered = deferred<void>();
+    const verified = deferred<AccessVerification>();
+    const launch = vi.fn(VERIFIED.launch!);
+    const h = harness({}, { timeoutMs: 100, stopGraceMs: 10, drainTimeoutMs: 20,
+      verifyAccess: () => { entered.resolve(); return verified.promise; },
+    });
+    const run = await h.adapter.start(h.req());
+    const reading = collect(run);
+    await entered.promise;
+    const stopping = run[method]();
+    await vi.advanceTimersByTimeAsync(500);
+    await stopping;
+    const result = await run.done;
+    expect(result).toMatchObject({ kind: 'interrupted', stopAccepted: true, completion: {
+      process: { state: 'not_started' }, stdout: 'not_started', stderr: 'not_started', signals: [],
+    } });
+    verified.resolve({ ...VERIFIED, launch });
+    await vi.advanceTimersByTimeAsync(1);
+    const events = await reading;
+    expect(finished(events)).toHaveLength(1);
+    expect(events.at(-1)).toMatchObject({ result });
+    expect(launch).not.toHaveBeenCalled();
+    expect(runs(h.s)).toEqual([]);
+  });
+});
+
 describe('0C адаптер: успешный запуск и конверт событий', () => {
   it('success: конверт, монотонный seq, единственный run_finished, промпт через stdin', async () => {
     const h = harness({ steps: [out(fixture('success-simple.jsonl'))] });
     const run = await h.adapter.start(h.req({ prompt: 'ЗАПРОС-УНИК-7731 ж' }));
     const [events, result] = await Promise.all([collect(run), run.done]);
     expect(result).toMatchObject({ kind: 'success', text: 'Привет, мир 🌍' });
+    expect(result).toMatchObject({ stopAccepted: false, completion: {
+      process: { state: 'exited', exitCode: 0, signal: null }, stdout: 'ended', stderr: 'ended',
+      wait: 'settled', issues: [], descendants: 'not_guaranteed',
+    } });
     expect(finished(events)).toHaveLength(1);
     expect(events.at(-1)?.type).toBe('run_finished');
     expect(events.filter(e => e.type === 'run_started')).toHaveLength(1);
@@ -277,7 +581,7 @@ describe('0C адаптер: остановка', () => {
     await Promise.all([run.interrupt(), run.interrupt(), run.kill()]);
     await run.interrupt();
     await run.kill();
-    expect(await run.done).toEqual({ kind: 'interrupted' });
+    expect(await run.done).toMatchObject({ kind: 'interrupted', stopAccepted: true, completion: { process: { state: 'exited' } } });
   });
 
   it('все события доступны после остановки и заканчиваются единственным run_finished(interrupted)', async () => {
@@ -289,7 +593,8 @@ describe('0C адаптер: остановка', () => {
     const events = await collected;
     expect(finished(events)).toHaveLength(1);
     const last = events.at(-1);
-    expect(last && last.type === 'run_finished' ? last.result : undefined).toEqual({ kind: 'interrupted' });
+    expect(last && last.type === 'run_finished' ? last.result : undefined).toEqual(await run.done);
+    expect(await run.done).toMatchObject({ kind: 'interrupted', stopAccepted: true, completion: { process: { state: 'exited' } } });
   });
 
   it('interrupt после завершения запуска не меняет терминальный результат', async () => {
@@ -311,7 +616,7 @@ describe('0C адаптер: остановка', () => {
     await waitFor(() => seen.some(e => e.type === 'usage'));
     await run.interrupt();
     await reader;
-    expect(await run.done).toEqual({ kind: 'interrupted' });
+    expect(await run.done).toMatchObject({ kind: 'interrupted', stopAccepted: true, completion: { process: { state: 'exited' } } });
     expect(finished(seen)).toHaveLength(1);
   });
 
@@ -325,7 +630,8 @@ describe('0C адаптер: остановка', () => {
     });
     const run = await adapter.start(request(s.dir, { agentSessionId: FIXTURE_SESSION }));
     await run.interrupt();
-    expect(await run.done).toEqual({ kind: 'interrupted' });
+    expect(await run.done).toMatchObject({ kind: 'interrupted', stopAccepted: true,
+      completion: { process: { state: 'not_started' }, stdout: 'not_started', stderr: 'not_started', signals: [] } });
     await new Promise(r => setTimeout(r, 200));
     expect(runs(s)).toHaveLength(0);
   });
@@ -343,7 +649,8 @@ describe('0C адаптер: остановка', () => {
     const childPid = Number(readFileSync(pidFile, 'utf8'));
     expect(pidAlive(childPid)).toBe(true);
     await run.interrupt();
-    expect(await run.done).toEqual({ kind: 'interrupted' });
+    expect(await run.done).toMatchObject({ kind: 'interrupted', stopAccepted: true,
+      completion: { process: { state: 'exited', signal: 'SIGKILL' }, descendants: 'not_guaranteed' } });
     expect(await waitFor(() => !pidAlive(childPid))).toBe(true);
   });
 });
@@ -403,7 +710,7 @@ describe('0C адаптер: диагностика блокирует запу�
     let launches = 0;
     const h = harness({ steps: [out(fixture('success-simple.jsonl'))] }, {
       runner: { start: () => { throw new Error('Unverified spawn must not be used'); } },
-      verifyAccess: async () => ({ ...VERIFIED, launch: req => { launches++; return createProcessRunner().start(req); } }),
+      verifyAccess: async () => ({ ...VERIFIED, launch: req => { launches++; return launchReal(req); } }),
     });
     const run = await h.adapter.start(h.req());
     await collect(run);
