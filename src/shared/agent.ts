@@ -2,6 +2,7 @@
 export type AgentErrorReason =
   | 'binary_missing' | 'not_authenticated' | 'capability_missing' | 'invalid_request'
   | 'profile_unverified' | 'profile_unsupported' | 'spawn_failed' | 'timeout'
+  | 'practical_admission_blocked' | 'practical_admission_unsupported'
   | 'drain_timeout' | 'output_limit' | 'protocol_incompatible' | 'missing_result'
   | 'nonzero_exit' | 'network' | 'overloaded' | 'rate_limit' | 'unknown';
 

@@ -10,6 +10,12 @@ export const CLAUDE_ENV_ALLOWLIST = [
   'CLAUDE_CONFIG_DIR', 'ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN',
 ] as const;
 
+/** Явно заданные имена вне allowlist. Practical-маршрут отклоняет их до prompt;
+ * strict-маршрут сохраняет прежнее молчаливое отбрасывание в buildClaudeEnv. */
+export function forbiddenEnvNames(env: Readonly<Record<string, string | undefined>>): string[] {
+  return Object.keys(env).filter(name => env[name] !== undefined && (!(CLAUDE_ENV_ALLOWLIST as readonly string[]).includes(name) || env[name]!.includes('\0')));
+}
+
 export function buildClaudeEnv(source: Readonly<Record<string, string | undefined>>): Record<string, string> {
   const env: Record<string, string> = {};
   for (const name of CLAUDE_ENV_ALLOWLIST) {

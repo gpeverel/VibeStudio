@@ -31,8 +31,8 @@ const CAPS: AgentCapabilities = {
   readOnly: 'unverified',
 };
 const detection = (binaryPath: string | null, overrides: Partial<AgentDetection> = {}): AgentDetection => ({
-  status: 'unavailable', binaryPath, version: '2.1.295', auth: 'authenticated', capabilities: CAPS,
-  unavailable: [{ reason: 'profile_unverified', detail: 'не подтверждено' }], ...overrides,
+  status: 'available', binaryPath, version: '2.1.295', auth: 'authenticated', capabilities: CAPS,
+  unavailable: [], ...overrides,
 });
 const VERIFIED: AccessVerification = { status: 'verified', evidence: ['synthetic-test-stub'], detail: 'подстановка теста', launch: createProcessRunner().start };
 
