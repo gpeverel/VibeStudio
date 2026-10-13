@@ -2,7 +2,9 @@ import type { AgentDiagnostic, AgentErrorReason, AgentEvent, AgentRunResult } fr
 export type { AgentDiagnostic, AgentErrorReason, AgentEvent, AgentRunResult, AgentUsage, NormalizedPayload } from '../../shared/agent.ts';
 
 export type ReadTool = 'Read' | 'Glob' | 'Grep';
+/** Legacy strict: отсутствие kind сохраняет прежние требования изоляции. */
 export interface AccessProfile {
+  kind?: never;
   mode: 'read-only';
   tools: readonly ReadTool[];
   allow: readonly string[];
@@ -23,6 +25,27 @@ export interface AccessProfile {
   network: 'provider-only';
 }
 
+/** Политика чтения доверенного проекта, а не обеспеченная ОС-граница процесса.
+ * Builtin/managed-совместимость оценивается отдельно от проектных расширений. */
+export interface PracticalLocalReadProfile {
+  kind: 'practical-local-v1';
+  mode: 'read-only';
+  tools: readonly ReadTool[];
+  allow: readonly string[];
+  deny: readonly string[];
+  /** Ожидаемая область операций; не ограничивает доступ CLI средствами ОС. */
+  workspaceRoot: string;
+  /** Само поле доверия не заменяет допуск конкретного запуска. */
+  projectTrust: 'trusted';
+  configPolicy: {
+    settingSources: readonly [];
+    projectHooks: 'disabled';
+    projectMcp: 'disabled';
+    projectPlugins: 'disabled';
+  };
+}
+export type AgentAccessProfile = AccessProfile | PracticalLocalReadProfile;
+
 /** Значения принимаются только из документированного allowlist адаптера. */
 export type AgentEnvironment = Readonly<Record<string, string>>;
 export interface AgentRunRequest {
@@ -34,7 +57,7 @@ export interface AgentRunRequest {
   prompt: string;
   agentSessionId: string;
   resume: boolean;
-  profile: AccessProfile;
+  profile: AgentAccessProfile;
   model?: string;
   maxTurns?: number;
   env: AgentEnvironment;
@@ -53,9 +76,11 @@ export interface AgentCapabilities {
   settingSources: boolean;
   strictMcpConfig: boolean;
   permissionPrompts: boolean;
+  /** Только legacy strict. Объявленные флаги и practical-допуск не дают verified. */
   readOnly: 'verified' | 'unverified' | 'unsupported';
 }
 export interface AgentDetection {
+  /** Готовность binary/interface/auth; не допуск конкретного профиля. */
   status: 'available' | 'unavailable';
   binaryPath: string | null;
   version: string | null;

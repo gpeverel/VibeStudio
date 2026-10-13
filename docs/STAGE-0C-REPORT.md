@@ -1,6 +1,6 @@
 # Этап 0C: протокол Claude CLI, диагностика, профиль доступа — отчёт
 
-> Актуальный статус после продуктовых решений 2026-10-11 — в заключительном разделе «Принятый пересмотр требований и план перехода». Прежние прогоны и выводы ниже сохранены исторически. Последний записанный полный прогон: 262/262 Vitest, 78/78 Node, обязательные проверки и smoke успешны с указанными ограничениями среды. Новых прогонов в документальном пересмотре нет. Старый строгий 0C не пройден, новый практический профиль ещё не реализован; этап 0C не завершён.
+> Актуальный результат по отдельному поручению пользователя — заключительный раздел «P1: разделение strict и practical — 2026-10-13». Прежние прогоны, продуктовый пересмотр и выводы ниже сохранены исторически. Новые контракты проверены на doubles; production-проверки практической совместимости ещё нет. Старый строгий 0C не пройден; этап 0C не завершён.
 
 Дата: 2026-10-09; доработка B (live-runner, стенд, отчёт) и сверка с аудитом C/A: 2026-10-10. Окружение: Node `v24.15.0` (через `scripts/with-node.sh`), npm `12.2.0`, существующий lockfile; зависимости и lockfile не менялись. Работали три воркера: A (порты и адаптеры, конфигурация), B (тесты, fixtures, стенд, этот отчёт, итоговые прогоны), C (сборщик инструкций §12 и план живых проб).
 
@@ -409,3 +409,72 @@ Production-код в этом продолжении **не менялся**. `A
 ### Проверки этого документального продолжения
 
 Изменены только ARCHITECTURE-REASSESSMENT, SPEC, этот отчёт и новый IMPLEMENTATION-PLAN. Production-код, тесты, конфигурация, зависимости, существующие лаборатории и fixtures не менялись. Выполняются только чтение, сверка документации и контроль diff; npm-команды, установка, сборка, CLI/auth/model пробы не выполнялись. Новый модельный бюджет не выдан. Старые 04/05–07/N1–N3 автоматически не запускаются; будущие живые проверки потребуют отдельного согласованного сценария.
+
+## P1: разделение strict и practical — 2026-10-13
+
+Реализован контрактный срез P1 по IMPLEMENTATION-PLAN §3/§6. Среда: Node `v24.15.0`, npm `12.2.0`, существующие зависимости. Окончательная матрица doubles — **170/170**, полный Vitest после последней правки — **344/344**, Node-runner — **78/78**; статические проверки и сборка успешны. Smoke завершился SIGABRT и не считается пройденным. Реального production-ready нет; перекрёстная проверка завершена, ограничения приведены ниже.
+
+### Владение и контракты
+
+| Владелец | Изменённые файлы P1 | Изменение |
+|---|---|---|
+| A | `src/core/ports/agent.ts`, `src/shared/agent.ts`, `src/adapters/claude/profile.ts` | Union legacy/practical, типизированный допуск и проверка runtime-форм |
+| B | `src/adapters/claude/index.ts`, `src/adapters/claude/args.ts`, `src/adapters/claude/detect.ts` | Независимая диагностика, два маршрута запуска, фиксация контекста и запрет позднего launch |
+| C | `tests/claude/access-profile.test.ts`, `tests/claude/detect.test.ts`, `tests/claude/adapter-lifecycle.test.ts`, новый `tests/claude/practical-profile.test.ts`, `tests/helpers/claude/requests.ts`; этот отчёт и `docs/IMPLEMENTATION-PLAN.md` | Независимые отрицательные проверки и synthetic-положительный маршрут, приёмочный прогон и единый отчёт |
+
+`AccessProfile` сохраняет legacy strict. Старые `readOnlyProfile`/`request` остаются строгими aliases явно названных `legacyStrictProfile`/`legacyStrictRequest`. Только `PracticalLocalReadProfile.kind='practical-local-v1'` выбирает новый маршрут; неизвестный kind, включая явно переданные `null`/`undefined`, отклоняется. `PracticalLocalReadProfile` содержит `workspaceRoot`, `projectTrust='trusted'`, закрытые tools/allow/deny и отключённые проектные settings/hooks/MCP/plugins. Полей строгих fs/network и общепроцессного обещания loadPlugins у него нет.
+
+`PracticalAdmissionEvaluator` подключается через `ClaudeAdapterOptions.assessPractical` доверенной композицией. Результат `PracticalAdmission` различает ready/blocked/unsupported; причины: assessment_missing, project_untrusted, prerequisite_unknown, configuration_conflict, cli_unsupported, assessment_failed. Ошибки запуска — practical_admission_blocked/practical_admission_unsupported с конкретной причиной. Ограничения v1: no_os_sandbox, no_provider_only_network, detached_children_not_guaranteed. Этот допуск не является AccessVerification, не несёт verified/evidence/launch. Положительная реализация явно названа `SYNTHETIC_READY` и находится только в тестах; приложение не подключает постоянный ready-callback.
+
+`detect.status=available` теперь отражает binary/interface/auth, а `capabilities.readOnly` остаётся unverified. В detect-тесте обновлено прежнее ожидание unavailable только по profile_unverified и добавлен фактический отказ strict-start без verifier на том же диагностированном double. Все прежние отрицательные strict-проверки evidence/launch сохранены. Аргументы и allowlist окружения не расширены; запрещённый явный env practical отклоняется до prompt, прежняя strict-фильтрация env сохранена.
+
+### Матрица независимой приёмки
+
+| Вход / риск | Проверка |
+|---|---|
+| Legacy без verifier; verified/evidence без launch | Нет prompt и обычного runner; practical-оценщик не вызывается |
+| Legacy со связанным synthetic launch | Запускается только launch verifier, прямой runner не вызывается |
+| Practical без оценки, blocked, неизвестная предпосылка | Типизированный недопуск; данные ready/verified в запросе не дают полномочий |
+| Unsupported, конфликт конфигурации, неполный runtime-ready | Отказ с причиной без fallback и расширения политики |
+| Synthetic practical-ready | Прямой runner, те же args/env, точные stdin/cwd/session-id/resume; strict verifier не вызывается |
+| Неверные kind/trust/workspace/tools/allow/config/env; CLI/auth/capability/request | Нет prompt; самостоятельные причины ошибок сохранены |
+| Мутация до detect и во время оценки | Снимок исходного запроса, замороженные profile/config/args/env/detection и контекст |
+| Stop, ошибка, ready между deadline и finish либо после timeout | Нет позднего prompt; done и единственный run_finished согласованы |
+| Ошибочный result/ненулевой exit после practical launch | Ошибка не становится success и не создаёт второй terminal |
+
+### Перекрёстная проверка и фактические команды
+
+C проверил изменения B чтением и независимыми тестами. Первый прогон обнаружил, что ready с пустыми/неизвестными limitations допускает запуск, а верхний объект контекста не заморожен. B исправил обе причины; assertions не ослаблялись. A подтвердил чтением наличие всех восьми переходов §3 и сохранение отрицательных проверок; его замечания к ожиданиям projectTrust и сериализуемости DTO учтены. По предложению A добавлены смешанные strict/practical поля и inherited/non-enumerable unknown kind; B сохраняет отказ неизвестного kind до structuredClone. B проверил validator A: различение отсутствующего/неизвестного kind, сохранение strict-полей и отказ смешанной practical-формы соответствуют контракту; замечаний нет. Перекрёстная проверка A→C, B→A, C→B завершена.
+
+Замечание C к свободным строкам во внутренних доменных типах B устранено: PracticalVerdict использует PracticalAdmissionReason/PracticalAdmissionLimitation. Дополнительно B отклоняет дубликаты limitations и исключает неизвестные значения из диагностики. C добавил четыре независимых проверки этих изменений; последняя целевая матрица прошла полностью. Открытых разногласий по контрактам P1 не осталось. Окончательная версия index.ts имеет SHA-256 `2afe82ab10e883fcc7f3f0b7b4d7c3385a056ec81967a4a795cf52c7bb09bd23`.
+
+Все npm-команды выполняются через `sh scripts/with-node.sh`. Целевой запуск: `npm exec --offline --no -- vitest run tests/claude/access-profile.test.ts tests/claude/detect.test.ts tests/claude/adapter-lifecycle.test.ts tests/claude/practical-profile.test.ts`; `--offline --no` запрещает скачивание недостающего пакета.
+
+| Прогон | Фактический результат |
+|---|---|
+| Исходные три целевых файла до правок C, без нового practical-файла | exit 0; 3 файла, 88/88 тестов |
+| Первый интеграционный целевой прогон | exit 1; 155 passed, 3 failed из 158; замечания к неполному ready и мутабельному context |
+| Промежуточный typecheck | exit 2; TS2488 в новом тесте: необязательный scenario.steps; тест исправлен |
+| Typecheck после исправления теста | exit 0 |
+| Промежуточный lint | exit 0 |
+| Шесть дополнительных negative cases (целевой фильтр `-t 'kind не теряется\|смешение\|loadPlugins\|функция assessPractical'`) | exit 0; 6/6 выбранных, остальные 68 не выбирались фильтром; следующий прогон выполняет весь файл |
+| Целевой прогон после исправлений B и дополнений C | exit 0; 4 файла, 166/166 тестов, включая все 74 practical-теста |
+| Окончательный целевой прогон после типизации B и четырёх регрессий C | exit 0; 4 файла, 170/170 тестов, включая все 78 practical-тестов |
+| `npm run typecheck`, включая повтор после последней правки | exit 0 |
+| `npm run lint`, включая повтор после последней правки | exit 0 |
+| `npm run check:boundaries`, включая повтор после последней правки | exit 0; 31 модуль, 49 зависимостей, нарушений нет |
+| `npm test` до последней правки B | exit 0; 12 файлов, 340/340 тестов; 190,52 с |
+| Окончательный `npm test` после последней правки B и регрессий C | exit 0; 12 файлов, 344/344 тестов; 178,98 с |
+| `npm run test:node` | exit 0; 7 suites, 78/78, fail/cancelled/skipped/todo = 0; 173,44 с |
+| `npm run build`, включая повтор после последней правки | exit 0; main/preload/renderer собраны |
+| `npm run smoke` | exit 1; Electron завершился с SIGABRT, успешный GUI-запуск не подтверждён |
+| `git diff --check` | exit 0 |
+| Контроль tracked/untracked области изменений | 13 путей, все разрешены P1; посторонних изменений нет |
+
+Полный Vitest повторён из-за изменения поведения последней правкой B; отдельный Node-runner Git и smoke не повторялись, поскольку эти пути не менялись. В Git-проверках текущая среда выдаёт предупреждение `confstr() failed ... DARWIN_USER_TEMP_DIR; using /tmp instead`; окончательный полный Vitest и Node-набор завершились успешно. Smoke не объявляется пройденным: текущий прогон зафиксировал только SIGABRT, конкретная причина этого запуска дополнительно не установлена. Исторический успешный smoke с расширенными GUI-правами не заменяет эту проверку; безопасность renderer и ограничения среды не ослаблялись.
+
+### Границы результата
+
+Parser, инструкции модели, ProcessRunner и его порт, Git, main/preload/UI, SQLite, Codex, Swarm, live-runner, fixtures, лаборатории, SPEC, конфигурация и зависимости в P1 не изменялись. Реальные CLI/auth/model, test:live и OS-стенды не запускались; ПО не устанавливалось. Общий Vitest сохранил существующие unit-тесты лабораторной политики и setsid-контрпример на собственных временных процессах; это не новый запуск OS-лабораторий.
+
+Реальная effective-конфигурация, builtin/managed-совместимость и штатная auth практического Claude остаются P2b; отдельный Stop outcome остаётся P2a. Практический read-only не обещает файловую/сетевую ОС-изоляцию или остановку detached-потомков. **0C не закрыт; следующий пакет автоматически не начинается.**

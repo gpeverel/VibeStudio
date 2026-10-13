@@ -129,6 +129,13 @@ describe('0C профиль доступа: validateAccessProfile блокиру
     expect(validateAccessProfile(readOnlyProfile(CWD), CWD)).toEqual([]);
   });
 
+  it.each([undefined, null, 'legacy-strict', 'practical-local-v2'])('добавленный неизвестный kind %s не превращает legacy в разрешённый профиль', kind => {
+    const profile = { ...readOnlyProfile(CWD), kind };
+    expect(validateAccessProfile(profile, CWD)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ reason: 'profile_unsupported' }),
+    ]));
+  });
+
   const bad: [string, AccessProfile][] = [
     ['Bash в tools', mutate({ tools: ['Read', 'Bash'] })],
     ['Edit в tools', mutate({ tools: ['Read', 'Edit'] })],

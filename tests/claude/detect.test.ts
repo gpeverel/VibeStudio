@@ -1,7 +1,9 @@
 import { chmodSync, copyFileSync, realpathSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import { detectClaude, resolveClaudeBinary } from '../../src/adapters/claude/detect.ts';
+import { createClaudeAdapter } from '../../src/adapters/claude/index.ts';
 import { createProcessRunner } from '../../src/adapters/process-runner/index.ts';
+import { legacyStrictRequest } from '../helpers/claude/requests.ts';
 import { Stand } from '../helpers/claude/stand.ts';
 import type { FakeScenario } from '../helpers/claude/stand.ts';
 
@@ -73,7 +75,7 @@ describe('0C detect: диагностика бинарника, авториза
     expect(found.version).toBe('2.1.295');
   });
 
-  it('рабочий бинарник с входом: версия, возможности по help, но readOnly остаётся unverified и status=unavailable', async () => {
+  it('рабочий бинарник с входом: status=available означает готовность CLI, readOnly остаётся unverified', async () => {
     const s = stand();
     const bin = s.fakeClaude(good());
     const d = await detectClaude(runner, { binaryPath: bin, env: env(s) });
@@ -82,11 +84,16 @@ describe('0C detect: диагностика бинарника, авториза
     expect(d.auth).toBe('authenticated');
     expect(d.capabilities).toMatchObject({ streamJson: true, partialMessages: true, restricted: true, safeMode: true, tools: true, settingSources: true, strictMcpConfig: true, resume: true, sessionId: true });
     expect(d.capabilities.readOnly).toBe('unverified'); // наличие флагов — не проверенная граница
-    expect(d.status).toBe('unavailable');
-    expect(reasons(d)).toContain('profile_unverified');
+    expect(d.status).toBe('available'); // P1 отделяет обнаружение CLI от допуска конкретного профиля.
+    expect(reasons(d)).not.toContain('profile_unverified');
     expect(reasons(d)).not.toContain('binary_missing');
     expect(reasons(d)).not.toContain('not_authenticated');
     expect(reasons(d)).not.toContain('capability_missing');
+    // Сохранена поведенческая защита: available не разрешает strict-start без verifier.
+    const adapter = createClaudeAdapter({ detect: async () => d, env: { HOME: s.dir } });
+    const run = await adapter.start(legacyStrictRequest(s.dir));
+    expect(await run.done).toMatchObject({ kind: 'error', reason: 'profile_unverified' });
+    expect(s.records().some(record => record.probe === 'run')).toBe(false);
   });
 
   it('нет авторизации: not_authenticated отличается от отсутствия бинарника и от несовместимости', async () => {

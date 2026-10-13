@@ -5,7 +5,6 @@ import { delimiter, isAbsolute, join } from 'node:path';
 import type { AgentCapabilities, AgentDetection, AgentDetectOptions } from '../../core/ports/agent.ts';
 import type { ProcessRunner } from '../../core/ports/process-runner.ts';
 import { buildClaudeEnv } from './args.ts';
-import { UNVERIFIED_ACCESS_DETAIL } from './profile.ts';
 
 export const REQUIRED_CLAUDE_FLAGS = [
   '--print', '--verbose', '--input-format', '--output-format', '--include-partial-messages',
@@ -99,11 +98,11 @@ export async function detectClaude(runner: ProcessRunner, options: AgentDetectOp
       reason: result.auth === 'unauthenticated' ? 'not_authenticated' : 'capability_missing',
       detail: result.auth === 'unauthenticated' ? 'Claude CLI не авторизован' : 'Авторизация не подтверждена безопасной диагностикой',
     });
-    result.unavailable.push({ reason: 'profile_unverified', detail: UNVERIFIED_ACCESS_DETAIL });
   } catch {
     result.unavailable.push({ reason: 'spawn_failed', detail: 'Ошибка запуска диагностики CLI' });
   }
-  // detect не имеет конкретного cwd/профиля и потому не может подтвердить read-only.
+  // status описывает готовность самой CLI (binary/interface/auth), а не допуск профиля.
+  // detect не имеет cwd/профиля: readOnly остаётся 'unverified', start решает допуск запроса.
   result.status = result.unavailable.length ? 'unavailable' : 'available';
   return result;
 }
