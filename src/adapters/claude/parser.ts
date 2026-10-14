@@ -1,5 +1,7 @@
 import { TextDecoder } from 'node:util';
-import type { AgentDiagnostic, AgentErrorReason, AgentRunResult, AgentUsage, NormalizedPayload } from '../../core/ports/agent.ts';
+import type { AgentDiagnostic, AgentErrorReason, AgentRunResult, AgentUsage, InventoryFact, NormalizedPayload, RuntimeInventory, RuntimeInventoryEntry } from '../../core/ports/agent.ts';
+import { BLOCKED_TOOLS, READ_ONLY_TOOLS, MAX_INVENTORY_ITEMS, MAX_INVENTORY_NAME_BYTES, compareRuntimeInventory, inventoryId, isRuntimeInventoryExpectation } from './profile.ts';
+import type { RuntimeInventoryExpectation } from './profile.ts';
 
 export const DEFAULT_PARSER_LIMITS = {
   maxLineBytes: 1_048_576,
@@ -13,11 +15,23 @@ export interface ParserOptions {
   maxStateBytes?: number;
   maxMessages?: number;
   expectedSessionId?: string;
+  /** Независимое ожидание production-допуска; требует init до содержательных событий. */
+  expectedInventory?: RuntimeInventoryExpectation;
 }
 type JsonObject = Record<string, unknown>;
 const object = (value: unknown): JsonObject | undefined =>
   value !== null && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : undefined;
 const number = (value: unknown): number | undefined => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+
+const knownInventory = <T>(value: T): InventoryFact<T> => ({ state: 'known', value, provenance: 'cli-init' });
+const unknownInventory = (reason: 'missing' | 'malformed' | 'unattributed'): InventoryFact<never> => ({ state: 'unknown', reason, provenance: 'cli-init' });
+function freezeInventory<T>(value: T): T {
+  if (value && typeof value === 'object') {
+    for (const child of Object.values(value)) freezeInventory(child);
+    Object.freeze(value);
+  }
+  return value;
+}
 
 function usage(value: unknown): AgentUsage {
   const source = object(value) ?? {};
@@ -39,6 +53,10 @@ export class ClaudeStreamParser {
   private lineBytes = 0;
   private diagBytes = 0;
   private stateBytes = 0;
+  private inventoryItems = 0;
+  private inventory: RuntimeInventory | undefined;
+  private expectedInventory: RuntimeInventoryExpectation | undefined;
+  private readonly expectedSessionId: string | undefined;
   private ended = false;
   private activeMessage = '';
   private texts = new Map<string, string>();
@@ -49,7 +67,8 @@ export class ClaudeStreamParser {
   private assistantError: AgentErrorReason | undefined;
   private limits: typeof DEFAULT_PARSER_LIMITS;
 
-  constructor(private readonly options: ParserOptions = {}) {
+  constructor(options: ParserOptions = {}) {
+    this.expectedSessionId = options.expectedSessionId;
     this.limits = { ...DEFAULT_PARSER_LIMITS };
     for (const name of Object.keys(this.limits) as (keyof typeof DEFAULT_PARSER_LIMITS)[]) {
       if (options[name] !== undefined) this.limits[name] = options[name];
@@ -57,7 +76,25 @@ export class ClaudeStreamParser {
     for (const value of Object.values(this.limits)) {
       if (!Number.isSafeInteger(value) || value < 1 || value > 2_147_483_647) throw new Error('Лимит парсера должен быть положительным конечным целым');
     }
+    if (options.expectedInventory !== undefined) {
+      if (!isRuntimeInventoryExpectation(options.expectedInventory)) this.fail('runtime_inventory_unknown', 'Некорректное независимое ожидание runtime inventory');
+      else {
+        const expected = options.expectedInventory;
+        // Копируем только контрактные поля: лишний конфигурационный dump не удерживается.
+        this.expectedInventory = freezeInventory({
+          tools: [...expected.tools], plugins: expected.plugins.map(({ id, origin }) => ({ id, origin })),
+          mcpServers: expected.mcpServers.map(({ id, origin }) => ({ id, origin })),
+          cliVersion: expected.cliVersion, permissionMode: expected.permissionMode,
+          ...(expected.skills ? { skills: [...expected.skills] } : {}),
+          ...(expected.slashCommands ? { slashCommands: [...expected.slashCommands] } : {}),
+          ...(expected.agents ? { agents: [...expected.agents] } : {}),
+        });
+      }
+    }
   }
+
+  /** Только первый init. Снимок и вложенные значения заморожены; сырой init не удерживается. */
+  get runtimeInventory(): RuntimeInventory | undefined { return this.inventory; }
 
   private fail(reason: AgentErrorReason, detail: string): void { this.error ??= { reason, detail }; }
   private diagnostic(code: string, detail: string): void {
@@ -99,7 +136,9 @@ export class ClaudeStreamParser {
     if (this.error) return [];
     try { this.line += this.decoder.decode(); }
     catch { this.fail('protocol_incompatible', 'Оборванный UTF-8'); return []; }
-    return this.line.trim() ? this.consumeLine() : [];
+    const events = this.line.trim() ? this.consumeLine() : [];
+    if (this.expectedInventory && !this.inventory) this.fail('runtime_inventory_unknown', 'CLI не сообщил обязательный init');
+    return this.error ? [] : events;
   }
 
   private consumeLine(): NormalizedPayload[] {
@@ -113,18 +152,101 @@ export class ClaudeStreamParser {
     if (!value || typeof value.type !== 'string') {
       this.fail('protocol_incompatible', 'У события отсутствует тип'); return [];
     }
-    if (typeof value.session_id === 'string' && this.options.expectedSessionId && value.session_id !== this.options.expectedSessionId) {
+    if (typeof value.session_id === 'string' && this.expectedSessionId && value.session_id !== this.expectedSessionId) {
       this.fail('protocol_incompatible', 'CLI вернул другой идентификатор диалога'); return [];
     }
     if (this.result && (['result', 'assistant', 'user', 'stream_event'].includes(value.type)
       || (value.type === 'system' && value.subtype === 'init'))) {
       this.fail('protocol_incompatible', 'Событие после терминального результата'); return [];
     }
+    if (this.expectedInventory && !this.inventory && ['result', 'assistant', 'user', 'stream_event'].includes(value.type)) {
+      this.fail('runtime_inventory_unknown', 'Содержательное событие CLI до обязательного init'); return [];
+    }
     const events = this.normalize(value);
-    if (this.texts.size + this.tools.size + this.usages.size + this.finishedTools.size > this.limits.maxMessages || this.stateBytes > this.limits.maxStateBytes) {
+    if (this.error) return [];
+    if (this.inventoryItems + this.texts.size + this.tools.size + this.usages.size + this.finishedTools.size > this.limits.maxMessages || this.stateBytes > this.limits.maxStateBytes) {
       this.fail('output_limit', 'Превышен бюджет состояния парсера'); return [];
     }
     return events;
+  }
+
+  private inventoryName(value: unknown, visibleTool = false): string | undefined {
+    if (typeof value !== 'string' || !value.length) return undefined;
+    if (Buffer.byteLength(value) > MAX_INVENTORY_NAME_BYTES) {
+      this.fail('output_limit', 'Превышен размер имени runtime inventory'); return undefined;
+    }
+    if ([...value].some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) return undefined;
+    return visibleTool && [...READ_ONLY_TOOLS, ...BLOCKED_TOOLS].some(tool => tool === value) ? value : inventoryId(value);
+  }
+
+  private inventoryNames(value: unknown, tools = false): InventoryFact<readonly string[]> {
+    if (value === undefined) return unknownInventory('missing');
+    if (!Array.isArray(value)) return unknownInventory('malformed');
+    if (value.length > MAX_INVENTORY_ITEMS) {
+      this.fail('output_limit', 'Превышен размер списка runtime inventory'); return unknownInventory('malformed');
+    }
+    this.inventoryItems += value.length;
+    const names: string[] = [];
+    for (const raw of value) {
+      const name = this.inventoryName(raw, tools);
+      if (name === undefined || names.includes(name)) return unknownInventory('malformed');
+      names.push(name);
+    }
+    return knownInventory(names);
+  }
+
+  private inventoryExtensions(value: unknown, plugins: boolean): InventoryFact<readonly RuntimeInventoryEntry[]> {
+    if (value === undefined) return unknownInventory('missing');
+    if (!Array.isArray(value)) return unknownInventory('malformed');
+    if (value.length > MAX_INVENTORY_ITEMS) {
+      this.fail('output_limit', 'Превышен размер списка runtime inventory'); return unknownInventory('malformed');
+    }
+    this.inventoryItems += value.length;
+    const entries: RuntimeInventoryEntry[] = [];
+    for (const raw of value) {
+      const entry = object(raw);
+      const id = this.inventoryName(entry?.name);
+      if (!entry || !id || entries.some(previous => previous.id === id)) return unknownInventory('malformed');
+      if (('path' in entry && typeof entry.path !== 'string') || ('source' in entry && typeof entry.source !== 'string')) return unknownInventory('malformed');
+      const builtinPath = plugins && entry.path === 'builtin';
+      const builtinSource = plugins && entry.source === `${entry.name as string}@builtin`;
+      if ((builtinPath && typeof entry.source === 'string' && !builtinSource)
+        || (builtinSource && typeof entry.path === 'string' && !builtinPath)) {
+        return { state: 'conflict', reason: 'source_conflict', provenance: 'cli-init' };
+      }
+      // Только наблюдавшаяся явная форма builtin. Путь не доказывает project/user/managed.
+      entries.push({ id, origin: builtinPath && builtinSource ? 'builtin' : 'unknown' });
+    }
+    return knownInventory(entries);
+  }
+
+  private init(value: JsonObject): NormalizedPayload[] {
+    if (this.inventory) { this.fail('protocol_incompatible', 'Повторный init CLI'); return []; }
+    if (typeof value.session_id !== 'string' || !value.session_id.length) {
+      this.fail('protocol_incompatible', 'В init отсутствует идентификатор диалога'); return [];
+    }
+    const version = value.claude_code_version;
+    const mode = value.permissionMode;
+    const safeMode = this.inventoryName(mode);
+    this.inventory = freezeInventory({
+      tools: this.inventoryNames(value.tools, true),
+      plugins: this.inventoryExtensions(value.plugins, true),
+      mcpServers: this.inventoryExtensions(value.mcp_servers, false),
+      skills: this.inventoryNames(value.skills),
+      slashCommands: this.inventoryNames(value.slash_commands),
+      agents: this.inventoryNames(value.agents),
+      cliVersion: version === undefined ? unknownInventory('missing')
+        : typeof version === 'string' && version.length <= 64 && /^\d+\.\d+\.\d+$/.test(version)
+          ? knownInventory(version) : unknownInventory('malformed'),
+      permissionMode: mode === undefined ? unknownInventory('missing')
+        : safeMode === undefined ? unknownInventory('malformed') : knownInventory(mode === 'dontAsk' ? mode : safeMode),
+    });
+    this.stateBytes += Buffer.byteLength(JSON.stringify(this.inventory));
+    if (this.expectedInventory) {
+      const issue = compareRuntimeInventory(this.inventory, this.expectedInventory);
+      if (issue) this.fail(issue.reason, issue.detail);
+    }
+    return this.error ? [] : [{ type: 'run_started', agentSessionId: value.session_id }];
   }
 
   private text(id: string, text: string, mode: 'delta' | 'snapshot'): NormalizedPayload[] {
@@ -186,7 +308,7 @@ export class ClaudeStreamParser {
   private normalize(value: JsonObject): NormalizedPayload[] {
     switch (value.type) {
       case 'system':
-        if (value.subtype === 'init' && typeof value.session_id === 'string') return [{ type: 'run_started', agentSessionId: value.session_id }];
+        if (value.subtype === 'init') return this.init(value);
         if (value.subtype === 'api_retry') return [{ type: 'retry', attempt: number(value.attempt), reason: this.errorReason(value.error, value.error_status) }];
         this.diagnostic('unknown_system', 'Неизвестное системное событие'); return [];
       case 'stream_event': return this.partial(object(value.event));

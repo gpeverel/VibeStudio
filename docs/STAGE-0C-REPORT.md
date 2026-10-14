@@ -609,3 +609,166 @@ sh scripts/with-node.sh npm exec --offline --no -- vitest run tests/claude/proce
 ### Ограничения и незакрытые критерии
 
 Незакрытых критериев контрактного среза P2a не осталось: GUI-smoke подтверждён новым разрешённым запуском с exit 0; незакрытых замечаний перекрёстного ревью и падающих lifecycle-тестов в историческом итоговом прогоне нет. Гарантия остановки detached-потомков не добавлена; новая ОС-песочница и полный tree-kill не реализуются. Данные completion предназначены для будущего решения engine; блокировка изменяющего слота workspace относится к P5 и здесь не подключена. Реальные CLI/auth/model, `test:live` и OS-лаборатории не запускались. Production-ready practical, адаптер Codex, SessionEngine, новый UI и продуктовый Swarm не реализовывались. Полный Vitest сохраняет прежние unit-проверки лабораторной политики и setsid-контрпример; это не запуск OS-лабораторий. Parser, инструкции, fixtures, Git, Electron, зависимости и конфигурация не изменялись. **Весь 0C не закрывается; P2b не начат, следующий пакет автоматически не начинается.**
+
+## P2b: production-оценка practical Claude — 2026-10-13
+
+**Статус: дефекты допуска и lifecycle исправлены, независимая матрица проходит; P2b и весь 0C не закрыты.** Новых реальных Claude/Codex, auth/model-проб, `test:live` или OS-лабораторий не было. Положительная ветвь production-алгоритма проверена на явно synthetic фактах; это не живая приёмка установленной CLI. Исторические P1/P2a и успешный GUI-smoke P2a выше сохранены без изменения. GUI-smoke P2b пока завершался SIGABRT; инженерная приёмка до его успешного завершения не объявляется пройденной.
+
+### Владение и файлы
+
+| Владелец | Файлы | Область |
+|---|---|---|
+| A | `src/shared/agent.ts`, `src/core/ports/agent.ts`, `src/adapters/claude/profile.ts`, `src/adapters/claude/parser.ts` | DTO происхождения и неизвестности inventory, безопасные идентификаторы, синхронный gate внутри parser |
+| B | новый `src/adapters/claude/admission.ts`, `src/adapters/claude/index.ts` | Production-сборщик файловых фактов, чистый алгоритм допуска, fingerprint/recheck, интеграция запуска и остановки |
+| C | новые `tests/claude/practical-admission.test.ts`, `tests/claude/runtime-inventory.test.ts`, `tests/helpers/claude/practical-evidence.ts`; `tests/claude/practical-profile.test.ts` | Независимая матрица, адаптация synthetic P1 к полному inventory, уборка собственных fake-процессов |
+| C | новый `tests/live/claude-practical.live.ts`, новый `docs/STAGE-0C-PRACTICAL-LIVE-PLAN.md`, этот отчёт и только статус P2b в `docs/IMPLEMENTATION-PLAN.md` | Отдельный конечный live-сценарий, координация проверок и фактический отчёт |
+
+`detect.ts` и `args.ts` остаются прежними: новые CLI-команды, права или способы авторизации ради допуска не добавлялись. Старый `tests/live/claude-live.live.ts`, все реальные fixtures и инструкции модели не изменялись. ProcessRunner, его порт, Git, Electron, UI, Codex, SessionEngine, Swarm, зависимости и конфигурация сборки вне изменений P2b.
+
+### Контракт и источники фактов
+
+`PracticalAdmission` сохраняет ready/blocked/unsupported; strict по-прежнему требует собственный `AccessVerifier` и связанный launch. Practical не выдаёт strict verified. Добавлены причины context_changed, runtime_inventory_unknown и runtime_inventory_mismatch. Три ограничения practical сохраняются: отсутствие ОС-песочницы, отсутствие provider-only гарантии и негарантированная остановка detached-потомков.
+
+Зафиксированное решение команды: production-ready требует полного expectedInventory и contextFingerprint, отдельного known managed-итога и повторной проверки. Legacy synthetic override P1 без обоих полей сохраняется только как явная подстановка доверенной тестовой композиции и не считается production-доказательством. Половинчатый ready запрещён контрактом и runtime-проверкой; два отрицательных теста после исправления B проходят. Новый helper C передаёт оба поля.
+
+Предложение разрешать ready при неизвестной managed-политике через четвёртое limitation отклонено C как противоречащее требованиям; итоговый production-сборщик оставляет effective OS/server-managed неизвестными. Наличие managed-файла без конфликтных ключей или его отсутствие не заменяет эти источники. Дополнительное ограничение не компенсирует возможный ранний hook.
+
+| Данные | Источник и предел доказательства |
+|---|---|
+| Binary, версия, auth, объявленные capabilities | Существующий detect с version/help/auth status. В текущей независимой матрице — doubles, реальная диагностика не запускалась. Auth status не подтверждает provider request/refresh |
+| Идентичность executable | Предпусковой stat пути из detect: размер и mtime. Это ограниченная проверка идентичности, не аттестация всего исполняемого кода |
+| Managed-файлы | Только чтение известных OS-путей `managed-settings.json`/`managed-mcp.json`; в тестах — искусственные данные и собственный временный файл. Ошибки чтения/JSON сохраняются как unknown, известные исполняемые настройки — conflict |
+| Полная effective managed-политика | Нужны file, OS-policy и server-managed, явный известный итог политики и её digest. Production-интерфейс для полного наблюдения не установлен: предпусковой отказ с конкретной причиной |
+| Ожидание runtime inventory | Независимо из read-only профиля и контракта конкретной версии 2.1.295; известные builtin-имена основаны на сохранённых реальных init 01–04. Это регистрация, не доказательство исполнения |
+| Фактический inventory | Только `system/init`: known/unknown/conflict и provenance=cli-init. Отсутствующее поле не становится `[]`. Явная согласованная пара builtin path/source отличается от неопределённого происхождения; project/user/managed не выводятся из произвольного пути |
+| Положительные facts в тестах | Отмечены provenance=synthetic. Подменяется сбор фактов, а production-оценка, fingerprint/recheck и интеграция остаются настоящими. Synthetic ready не является результатом живой приёмки |
+
+В безопасном DTO исходные имена расширений заменяются SHA-256; сохраняются только закрытые имена tools, нормализованные категории, цифровая версия и dontAsk. Пути, source, команды, credentials, значения env и конфигурационные дампы наружу не выдаются. Inventory имеет конечные лимиты списков/имён, учитывается в общем parser budget и замораживается. Изменённый semver suffix с произвольной строкой не раскрывается.
+
+Production-оценка проверяет версию/capabilities/auth, argv относительно ожидаемой политики, отсутствие расширения tools/allow/settings и подмены auth env-токеном. Допуск относится к executable, версии, argv, значениям разрешённого env, cwd, профилю и managed digest. Кэша ready нет; перед prompt выполняется повторная оценка. Известные проверки unknown/malformed/conflict блокируют запуск; найденные пробелы в валидации damaged facts перечислены отдельно ниже. Предпусковая проверка не исключает внешнюю гонку после последнего чтения.
+
+Ожидаемый inventory передаётся в parser до чтения stdout. Проверка init выполняется внутри разбора строки: init и поздний success в одном chunk не обходят отказ. Повторный init, неизвестное обязательное поле и несовпадение с независимым ожиданием не дают success. Внутренняя остановка не выставляет пользовательский stopAccepted; ошибки completion P2a сохраняются. Это не доказывает, что hook не успел выполниться до init.
+
+### Независимая матрица C
+
+| Срез | Проверки |
+|---|---|
+| Достаточные данные | Полный synthetic managed/executable факт, production-ready, ожидаемый inventory, штатный чистый completion, отсутствие strict verified |
+| Неизвестность и несовместимость | Нет binary/version/auth/capabilities, другая версия, пропущенные/повреждённые facts, неизвестный provenance, неполный охват managed-источников |
+| Конфигурация и auth | Отсутствующий/пустой/повреждённый/нечитаемый файл; исполняемые ключи; токены и запрещённый env; неизменные HOME/PATH/CLAUDE_CONFIG_DIR; нет Bash/Edit/Write/произвольных settings |
+| Привязка и гонки | Значения env при одинаковых именах, executable/version/cwd/profile/argv/config digest, повторный сбор после допуска, Stop во время первого и повторного сбора |
+| Inventory | Known empty отдельно от missing; malformed элемент непустого списка; неизвестное происхождение знакомого plugin; source conflict; origin project/user/builtin/managed; несовпадение tools/MCP/plugins/skills/slash commands/agents/version/mode; отсутствующие scalar-поля; sparse/повреждённое ожидание; перестановка состава |
+| Секреты и бюджеты | Canary в name/path/source/config/env/error/semver suffix, 65 элементов, длинное UTF-8 имя, общий state/count/line budget, повреждённый JSON |
+| Lifecycle | Согласованный done/run_finished, init+result одним chunk, поздний done, внутренняя ошибка kill с EPERM, deadline и unconfirmed exit без пользовательского Stop; ошибка inventory на конце потока без LF |
+| Регрессии | Synthetic P1 сохраняет самостоятельные strict/practical маршруты и отрицательные assertions; реальные 01–04 replay не переписаны; P2a Stop/detect/strict/practical и detached-контрпример остаются в целевом наборе |
+
+Обновление P1: отсутствие `assessPractical` теперь проверяет default production-отказ при unknown managed вместо прежнего assessment_missing. Только synthetic streams внутри helper получают полный init; исходные fixtures не редактируются. Проверка missing_result получает валидный init без result, чтобы отдельно проверять прежний критерий и новый обязательный init. Отрицательные требования и strict-проверки не ослаблялись.
+
+### Перекрёстное ревью и фактические результаты
+
+C проверил B чтением и независимыми тестами. По замечаниям уже добавлены digest и явный итог managed-политики, ограничение версии ровно наблюдённым контрактом, типизированные причины facts и безопасная диагностика. A исправил раскрытие произвольного semver suffix в inventory. C исправил собственные ошибки TypeScript/ESLint и подачи табличных данных тестов; это не дефекты production.
+
+Первый полный цикл выявил шесть дефектов B: неизвестный/дублирующийся managed source и отрицательный размер executable давали ready; половинчатый override-ready без inventory либо fingerprint допускал prompt; ошибка inventory в `parser.end()` без LF не вызывала внутреннюю остановку. B исправил эти случаи, независимые assertions сохранены и теперь проходят. По замечанию C production-ожидание дополнено agents; helper C использует независимо перечисленные четыре имени из сохранённого init.
+
+A просмотрел оба новых тестовых файла, helper и live-сценарий и подтвердил полноту основной unit-матрицы. По его ревью C добавил отсутствующие scalar-поля, повреждённые/sparse expectedInventory, перестановку состава, EOF без LF и отрицательную live-проверку Write с отсутствием transcript. Unknown/duplicate managed source, половинчатый ready и adapter EOF также покрыты. A самостоятельно сообщил узкие прогоны старого parser 43/43 и первоначального inventory 52/52, ESLint своих четырёх файлов, узкий TypeScript и diff-check — exit 0; это отдельные проверки, не итоговые наборы C.
+
+B завершил ревью shared/core/profile/parser A без незакрытых замечаний. Строгая проверка идентификатора в init, отказ повторного init и отбрасывание событий ошибочной строки подтверждены A как намеренное поведение; прежние 43 parser/replay-теста прошли без правки fixtures. B подтвердил работу используемых API inventory и ожидания. Ограничение сравнения plugins: требуется точный состав двух builtin — `cc-plugin-agents-md` и `cc-plugin-plugin-authoring`; другой состав даёт mismatch. Origin builtin определяется только согласованной парой `path=builtin` и `source=<name>@builtin`; project/managed из init не выводятся. Перекрёстные ревью A→C, B→A и C→B завершены без открытых замечаний; это не живая приёмка CLI.
+
+Последняя матрица C содержит **158 новых тестов: 67 inventory и 91 admission**. Дополнительный sparse-дефект воспроизведён на промежуточном прогоне 157 passed/1 failed: `every` пропускал пустой слот после трёх обязательных источников. B исправил проверку через явное чтение всех слотов; повреждение даёт blocked/assessment_failed, а неполный корректный перечень сохраняет prerequisite_unknown. Итоговый целевой набор **456/456** включает все 158 новых тестов. C→B ревью допуска, неизвестности и гонок завершено без открытых замечаний; assertions не ослаблялись. Фактические реальные данные по-прежнему блокируются из-за неизвестной managed-политики.
+
+Все команды выполняются через установленную среду `sh scripts/with-node.sh`, без установки пакетов. Исторические результаты P1/P2a не считаются новыми результатами P2b.
+
+| Команда / промежуточный прогон | Фактический результат |
+|---|---|
+| `npm exec --offline --no -- vitest run tests/claude` до правок | exit 0; 9 файлов, 298/298; 26,73 с |
+| Первый новый inventory-набор | exit 1; ошибка синтаксиса helper, тесты не исполнены; исправлена C |
+| `vitest run tests/claude/runtime-inventory.test.ts` после исправления | exit 0; 52/52 |
+| Два новых файла, первый общий прогон | exit 1; 130 passed/7 failed из 137; пять ошибок подачи данных тестов исправлены C, два нарушения переданы B |
+| Два новых файла и practical-profile после исправления C | exit 1; 215 passed/2 failed из 217 |
+| `practical-admission.test.ts` после дополнительных отрицательных случаев | exit 1; 84 passed/5 failed из 89, затем 84 passed/6 failed из 90 после добавления end без LF |
+| Предварительный `npm run typecheck` | exit 2; одна ошибка формы it.each в новом тесте, исправлена C |
+| Предварительный ESLint только новых/изменённых тестов | exit 1; два замечания к новому тесту, исправлены C |
+| Промежуточный `git diff --check` | exit 0 |
+
+Первый последовательный цикл P2b до исправлений B: Node `v24.15.0`, npm `12.2.0`, установленная среда. Эти фактические результаты сохранены как история P2b, а не итог изменённого позже дерева; одинаковые полные наборы параллельно не запускались.
+
+| Команда | Фактический результат первого цикла P2b |
+|---|---|
+| `sh scripts/with-node.sh npm exec --offline --no -- vitest run tests/claude` | exit 1; 11 файлов: 10 passed/1 failed; **434 passed/6 failed из 440**, 38,93 с |
+| `sh scripts/with-node.sh npm run typecheck` | exit 0 |
+| `sh scripts/with-node.sh npm run lint` | exit 0 |
+| `sh scripts/with-node.sh npm run check:boundaries` | exit 0; 32 модуля, 61 зависимость, нарушений нет |
+| `sh scripts/with-node.sh npm test` | exit 1; 14 файлов: 13 passed/1 failed; **516 passed/6 failed из 522**, 183,45 с; те же шесть отказов |
+| `sh scripts/with-node.sh npm run test:node` | exit 0; 7 suites, **78/78**, fail/cancelled/skipped/todo = 0; 165,42 с |
+| `sh scripts/with-node.sh npm run build` | exit 0; main/preload/renderer собраны |
+| `sh scripts/with-node.sh npm run smoke` | exit 1; Electron завершился SIGABRT; загрузка окна/preload не подтверждена |
+| `git diff --check` | exit 0 |
+| Контроль tracked/untracked | 14 файлов в заявленной области: 8 изменённых tracked и 6 новых; A — 4, B — 2, C — 8. Посторонних изменений нет |
+
+Повторная проверка после исправлений B и замечаний A, также через установленную среду:
+
+| Команда | Фактический результат |
+|---|---|
+| `sh scripts/with-node.sh npm exec --offline --no -- vitest run tests/claude` | exit 1; 451 passed/1 failed из 452, 11 файлов, 27,06 с. Единственный отказ — helper C ещё не ожидал новое поле agents; ожидание дополнено независимо от production-функции |
+| `sh scripts/with-node.sh npm exec --offline --no -- vitest run tests/claude/practical-admission.test.ts tests/claude/runtime-inventory.test.ts` | exit 1; **157 passed/1 failed из 158**, 2 файла, 0,274 с. Inventory 67/67; admission 90/91, только sparse managed sources |
+| `sh scripts/with-node.sh npm run typecheck` | exit 0 |
+| `sh scripts/with-node.sh npm run lint` | exit 0 |
+| `sh scripts/with-node.sh npm run check:boundaries` | exit 0; 32 модуля, 61 зависимость |
+| `git diff --check` после обновления отчёта | exit 0 |
+| Контроль tracked/untracked после дополнений | Те же 14 файлов в заявленном владении: 8 tracked, 6 новых; посторонних изменений нет |
+
+Итоговый последовательный цикл C после исправления sparse-проверки B и всех дополнений матрицы:
+
+| Команда | Фактический результат итогового дерева |
+|---|---|
+| `sh scripts/with-node.sh npm exec --offline --no -- vitest run tests/claude` | exit 0; **456/456**, 11 файлов, 26,96 с; включает все 158 новых независимых тестов |
+| `sh scripts/with-node.sh npm run typecheck` | exit 0 |
+| `sh scripts/with-node.sh npm run lint` | exit 0 |
+| `sh scripts/with-node.sh npm run check:boundaries` | exit 0; 32 модуля, 61 зависимость |
+| `sh scripts/with-node.sh npm test` | exit 0; **538/538**, 14 файлов, 169,02 с |
+| `sh scripts/with-node.sh npm run test:node` | exit 0; **78/78**, 7 suites, fail/cancelled/skipped/todo = 0, 160,82 с |
+| `sh scripts/with-node.sh npm run build` | exit 0; main/preload/renderer собраны |
+| `sh scripts/with-node.sh npm run smoke` | exit 1; Electron завершился SIGABRT; окно и preload не подтверждены |
+| `git diff --check` | exit 0 |
+| Контроль tracked/untracked | Те же 14 файлов: A — 4, B — 2, C — 8; 8 tracked и 6 новых, посторонних изменений нет |
+
+Наборы выполнены последовательно; одинаковые полные проверки не запускались параллельно. Повтор обусловлен исправлениями B и дополнительными тестами C. Прежние результаты сохранены отдельно и не выдаются за итог изменённого дерева.
+
+Sandbox Electron, assertions, зависимости и конфигурация не изменялись. Причина SIGABRT отдельно не диагностировалась; он не объявляется тем же доказанным случаем macOS, что в историческом исследовании P2a. Предыдущий успешный GUI-smoke P2a не отменяется новым отказом текущей среды. В Git-тестах наблюдались прежние `confstr ... DARWIN_USER_TEMP_DIR` предупреждения; оба итоговых набора прошли. Временные проекты тестов удаляются в teardown, включая failed assertions; контролируемые fault-doubles не посылают системных сигналов. Для полной инженерной приёмки остаётся успешный GUI-smoke. Получение итогового B→A ревью изменило только документацию: наборы не повторялись, `git diff --check` — exit 0. Это не разрешает live и не заменяет проверку реального допуска.
+
+### Подготовленный live-сценарий и оставшиеся критерии
+
+Новый [план practical live](STAGE-0C-PRACTICAL-LIVE-PLAN.md) задаёт точную команду только для нового файла, до пяти модельных запусков, до 15 диагностик version/help/auth, конечные deadlines и отсутствие повторов. Проверяются Read/Glob/Grep, однократный безвредный запрос Write собственного контроля с обязательным событием отказа CLI и отсутствием эффекта, отсутствие transcript у своего UUID без persistence, штатный auth/provider request, persistence/resume, отличимый контекст first/resume, проектные приманки и Stop. Если недоступный Write не даёт события отказа, отрицательная проверка не засчитывается и права не расширяются. Историческая 04 не повторяется; 01–03 учитываются и новая цепочка проверяется только из-за смены production-комбинации. Приманки не расширяют argv или права. Стенд останавливает только собственные handles, проверяет контроль до cleanup при failed assertion и сохраняет безопасный отчёт отдельно от удаляемого проекта.
+
+Распознаваемость локального plugin и provider refresh остаются неизвестными без отдельного наблюдения. Отсутствие marker не выдаётся за доказательство отключения всех расширений. Отличимый ответ first/resume не является доказательством внутреннего состояния модели: артефакт сохраняет instructionApplication=unconfirmed даже при совпавшем слове. Transcripts чужих сессий не читаются и не удаляются, credentials не переносятся. Production теперь обязательно сравнивает agents с независимым ожиданием; отсутствие, повреждение или лишний агент блокируют gate. Само наличие зарегистрированного агента не доказывает исполнения или расширения прав.
+
+**Реализовано**: production-алгоритм и честный default-отказ при недостаточных фактах, безопасный inventory/gate, отдельный стенд. **Проверено на doubles**: все 158 новых независимых тестов и сохранённые регрессии в целевом наборе 456/456; найденные дефекты исправлены. **Подтверждено новым реальным запуском Claude**: ничего — реальные CLI/auth/model были запрещены и не запускались. Доступного полного effective managed-интерфейса пока недостаточно для реального ready; live и незакрытые критерии 0C-1/2/3 Claude не объявляются выполненными. Следующие пакеты не начинались.
+
+### Восстановление автоматической проверки — 2026-10-14
+
+Автоматическая передача результата сообщила: lint прошёл, `npm test` остановлен вместе с дочерними процессами по внешнему лимиту 900 с. Доступный вывод обрывается после заголовка Vitest, без имени теста и stack trace. Исходную точку зависания по этому выводу установить нельзя. Диагностический повтор `sh scripts/with-node.sh npm test -- --reporter=verbose` **до исправления** прошёл: exit 0, 538/538, 14 файлов, 147,05 с; Node 24.15.0/npm 12.2.0 соответствуют установленной среде. Поэтому устранение конкретной причины прежнего 900-секундного сбоя не объявляется доказанным.
+
+Найден и закрыт воспроизводимый пробел тестового стенда: синхронные `execFileSync` в подготовке Git-репозиториев, снимках доступа и запуске скриптов не имели собственного deadline. Такой вызов блокирует event loop, поэтому таймер теста Vitest не может прервать его. Одного `timeout` с обычным SIGTERM также недостаточно, если ребёнок игнорирует сигнал.
+
+По запросу восстановления C точечно расширил тестовый срез на общий helper и его использование в Git-кейсах. Изменены `tests/cases/git-boundaries.ts`, `tests/helpers/claude/access-stand.ts`, `tests/claude/access-stand.test.ts`; новые файлы — `tests/helpers/process.ts` и `tests/claude/stand-process.test.ts`. Production Git/Claude/ProcessRunner, конфигурация сборки, зависимости, старые fixtures и модельные инструкции не изменены.
+
+Теперь синхронные процессы стенда имеют deadline не более 5 с и SIGKILL только своего дочернего процесса. Stdout/stderr захватываются в результат или ошибку, а не наследуют канал отчёта. Ошибки exit сохраняются; MCP-двойник явно проверяет ETIMEDOUT. Ошибка создания стенда удаляет собственный временный каталог, даже если стенд ещё не возвращён тесту. Deadline снимка пробрасывается как ошибка и не может превратиться в одинаковый `UNREADABLE` до и после проверки. Это не механизм остановки всего дерева процессов.
+
+Добавлены восемь регрессий: успешный stdout, ненулевой exit, завершение собственного ребёнка с игнорированием SIGTERM при заблокированном таймере родителя, запрет отключения deadline тремя некорректными значениями, cleanup после ошибки подготовки и отказ снимка при deadline. Контрольный ребёнок сам завершается через 2 с даже при регрессии helper; после timeout проверено отсутствие его PID. Уборка в тесте допускает только захваченный собственный `vs-access-*` внутри временного каталога. Узкий прогон `sh scripts/with-node.sh npm exec --offline --no -- vitest run tests/claude/stand-process.test.ts tests/claude/access-stand.test.ts` — exit 0, 31/31, 5,50 с.
+
+Проверки после изменения стендов выполнялись последовательно, через установленную среду:
+
+| Команда | Фактический результат 2026-10-14 |
+|---|---|
+| `sh scripts/with-node.sh npm exec --offline --no -- vitest run tests/claude` | exit 0; **464/464**, 12 файлов, 20,23 с |
+| `sh scripts/with-node.sh npm run typecheck` | exit 0 |
+| `sh scripts/with-node.sh npm run lint` | exit 0 |
+| `sh scripts/with-node.sh npm run check:boundaries` | exit 0; 32 модуля, 61 зависимость |
+| `sh scripts/with-node.sh npm test` | exit 0; **546/546**, 15 файлов, **181,59 с**; обычный репортер, без увеличения лимитов |
+| `sh scripts/with-node.sh npm run test:node` | exit 0; **78/78**, 7 suites, fail/cancelled/skipped/todo = 0, 155,52 с |
+| `sh scripts/with-node.sh npm run build` | exit 0 |
+| `sh scripts/with-node.sh npm run smoke` | exit 1; SIGABRT, окно/preload не подтверждены |
+| `git diff --check` | exit 0 |
+| Область восстановления | 7 файлов C: 5 изменённых tracked, 2 новых; только тесты, helper, этот отчёт и статус P2b |
+
+Сначала завершилась диагностика прежнего состояния, затем узкая регрессия и итоговый цикл; одинаковые полные наборы параллельно не запускались. Внешний лимит передачи 900 с, таймауты Vitest и assertions не ослаблены. Локальная команда `npm test` восстановлена и завершается в пределах лимита; это не результат повторной автоматической передачи, которая выполняется вне этого прогона. GUI-smoke, реальная effective managed-политика и отдельная live-приёмка остаются открытыми. Реальные Claude/Codex/auth/model и OS-лаборатории не запускались; P2b/0C не закрываются.

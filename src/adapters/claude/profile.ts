@@ -1,5 +1,6 @@
+import { createHash } from 'node:crypto';
 import { isAbsolute, relative, sep } from 'node:path';
-import type { AgentErrorReason, AgentRunRequest, AgentDetection, PracticalLocalReadProfile } from '../../core/ports/agent.ts';
+import type { AgentErrorReason, AgentRunRequest, AgentDetection, PracticalLocalReadProfile, RuntimeInventory, RuntimeInventoryEntry } from '../../core/ports/agent.ts';
 import type { ProcessRequest, ProcessRun } from '../../core/ports/process-runner.ts';
 
 export const READ_ONLY_TOOLS = ['Read', 'Glob', 'Grep'] as const;
@@ -35,22 +36,114 @@ export type AccessVerifier = (context: AccessVerificationContext) => Promise<Acc
 
 export type PracticalAdmissionReason =
   | 'assessment_missing' | 'project_untrusted' | 'prerequisite_unknown'
-  | 'configuration_conflict' | 'cli_unsupported' | 'assessment_failed';
+  | 'configuration_conflict' | 'cli_unsupported' | 'assessment_failed'
+  | 'context_changed' | 'runtime_inventory_unknown' | 'runtime_inventory_mismatch';
 export type PracticalAdmissionLimitation =
   | 'no_os_sandbox' | 'no_provider_only_network' | 'detached_children_not_guaranteed';
 
 /** Допуск только конкретного practical-запроса; не AccessVerification и не launch.
- * В P1 ready используется исключительно synthetic-подстановками в тестах.
- * Реальная совместимость CLI/auth/builtin/managed остаётся задачей P2b. */
+ * Ready без привязки сохраняет старую synthetic-подстановку P1.
+ * Отпечаток и ожидание всегда присутствуют вместе, половинчатый допуск недопустим.
+ * Production обязан возвращать ProductionPracticalAdmission с обоими полями. */
 export type PracticalAdmission = {
   detail: string;
   /** Ready требует всех трёх ограничений v1: отсутствие данных не означает отсутствие ограничений. */
   limitations: readonly PracticalAdmissionLimitation[];
 } & (
-  | { status: 'ready' }
+  | { status: 'ready'; contextFingerprint?: never; expectedInventory?: never }
+  | { status: 'ready'; contextFingerprint: string; expectedInventory: RuntimeInventoryExpectation }
   | { status: 'blocked'; reason: PracticalAdmissionReason }
   | { status: 'unsupported'; reason: PracticalAdmissionReason }
 );
+
+export type ProductionPracticalAdmission = Exclude<PracticalAdmission, { status: 'ready' }>
+  | (Extract<PracticalAdmission, { status: 'ready' }> & {
+    readonly contextFingerprint: string;
+    readonly expectedInventory: RuntimeInventoryExpectation;
+  });
+
+/** Независимое предзапусковое ожидание, а не копия фактического init.
+ * Необязательные категории проверяются, если для них есть отдельное ожидание.
+ * Прочие сведения init остаются наблюдением и не становятся разрешением. */
+export interface RuntimeInventoryExpectation {
+  readonly tools: readonly string[];
+  readonly plugins: readonly RuntimeInventoryEntry[];
+  readonly mcpServers: readonly RuntimeInventoryEntry[];
+  readonly cliVersion: string;
+  readonly permissionMode: 'dontAsk';
+  readonly skills?: readonly string[];
+  readonly slashCommands?: readonly string[];
+  readonly agents?: readonly string[];
+}
+export interface RuntimeInventoryIssue {
+  readonly reason: 'runtime_inventory_unknown' | 'runtime_inventory_mismatch';
+  readonly field: keyof RuntimeInventory | 'init';
+  readonly detail: string;
+}
+export const MAX_INVENTORY_ITEMS = 64;
+export const MAX_INVENTORY_NAME_BYTES = 128;
+
+export function inventoryId(name: string): string {
+  return `sha256:${createHash('sha256').update(name).digest('hex')}`;
+}
+
+const inventoryDigest = (value: unknown): value is string => typeof value === 'string' && /^sha256:[a-f0-9]{64}$/.test(value);
+function inventoryStrings(value: unknown, digestOnly = false): value is readonly string[] {
+  if (!Array.isArray(value) || value.length > MAX_INVENTORY_ITEMS) return false;
+  for (const item of value) {
+    if (typeof item !== 'string' || !(digestOnly ? inventoryDigest(item)
+      : [...READ_ONLY_TOOLS, ...BLOCKED_TOOLS].some(tool => tool === item) || inventoryDigest(item))) return false;
+  }
+  return new Set(value).size === value.length;
+}
+function inventoryEntries(value: unknown): value is readonly RuntimeInventoryEntry[] {
+  if (!Array.isArray(value) || value.length > MAX_INVENTORY_ITEMS) return false;
+  const ids = new Set<string>();
+  for (const item of value) {
+    if (!isRecord(item) || !inventoryDigest(item.id) || typeof item.origin !== 'string'
+      || !['project', 'user', 'builtin', 'managed'].includes(item.origin) || ids.has(item.id)) return false;
+    ids.add(item.id);
+  }
+  return true;
+}
+
+export function isRuntimeInventoryExpectation(value: unknown): value is RuntimeInventoryExpectation {
+  return isRecord(value) && inventoryStrings(value.tools) && inventoryEntries(value.plugins) && inventoryEntries(value.mcpServers)
+    && typeof value.cliVersion === 'string' && /^\d+\.\d+\.\d+$/.test(value.cliVersion) && value.cliVersion.length <= 64
+    && value.permissionMode === 'dontAsk'
+    && (['skills', 'slashCommands', 'agents'] as const).every(key => !(key in value) || inventoryStrings(value[key], true));
+}
+
+/** Сравнение без вывода недоверенных значений в причины и диагностику. */
+export function compareRuntimeInventory(actual: RuntimeInventory | undefined, expected: RuntimeInventoryExpectation): RuntimeInventoryIssue | undefined {
+  const issue = (field: RuntimeInventoryIssue['field'], mismatch = false): RuntimeInventoryIssue => ({
+    reason: mismatch ? 'runtime_inventory_mismatch' : 'runtime_inventory_unknown', field,
+    detail: `${mismatch ? 'Расхождение' : 'Неподтверждённое поле'} runtime inventory: ${field}`,
+  });
+  if (!isRuntimeInventoryExpectation(expected) || !actual) return issue('init');
+  const fields: (keyof RuntimeInventory)[] = ['tools', 'plugins', 'mcpServers', 'cliVersion', 'permissionMode'];
+  for (const key of ['skills', 'slashCommands', 'agents'] as const) if (key in expected) fields.push(key);
+  for (const key of fields) {
+    const fact = actual[key];
+    if (!fact || fact.provenance !== 'cli-init' || fact.state === 'unknown') return issue(key);
+    if (fact.state === 'conflict') return issue(key, true);
+    if (fact.state !== 'known') return issue(key);
+    const value = fact.value;
+    const wanted = expected[key];
+    if (key === 'plugins' || key === 'mcpServers') {
+      if (!inventoryEntries(value)) return issue(key);
+      const signature = (entries: readonly RuntimeInventoryEntry[]): string => entries.map(entry => `${entry.id}:${entry.origin}`).sort().join(',');
+      if (signature(value) !== signature(wanted as readonly RuntimeInventoryEntry[])) return issue(key, true);
+    } else if (key === 'cliVersion' || key === 'permissionMode') {
+      if (typeof value !== 'string') return issue(key);
+      if (value !== wanted) return issue(key, true);
+    } else {
+      if (!inventoryStrings(value, key !== 'tools')) return issue(key);
+      if ([...value].sort().join(',') !== [...wanted as readonly string[]].sort().join(',')) return issue(key, true);
+    }
+  }
+  return undefined;
+}
 
 /** Адаптер передаёт неизменяемый снимок до запуска и использует те же argv/env.
  * Оценщик подключается только доверенной композицией, никогда через IPC/модель. */

@@ -3,12 +3,13 @@ import type { AgentAdapter, AgentDetection, AgentDetectOptions, AgentDiagnostic,
 import type { ProcessRequest, ProcessResult, ProcessRun, ProcessRunner } from '../../core/ports/process-runner.ts';
 import { createProcessRunner } from '../process-runner/index.ts';
 import { BoundedQueue } from '../process-runner/queue.ts';
+import { createClaudeAdmission } from './admission.ts';
 import { buildClaudeArgs, buildClaudeEnv, forbiddenEnvNames } from './args.ts';
 import { detectClaude } from './detect.ts';
 import { ClaudeStreamParser } from './parser.ts';
 import type { ParserOptions } from './parser.ts';
-import { UNVERIFIED_ACCESS_DETAIL, getAccessProfileKind, validateAccessProfile } from './profile.ts';
-import type { AccessVerifier, PracticalAdmissionContext, PracticalAdmissionEvaluator, PracticalAdmissionLimitation, PracticalAdmissionReason } from './profile.ts';
+import { UNVERIFIED_ACCESS_DETAIL, getAccessProfileKind, isRuntimeInventoryExpectation, validateAccessProfile } from './profile.ts';
+import type { AccessVerifier, PracticalAdmissionContext, PracticalAdmissionEvaluator, PracticalAdmissionLimitation, PracticalAdmissionReason, RuntimeInventoryExpectation } from './profile.ts';
 
 export interface ClaudeAdapterOptions {
   runner?: ProcessRunner;
@@ -19,7 +20,8 @@ export interface ClaudeAdapterOptions {
   /** Только strict-маршрут (профиль без kind): проверенный launch. */
   verifyAccess?: AccessVerifier;
   /** Только практический маршрут. Доверенная композиция/тестовый стенд, никогда не IPC и не config.
-   * В P1 production-реализации нет: без неё practical-local-v1 всегда отклоняется до prompt. */
+   * Без неё работает production-оценщик admission.ts (P2b): на реальной CLI он блокирует допуск,
+   * пока эффективная managed-политика не наблюдаема. Переопределение — явная подстановка. */
   assessPractical?: PracticalAdmissionEvaluator;
   parserLimits?: ParserOptions;
   maxQueue?: number;
@@ -66,7 +68,8 @@ function isCleanCompletion(completion: ProcessCompletion): boolean {
     && completion.stdout === 'ended' && completion.stderr === 'ended' && completion.wait === 'settled' && completion.issues.length === 0;
 }
 
-const PRACTICAL_REASONS: readonly PracticalAdmissionReason[] = ['assessment_missing', 'project_untrusted', 'prerequisite_unknown', 'configuration_conflict', 'cli_unsupported', 'assessment_failed'];
+const PRACTICAL_REASONS: readonly PracticalAdmissionReason[] = ['assessment_missing', 'project_untrusted', 'prerequisite_unknown', 'configuration_conflict', 'cli_unsupported', 'assessment_failed',
+  'context_changed', 'runtime_inventory_unknown', 'runtime_inventory_mismatch'];
 /** Все три ограничения безусловны для practical-local-v1: пропуск не означает их отсутствие. */
 const PRACTICAL_LIMITATIONS: readonly PracticalAdmissionLimitation[] = ['no_os_sandbox', 'no_provider_only_network', 'detached_children_not_guaranteed'];
 interface PracticalVerdict {
@@ -75,16 +78,19 @@ interface PracticalVerdict {
   detail: string;
   /** Только известные значения: произвольные строки оценщика в диагностику не попадают. */
   limitations: PracticalAdmissionLimitation[];
+  /** Только для ready: независимое ожидание inventory и отпечаток контекста допуска. */
+  expectedInventory?: RuntimeInventoryExpectation;
+  contextFingerprint?: string;
 }
 const isPracticalReason = (value: unknown): value is PracticalAdmissionReason => PRACTICAL_REASONS.includes(value as PracticalAdmissionReason);
 const isPracticalLimitation = (value: unknown): value is PracticalAdmissionLimitation => PRACTICAL_LIMITATIONS.includes(value as PracticalAdmissionLimitation);
 
 /** Runtime-проверка результата доверенной оценки: неполная или неизвестная форма — не допуск. */
-function checkPracticalAdmission(admission: unknown): PracticalVerdict {
+function checkPracticalAdmission(admission: unknown, production: boolean): PracticalVerdict {
   const blocked = (reason: PracticalAdmissionReason, detail: string, limitations: PracticalAdmissionLimitation[] = []): PracticalVerdict =>
     ({ error: 'practical_admission_blocked', reason, detail, limitations });
   if (!admission || typeof admission !== 'object') return blocked('assessment_failed', 'оценка допуска не вернула результат');
-  const value = admission as { status?: unknown; reason?: unknown; detail?: unknown; limitations?: unknown };
+  const value = admission as { status?: unknown; reason?: unknown; detail?: unknown; limitations?: unknown; expectedInventory?: unknown; contextFingerprint?: unknown };
   const detail = typeof value.detail === 'string' ? value.detail.slice(0, PRACTICAL_DETAIL_LIMIT) : '';
   const reported = Array.isArray(value.limitations) ? value.limitations : undefined;
   const known = [...new Set((reported ?? []).filter(isPracticalLimitation))];
@@ -96,7 +102,18 @@ function checkPracticalAdmission(admission: unknown): PracticalVerdict {
   if (reported.length !== PRACTICAL_LIMITATIONS.length || known.length !== PRACTICAL_LIMITATIONS.length) {
     return blocked('prerequisite_unknown', 'ready без полного набора известных ограничений practical-local-v1', known);
   }
-  return { reason: 'ready', detail, limitations: known };
+  const hasInventory = value.expectedInventory !== undefined;
+  const hasFingerprint = value.contextFingerprint !== undefined;
+  if ((hasInventory && !isRuntimeInventoryExpectation(value.expectedInventory))
+    || (hasFingerprint && (typeof value.contextFingerprint !== 'string' || !/^[0-9a-f]{64}$/.test(value.contextFingerprint)))) {
+    return blocked('assessment_failed', 'ready с некорректным ожиданием inventory или отпечатком контекста', known);
+  }
+  // Половинчатый ready не допуск в любой ветке; production требует пару целиком.
+  if (hasInventory !== hasFingerprint) return blocked('assessment_failed', 'ready только с одним из ожидания inventory и отпечатка контекста', known);
+  if (production && !hasInventory) return blocked('prerequisite_unknown', 'ready без ожидаемого inventory и отпечатка контекста', known);
+  return { reason: 'ready', detail, limitations: known,
+    ...(hasInventory ? { expectedInventory: value.expectedInventory as RuntimeInventoryExpectation } : {}),
+    ...(hasFingerprint ? { contextFingerprint: value.contextFingerprint as string } : {}) };
 }
 
 export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): AgentAdapter {
@@ -107,7 +124,9 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): AgentAd
     if (!Number.isSafeInteger(limits[name]) || limits[name] < 1 || limits[name] > 2_147_483_647) throw new Error('Лимиты адаптера должны быть конечными положительными целыми');
   }
   const sequences = new Map<string, number>();
-  const detect = (request: AgentDetectOptions = {}): Promise<AgentDetection> => {
+  // Production-путь practical: без явной подстановки оценивает admission.ts (без кэша решений).
+  const productionAdmission = options.assessPractical ? undefined : createClaudeAdmission();
+  const detect =(request: AgentDetectOptions = {}): Promise<AgentDetection> => {
     const params = { binaryPath: request.binaryPath ?? options.binaryPath, env: request.env ?? baseEnv };
     return options.detect ? options.detect(params) : detectClaude(runner, params);
   };
@@ -268,9 +287,11 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): AgentAd
           let launchArgs: readonly string[] = built.args;
           let launchEnv: Readonly<Record<string, string>> = built.env;
           let executable: string = detection.binaryPath;
+          let expectedInventory: RuntimeInventoryExpectation | undefined;
           if (practical) {
             // Не AccessVerification: ready не несёт verified/evidence и не изображает изоляцию.
-            if (!options.assessPractical) {
+            const assess = options.assessPractical ?? productionAdmission?.assess;
+            if (!assess) {
               finish({ kind: 'error', reason: 'practical_admission_blocked', detail: 'Практический допуск не выдан (assessment_missing): оценка допуска не подключена' }); return;
             }
             const frozenDetection = snapshot(detection);
@@ -280,13 +301,25 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): AgentAd
             executable = frozenDetection.binaryPath ?? executable;
             const context = deepFreeze({ detection: frozenDetection, request, args: launchArgs, env: launchEnv }) as PracticalAdmissionContext;
             let admission: unknown;
-            try { admission = await options.assessPractical(context); } catch { admission = undefined; }
+            try { admission = await assess(context); } catch { admission = undefined; }
             if (aborted()) { finish({ kind: 'interrupted' }); return; }
-            const verdict = checkPracticalAdmission(admission);
+            const verdict = checkPracticalAdmission(admission, productionAdmission !== undefined);
             if (verdict.limitations.length) diagnostic({ code: 'practical_limitations', detail: verdict.limitations.join(',') });
             if (verdict.error) {
               finish({ kind: 'error', reason: verdict.error, detail: `Практический допуск не выдан (${verdict.reason}): ${verdict.detail}` }); return;
             }
+            // Допуск относится к контексту на момент оценки: executable/версия/конфигурация перепроверяются прямо перед запуском.
+            // Это не исключает гонки после этой проверки.
+            if (productionAdmission && verdict.contextFingerprint) {
+              let unchanged = false;
+              try { unchanged = await productionAdmission.recheck(context, verdict.contextFingerprint); } catch { unchanged = false; }
+              if (aborted()) { finish({ kind: 'interrupted' }); return; }
+              if (!unchanged) {
+                finish({ kind: 'error', reason: 'practical_admission_blocked', detail: 'Практический допуск не выдан (context_changed): контекст запуска изменился после оценки' }); return;
+              }
+            }
+            expectedInventory = verdict.expectedInventory;
+            if (verdict.contextFingerprint) diagnostic({ code: 'practical_context', detail: `fingerprint:${verdict.contextFingerprint.slice(0, 16)}` });
             launch = processRequest => runner.start(processRequest);
           } else {
             const verification = await options.verifyAccess?.({ detection, request, args: built.args, env: built.env });
@@ -297,7 +330,9 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): AgentAd
             }
             launch = verification.launch;
           }
-          const parser = new ClaudeStreamParser({ ...options.parserLimits, expectedSessionId: request.agentSessionId });
+          // expectedInventory только у practical с ожиданием оценщика: init проверяется синхронно внутри разбора.
+          // Расхождение — controlled error через failure и внутренний stopProcess, не пользовательский Stop.
+          const parser = new ClaudeStreamParser({ ...options.parserLimits, expectedSessionId: request.agentSessionId, ...(expectedInventory ? { expectedInventory } : {}) });
           // До этого вызова процесс заведомо не запускался; после неизвестного throw факт запуска не доказан.
           launchAttempted = true;
           try {
@@ -352,7 +387,10 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): AgentAd
             await settleStops();
             finish({ kind: 'error', reason: 'drain_timeout', detail: 'Потоки не закрылись за отведённое время' }); return;
           }
+          const failedBeforeEnd = parser.error !== undefined;
           for (const payload of parser.end()) if (payload.type !== 'run_started') emit(payload);
+          // Отказ впервые на EOF (например init без завершающего LF): наблюдённый exit не отменяет доступную остановку.
+          if (!failedBeforeEnd && parser.error) { failure ??= { kind: 'error', ...parser.error }; stopProcess(); }
           for (const item of parser.diagnostics) diagnostic(item);
           // Отказ stop-метода мог прийти после done, но до терминального снимка.
           await settleStops();
