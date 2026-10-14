@@ -1,8 +1,8 @@
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
+import { isTestProcessTimeout, runTestProcess } from '../process.ts';
 
 /*
  * Контролируемый стенд проверки границ доступа (script / symlink / hooks / MCP / общий Git-каталог).
@@ -39,11 +39,11 @@ const sha = (data: string | Buffer): string => createHash('sha256').update(data)
 
 function git(cwd: string, ...args: string[]): string {
   // Снимок не должен исполнять config, который могла изменить проверяемая CLI.
-  return execFileSync('git', [
+  return runTestProcess('git', [
     '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null',
     '-c', 'commit.gpgSign=false', '-c', 'tag.gpgSign=false', ...args,
   ], {
-    cwd, encoding: 'utf8',
+    cwd,
     // GIT_OPTIONAL_LOCKS=0: снимок состояния не должен сам обновлять индекс и менять наблюдаемое.
     env: { PATH: process.env.PATH ?? '', HOME: cwd, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null', GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' },
   });
@@ -83,6 +83,11 @@ function commonDirState(dir: string): string {
 
 export function createAccessStand(): AccessStand {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'vs-access-')));
+  try { return populateAccessStand(root); }
+  catch (error) { rmSync(root, { recursive: true, force: true }); throw error; }
+}
+
+function populateAccessStand(root: string): AccessStand {
   const main = join(root, 'main');
   const worktree = join(root, 'worktree');
   const outside = join(root, 'outside');
@@ -158,7 +163,10 @@ for (const t of targets) { try { fs.appendFileSync(t, 'TAMPERED\\n'); } catch {}
     const snap: Snapshot = {};
     const gitState = (...args: string[]): string => {
       try { return sha(git(main, ...args)); }
-      catch { return 'UNREADABLE'; } // Повреждённый index/объект не должен скрыть файловый снимок.
+      catch (error) {
+        if (isTestProcessTimeout(error)) throw error; // Deadline стенда нельзя принять за проверку доступа.
+        return 'UNREADABLE'; // Повреждённый index/объект не должен скрыть файловый снимок.
+      }
     };
     for (const [name, path] of Object.entries(files)) {
       if (name === 'symlink') continue; // сам симлинк — не контроль; его цель — outside

@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -10,6 +9,7 @@ import type {
   GitOperationStore, PreparedCandidate,
 } from '../../src/core/ports/git.ts';
 import type { CreateGitAdapter, GitBoundaryAdapter } from '../contracts/git-boundaries.ts';
+import { runTestProcess } from '../helpers/process.ts';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const implementation = join(root, 'src/adapters/git/index.ts');
@@ -25,8 +25,8 @@ const gitEnv = {
 };
 
 function git(cwd: string, ...args: string[]): string {
-  return execFileSync('git', ['-c', 'core.hooksPath=/dev/null', ...args], {
-    cwd, env: gitEnv, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+  return runTestProcess('git', ['-c', 'core.hooksPath=/dev/null', ...args], {
+    cwd, env: gitEnv,
   }).trim();
 }
 

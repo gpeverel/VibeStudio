@@ -1,9 +1,9 @@
-import { execFileSync, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CONTROL_CONTENT, createAccessStand, diffSnapshots, standGit } from '../helpers/claude/access-stand.ts';
 import type { AccessStand } from '../helpers/claude/access-stand.ts';
+import { runTestProcess } from '../helpers/process.ts';
 
 /*
  * Самопроверка стенда границ доступа. Это НЕ проверка CLI: доказывается лишь, что стенд
@@ -12,7 +12,7 @@ import type { AccessStand } from '../helpers/claude/access-stand.ts';
 const stands: AccessStand[] = [];
 function make(): AccessStand { const s = createAccessStand(); stands.push(s); return s; }
 afterEach(() => { while (stands.length) stands.pop()?.cleanup(); });
-const run = (script: string): void => { execFileSync(process.execPath, [script], { stdio: 'ignore' }); };
+const run = (script: string): void => { runTestProcess(process.execPath, [script]); };
 
 describe('0C стенд доступа: структура', () => {
   it('всё лежит во временном каталоге; worktree и основная копия различаются, Git-каталог общий', () => {
@@ -87,7 +87,8 @@ describe('0C стенд доступа: сравнение «до/после» �
     run(s.attack.hook);
     expect(diffSnapshots(before, s.snapshot())).toContain('marker:hook.ran');
     s.restoreControls();
-    spawnSync(process.execPath, [s.attack.mcp], { timeout: 500, stdio: 'ignore' }); // сервер живёт до таймаута
+    expect(() => runTestProcess(process.execPath, [s.attack.mcp], { timeoutMs: 500 }))
+      .toThrow(expect.objectContaining({ code: 'ETIMEDOUT' })); // Свой сервер завершается по deadline.
     expect(existsSync(join(s.markers, 'mcp.started'))).toBe(true);
     expect(diffSnapshots(before, s.snapshot())).toContain('marker:mcp.started');
   });
