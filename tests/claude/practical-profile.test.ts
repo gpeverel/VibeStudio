@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as admission from '../../src/adapters/claude/admission.ts';
 import { buildClaudeArgs } from '../../src/adapters/claude/args.ts';
 import { createClaudeAdapter } from '../../src/adapters/claude/index.ts';
 import type { ClaudeAdapterOptions } from '../../src/adapters/claude/index.ts';
@@ -7,7 +8,8 @@ import { validateAccessProfile } from '../../src/adapters/claude/profile.ts';
 import type { PracticalAdmission, PracticalAdmissionContext } from '../../src/adapters/claude/profile.ts';
 import { createProcessRunner } from '../../src/adapters/process-runner/index.ts';
 import type { AgentCapabilities, AgentDetection, AgentEvent, AgentRun, AgentRunRequest } from '../../src/core/ports/agent.ts';
-import type { ProcessRequest } from '../../src/core/ports/process-runner.ts';
+import type { ProcessRequest, ProcessRun } from '../../src/core/ports/process-runner.ts';
+import { jsonLines, syntheticExpectation, syntheticFacts, syntheticInit } from '../helpers/claude/practical-evidence.ts';
 import { flagValue, legacyStrictProfile, legacyStrictRequest, practicalLocalReadProfile, practicalRequest, readOnlyProfile, request } from '../helpers/claude/requests.ts';
 import { Stand } from '../helpers/claude/stand.ts';
 import type { FakeScenario } from '../helpers/claude/stand.ts';
@@ -17,6 +19,7 @@ import type { FakeScenario } from '../helpers/claude/stand.ts';
 const SYNTHETIC_READY: PracticalAdmission = {
   status: 'ready', detail: 'synthetic: разрешение только тестов P1',
   limitations: ['no_os_sandbox', 'no_provider_only_network', 'detached_children_not_guaranteed'],
+  expectedInventory: syntheticExpectation(), contextFingerprint: 'c'.repeat(64),
 };
 const CAPS: AgentCapabilities = {
   streamJson: true, partialMessages: true, sessionId: true, resume: true, noSessionPersistence: true, maxTurns: true,
@@ -24,10 +27,25 @@ const CAPS: AgentCapabilities = {
   readOnly: 'unverified',
 };
 const SESSION = '11111111-1111-4111-8111-111111111111';
-const fixture = (name: string): string => readFileSync(new URL('../fixtures/claude/' + name, import.meta.url), 'utf8');
+// Только старые synthetic streams получают полный synthetic init; файлы и реальные replay неизменны.
+const fixture = (name: 'success-simple.jsonl' | 'error-execution.jsonl'): string => {
+  const data = readFileSync(new URL('../fixtures/claude/' + name, import.meta.url), 'utf8');
+  return jsonLines(syntheticInit()).toString() + data.slice(data.indexOf('\n') + 1);
+};
 const success = (): FakeScenario => ({ steps: [{ out: fixture('success-simple.jsonl') }] });
 const stands: Stand[] = [];
-afterEach(() => { vi.useRealTimers(); while (stands.length) stands.pop()?.cleanup(); });
+const managedRuns = new Set<ProcessRun>();
+afterEach(async () => {
+  await Promise.allSettled([...managedRuns].map(run => run.kill()));
+  managedRuns.clear(); vi.useRealTimers(); vi.restoreAllMocks();
+  while (stands.length) stands.pop()?.cleanup();
+});
+const productionFactory = admission.createClaudeAdmission;
+function syntheticUnknownManaged(): void {
+  vi.spyOn(admission, 'createClaudeAdmission').mockImplementation(() => productionFactory({
+    collect: async context => ({ ...syntheticFacts(context), managed: { state: 'unknown', reason: 'unobservable' } }),
+  }));
+}
 
 function harness(options: Partial<ClaudeAdapterOptions> = {}, scenario = success(), detectionPatch: Partial<AgentDetection> = {}) {
   const s = new Stand();
@@ -38,7 +56,7 @@ function harness(options: Partial<ClaudeAdapterOptions> = {}, scenario = success
     capabilities: { ...CAPS }, unavailable: [], ...detectionPatch,
   };
   const runner = createProcessRunner();
-  const launch = vi.fn((input: ProcessRequest) => runner.start(input));
+  const launch = vi.fn((input: ProcessRequest) => { const run = runner.start(input); managedRuns.add(run); return run; });
   const assess = vi.fn(async (): Promise<PracticalAdmission> => SYNTHETIC_READY);
   const verify = vi.fn(async () => { throw new Error('Practical не должен вызывать strict verifier'); });
   const detect = vi.fn(async () => detection);
@@ -124,11 +142,12 @@ describe('P1: legacy strict не получает практический до�
 });
 
 describe('P1: practical требует отдельную полную оценку', () => {
-  it('нет assessPractical: явный недопуск, strict verifier не вызывается', async () => {
+  it('нет assessPractical: production-оценка unknown managed запрещает prompt, strict verifier не вызывается', async () => {
+    syntheticUnknownManaged();
     const h = harness({ assessPractical: undefined });
     const { result, run } = await blocked(h);
     expect(result).toMatchObject({ reason: 'practical_admission_blocked' });
-    expect(JSON.stringify([result, run.diagnostics])).toContain('assessment_missing');
+    expect(JSON.stringify([result, run.diagnostics])).toContain('prerequisite_unknown');
     expect(h.verify).not.toHaveBeenCalled();
   });
 
@@ -188,6 +207,7 @@ describe('P1: practical требует отдельную полную оцен�
   });
 
   it('ready/verified из данных запроса не заменяют доверенную оценку', async () => {
+    syntheticUnknownManaged();
     const h = harness({ assessPractical: undefined });
     const injected = { ...h.req(), admission: SYNTHETIC_READY, verified: true };
     const { result } = await blocked(h, injected);
@@ -393,7 +413,7 @@ describe('P1: synthetic practical-ready запускает только точн
   });
 
   it.each([
-    ['нет result', { steps: [] }, 'missing_result'],
+    ['нет result', { steps: [{ out: jsonLines(syntheticInit()).toString() }] }, 'missing_result'],
     ['success с ненулевым exit', { ...success(), exit: 3 }, 'nonzero_exit'],
     ['ошибка CLI', { steps: [{ out: fixture('error-execution.jsonl') }], exit: 1 }, undefined],
   ] as const)('после practical launch %s сохраняет ошибку и один terminal', async (_name, scenario, reason) => {

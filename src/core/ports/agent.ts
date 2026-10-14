@@ -1,5 +1,6 @@
 import type { AgentDiagnostic, AgentErrorReason, AgentEvent, AgentRunCompletion } from '../../shared/agent.ts';
 export type { AgentDiagnostic, AgentErrorReason, AgentEvent, AgentRunCompletion, AgentRunResult, AgentUsage, NormalizedPayload,
+  InventoryFact, InventoryOrigin, InventoryProvenance, RuntimeInventory, RuntimeInventoryEntry,
   ProcessCompletion, ProcessCompletionIssue, ProcessCompletionIssueCode, ProcessSignalResult, ProcessStreamState } from '../../shared/agent.ts';
 
 export type ReadTool = 'Read' | 'Glob' | 'Grep';

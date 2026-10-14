@@ -3,9 +3,40 @@ export type AgentErrorReason =
   | 'binary_missing' | 'not_authenticated' | 'capability_missing' | 'invalid_request'
   | 'profile_unverified' | 'profile_unsupported' | 'spawn_failed' | 'timeout'
   | 'practical_admission_blocked' | 'practical_admission_unsupported'
+  | 'runtime_inventory_unknown' | 'runtime_inventory_mismatch'
   | 'drain_timeout' | 'output_limit' | 'protocol_incompatible' | 'missing_result'
   | 'signal_failed' | 'stream_failed' | 'process_result_failed' | 'exit_unconfirmed'
   | 'nonzero_exit' | 'network' | 'overloaded' | 'rate_limit' | 'unknown';
+
+/** Источник наблюдения не равен происхождению расширения и не доказывает его исполнение. */
+export type InventoryProvenance = 'cli-init' | 'effective-config' | 'version-contract';
+export type InventoryOrigin = 'project' | 'user' | 'builtin' | 'managed' | 'unknown';
+export type InventoryFact<T> = { readonly provenance: InventoryProvenance } & (
+  | { readonly state: 'known'; readonly value: T }
+  | { readonly state: 'unknown'; readonly reason: 'missing' | 'malformed' | 'unsupported' | 'unattributed' }
+  | { readonly state: 'conflict'; readonly reason: 'source_conflict' }
+);
+export interface RuntimeInventoryEntry {
+  /** SHA-256 имени: исходные имена, пути, команды и значения конфигурации не передаются. */
+  readonly id: string;
+  readonly origin: InventoryOrigin;
+}
+/** Безопасный ограниченный снимок регистрации из init; не effective-политика и не разрешение.
+ * Пустой known-список означает только явно сообщённый пустой список этого поля.
+ * Наблюдения об отсутствующих hooks/managed-источниках из init не выводятся. */
+export interface RuntimeInventory {
+  /** Известные имена инструментов из закрытого словаря; остальные — SHA-256. */
+  readonly tools: InventoryFact<readonly string[]>;
+  readonly plugins: InventoryFact<readonly RuntimeInventoryEntry[]>;
+  readonly mcpServers: InventoryFact<readonly RuntimeInventoryEntry[]>;
+  /** Имена этих регистраций всегда передаются как SHA-256. */
+  readonly skills: InventoryFact<readonly string[]>;
+  readonly slashCommands: InventoryFact<readonly string[]>;
+  readonly agents: InventoryFact<readonly string[]>;
+  readonly cliVersion: InventoryFact<string>;
+  /** Только dontAsk сохраняется открытым текстом; прочие значения — SHA-256. */
+  readonly permissionMode: InventoryFact<string>;
+}
 
 /** Сериализуемые факты завершения; без Node-типов, Error и идентичности старого PID. */
 export type ProcessCompletionIssueCode =
