@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "provenance": "real-diagnostic-safe-projection",
+  "probeOrdinal": 3,
+  "authorization": {
+    "decision": "делай до тех пор пока не будет успешный результат в разумных пределах. например 3 раза.",
+    "scope": "До трёх дополнительных немодельных проб; прежние argv/env/бюджеты, без prompt; между попытками проверка обоснованных исправлений",
+    "batchAttempt": 1,
+    "batchLimit": 3
+  },
+  "observationWindowUtc": {
+    "before": "2026-10-15 11:59:53 UTC",
+    "after": "2026-10-15 11:59:54 UTC"
+  },
+  "launcher": {
+    "command": "P2B_SETTINGS_INSPECTION=1 /Users/nishimata/.nvm/versions/node/v24.15.0/bin/node tests/helpers/claude/settings-inspection-cli.ts --approved-single-probe",
+    "invocations": 1,
+    "exitCode": 1,
+    "toolWallTimeSeconds": 0.446669667
+  },
+  "checkedSha256": {
+    "tests/helpers/claude/settings-inspection-cli.ts": "6dfdbe24fb86c22ea67a63b81aaa43c04b37618d668250f11f4946f04d11f324",
+    "tests/helpers/claude/settings-inspection-supervisor.ts": "599e91181d2a41639f839a2324575fff3177983e6cdfea545768ba3390c6e1d3",
+    "tests/helpers/claude/settings-inspection-worker.ts": "ecfa5b8b994cc3a2d4677339234d28bf0dc51c284218f818baa57f64cee4f837",
+    "tests/helpers/claude/settings-inspection.ts": "3ad730e9fe371ad0806fa959e5fbceb67227e37fd7518e53836408d937e64439",
+    "/Users/nishimata/.nvm/versions/node/v24.15.0/bin/node": "3200fbd9f7fd4410426dd541e10d1ab829d3472f270d743c7fabd1696c03fe32",
+    "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe": "0116ee2e0a513900b633d9951367f18747686478e2b462805b8c31609f047f70"
+  },
+  "report": {
+    "identity": {
+      "executable": "/opt/homebrew/bin/claude",
+      "executableSha256": "0116ee2e0a513900b633d9951367f18747686478e2b462805b8c31609f047f70",
+      "declaredPackageVersion": "2.1.295",
+      "runtimeVersion": "unconfirmed",
+      "cwd": "/private/tmp/vs-policy-inspect-p2b-03-8U2qz3",
+      "argv": [
+        "--print",
+        "--verbose",
+        "--input-format",
+        "stream-json",
+        "--output-format",
+        "stream-json",
+        "--restricted",
+        "--safe-mode",
+        "--setting-sources",
+        "",
+        "--strict-mcp-config",
+        "--mcp-config",
+        "{\"mcpServers\":{}}",
+        "--tools",
+        "Read,Glob,Grep",
+        "--allowedTools",
+        "Read,Glob,Grep",
+        "--permission-mode",
+        "dontAsk",
+        "--permission-prompts",
+        "none",
+        "--disable-slash-commands",
+        "--no-chrome",
+        "--disallowedTools",
+        "Bash,PowerShell,Edit,Write,NotebookEdit,Agent,Task,Skill,WebFetch,WebSearch",
+        "--no-session-persistence",
+        "--system-prompt-snapshot",
+        "off"
+      ],
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ]
+    },
+    "topology": {
+      "claudeLimit": 1,
+      "auxiliaryNodeProcesses": 2,
+      "promptCount": 0,
+      "retries": 0
+    },
+    "cliCompatibility": "unconfirmed",
+    "transport": {
+      "cliCompatibility": "unconfirmed",
+      "outcome": "failed",
+      "stopAccepted": false,
+      "initialize": "pending",
+      "getSettings": "not_sent",
+      "sessionState": "unknown",
+      "inventoryObserved": false,
+      "protocolFailure": "system_message_unsupported",
+      "systemObservation": {
+        "subtype": "ui_invalidate",
+        "shape": "unclassified"
+      },
+      "reasons": [
+        "protocol_unknown",
+        "process_failed"
+      ],
+      "stdoutBytes": 4039,
+      "stderrBytes": 0,
+      "elapsedMs": 316,
+      "stdin": "finished",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 143,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "signals": [
+          {
+            "signal": "SIGTERM",
+            "target": "process",
+            "status": "sent"
+          }
+        ],
+        "wait": "settled",
+        "issues": [],
+        "descendants": "not_guaranteed"
+      }
+    },
+    "artifacts": {
+      "cwdBefore": {
+        "state": "present",
+        "kind": "directory",
+        "size": 64,
+        "mtimeMs": 1792065145057.7073
+      },
+      "cwdAfter": {
+        "state": "present",
+        "kind": "directory",
+        "size": 64,
+        "mtimeMs": 1792065145057.7073
+      },
+      "remoteBefore": {
+        "state": "missing"
+      },
+      "remoteAfter": {
+        "state": "missing"
+      },
+      "cleanup": "removed"
+    },
+    "supervisor": {
+      "cli": {
+        "state": "exited",
+        "exitCode": 143,
+        "signal": null
+      },
+      "worker": {
+        "state": "exited",
+        "exitCode": 0,
+        "signal": null
+      },
+      "signals": [
+        {
+          "signal": "SIGTERM",
+          "target": "process",
+          "status": "sent",
+          "process": "cli"
+        }
+      ],
+      "reasons": [],
+      "elapsedMs": 322,
+      "deadline": false,
+      "stopAccepted": false,
+      "descendants": "not_guaranteed"
+    }
+  },
+  "postRun": {
+    "ownCwdAbsent": true,
+    "verification": "Отдельный ls -ld после пробы: No such file or directory"
+  },
+  "limitations": [
+    "Сохранена только закрытая проекция; raw stdout/stderr, settings/account, IDs и значения env не сохранялись.",
+    "Реально наблюдался известный subtype ui_invalidate; его payload/схема в этой редакции не классифицировались, безопасное принятие не предполагалось.",
+    "Отсутствие statusNotifications означает, что строгое уведомление режима не было принято в этом запуске; новую ветку нельзя выдавать за объяснение первых двух проб.",
+    "Оба control-запроса не завершены: initialize pending, get_settings не отправлен. Runtime-версия, production-источник и модельная приёмка не подтверждены.",
+    "SIGTERM sent и exitCode143/signalnull записаны отдельно; прочие файловые/сетевые эффекты и detached-потомки не исключены."
+  ]
+}

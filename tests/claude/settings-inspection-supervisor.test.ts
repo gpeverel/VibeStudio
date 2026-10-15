@@ -182,6 +182,52 @@ describe('Независимый supervisor: synthetic handles и IPC', () => {
     expect(report.supervisor.reasons).toContain('ipc_invalid'); expect(report.transport).toBeUndefined();
     expect(JSON.stringify(report)).not.toContain('SECRET');
   });
+
+  it('systemObservation закрыт, совместим со старым отчётом, удаляет произвольные детали', () => {
+    const observation = { subtype: 'status', shape: 'status_valid', statusValue: 'requesting', permissionMode: 'dontAsk' };
+    const base = { ...transportReport(), outcome: 'failed', reasons: ['protocol_unknown'], protocolFailure: 'system_message_unsupported' };
+    expect(projectInspectionReport({ ...base, systemObservation: { ...observation, detail: 'SECRET-detail', uuid: 'SECRET-uuid' } })?.systemObservation).toEqual(observation);
+    expect(projectInspectionReport(transportReport())).toEqual(transportReport());
+    expect(projectInspectionReport({ ...transportReport(), statusNotifications: 1 })?.statusNotifications).toBe(1);
+    for (const value of [0, -1, 0.5, B.output + 1, 'SECRET-count']) expect(projectInspectionReport({ ...base, statusNotifications: value })).toBeUndefined();
+    expect(projectInspectionReport({ ...transportReport(), systemObservation: observation })).toBeUndefined();
+    expect(projectInspectionReport({ ...base, protocolFailure: 'json_invalid', systemObservation: observation })).toBeUndefined();
+    const legacyUi = { subtype: 'ui_invalidate', shape: 'unclassified' };
+    expect(projectInspectionReport({ ...base, systemObservation: legacyUi })?.systemObservation).toEqual(legacyUi);
+    expect(projectInspectionReport({ ...base, systemObservation: { subtype: 'ui_invalidate', shape: 'ui_invalidate_valid',
+      uiEvent: 'ui.render', instances: 'nonempty', secret: 'SECRET' } })?.systemObservation).toEqual({
+      subtype: 'ui_invalidate', shape: 'ui_invalidate_valid', uiEvent: 'ui.render', instances: 'nonempty' });
+    expect(projectInspectionReport({ ...transportReport(), uiInvalidations: 1 })?.uiInvalidations).toBe(1);
+    for (const value of [0, -1, 0.5, B.output + 1, 'SECRET-count']) expect(projectInspectionReport({ ...base, uiInvalidations: value })).toBeUndefined();
+  });
+
+  it.each([
+    { subtype: 'SECRET-subtype', shape: 'unclassified' },
+    { subtype: 'unknown', shape: 'SECRET-shape' },
+    { subtype: 'status', shape: 'status_valid', statusValue: 'SECRET-status', permissionMode: 'dontAsk' },
+    { subtype: 'status', shape: 'status_valid', statusValue: 'null', permissionMode: 'SECRET-mode' },
+    { subtype: 'status', shape: 'status_valid', statusValue: 'invalid', permissionMode: 'dontAsk' },
+    { subtype: 'status', shape: 'status_valid', statusValue: 'absent', permissionMode: 'dontAsk' },
+    { subtype: 'status', shape: 'status_valid', statusValue: 'null', permissionMode: 'invalid' },
+    { subtype: 'status', shape: 'status_valid' },
+    { subtype: 'session_state_changed', shape: 'session_state_valid', state: 'SECRET-state' },
+    { subtype: 'session_state_changed', shape: 'session_state_valid', state: 'invalid' },
+    { subtype: 'session_state_changed', shape: 'session_state_valid', state: 'absent' },
+    { subtype: 'session_state_changed', shape: 'unclassified', state: 'idle' },
+    { subtype: 'unknown', shape: 'unclassified', statusValue: 'null' },
+    { subtype: 'session_title_changed', shape: 'session_title_valid', state: 'idle' },
+    { subtype: 'ui_invalidate', shape: 'unclassified', uiEvent: 'ui.render' },
+    { subtype: 'ui_invalidate', shape: 'ui_invalidate_valid', uiEvent: 'invalid', instances: 'empty' },
+    { subtype: 'ui_invalidate', shape: 'ui_invalidate_valid', uiEvent: 'ui.render', instances: 'invalid' },
+    { subtype: 'ui_invalidate', shape: 'ui_invalidate_invalid', uiEvent: 'SECRET-event', instances: 'empty' },
+    { subtype: 'unknown', shape: 'unclassified', instances: 'nonempty' },
+  ])('неизвестный/несогласованный systemObservation из IPC останавливает supervisor %#', async systemObservation => {
+    const h = setup(); h.ready(); h.worker.emit('message', { type: 'report', report: { ...transportReport(),
+      outcome: 'failed', reasons: ['protocol_unknown'], protocolFailure: 'system_message_unsupported', systemObservation } });
+    await vi.advanceTimersByTimeAsync(B.term + B.kill + B.drain); const result = await h.run.done;
+    expect(result.supervisor.reasons).toContain('ipc_invalid'); expect(result.transport).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain('SECRET');
+  });
 });
 
 describe('Внешний надзор: собственные synthetic Node-процессы', () => {
@@ -247,7 +293,7 @@ describe('Внешний надзор: собственные synthetic Node-п�
     expect(result.supervisor.elapsedMs).toBeLessThan(budget.outer + 1000);
   });
 
-  it.each(['success', 'reject', 'early-exit', 'late-model', 'invalid-json', 'system-other'])('настоящий worker и унаследованные pipe handles: synthetic %s', async scenario => {
+  it.each(['success', 'reject', 'early-exit', 'late-model', 'invalid-json', 'system-other', 'mode-status', 'active-status', 'ui-invalidate', 'ui-without-instances', 'ui-invalid'])('настоящий worker и унаследованные pipe handles: synthetic %s', async scenario => {
     const messages: unknown[] = [], diagnostics: string[] = [];
     const spawnCli = vi.fn(() => {
       const child = own(spawn(process.execPath, ['tests/helpers/claude/settings-inspection-double.mjs', scenario], {
@@ -263,19 +309,28 @@ describe('Внешний надзор: собственные synthetic Node-п�
       return worker;
     });
     const result = await superviseSettingsInspection({ spawnCli, spawnWorker, budget }).done;
-    if (scenario === 'success') {
+    if (scenario === 'success' || scenario === 'mode-status' || scenario === 'ui-invalidate' || scenario === 'ui-without-instances') {
       expect(result.transport).toMatchObject({ outcome: 'observed', initialize: 'accepted', getSettings: 'accepted',
         settings: { executableKeysPresent: ['env'], policySettings: 'absent_unknown' }, stdin: 'finished' });
       expect(result.supervisor.reasons).toEqual([]);
+      if (scenario === 'mode-status') expect(result.transport?.statusNotifications).toBe(1);
+      if (scenario === 'ui-invalidate' || scenario === 'ui-without-instances') expect(result.transport?.uiInvalidations).toBe(1);
     } else {
       expect(result.transport?.outcome).not.toBe('observed');
       if (scenario === 'reject') expect(result.transport?.reasons).toContain('request_rejected');
       else if (scenario === 'late-model') expect(result.transport?.reasons).toContain('unexpected_event');
-      else if (scenario === 'invalid-json' || scenario === 'system-other') {
+      else if (scenario === 'invalid-json' || scenario === 'system-other' || scenario === 'active-status' || scenario === 'ui-invalid') {
         expect(result.transport).toMatchObject({ initialize: 'pending', getSettings: 'not_sent', reasons: expect.arrayContaining(['protocol_unknown']),
           protocolFailure: scenario === 'invalid-json' ? 'json_invalid' : 'system_message_unsupported' });
         expect(messages).toContainEqual({ type: 'report', report: result.transport });
         expect(result.supervisor.reasons).toEqual([]);
+        if (scenario === 'system-other') expect(result.transport?.systemObservation).toEqual({ subtype: 'unknown', shape: 'unclassified' });
+        if (scenario === 'active-status') expect(result.transport?.systemObservation).toEqual({
+          subtype: 'status', shape: 'status_valid', statusValue: 'requesting', permissionMode: 'dontAsk',
+        });
+        if (scenario === 'ui-invalid') expect(result.transport?.systemObservation).toEqual({
+          subtype: 'ui_invalidate', shape: 'ui_invalidate_invalid', uiEvent: 'invalid', instances: 'nonempty',
+        });
       }
       else expect(result.supervisor.cli).toMatchObject({ state: 'exited', exitCode: 7 });
     }

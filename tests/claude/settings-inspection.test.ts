@@ -48,6 +48,144 @@ function double(options: { holdWrite?: boolean | number; holdFinish?: boolean; h
 beforeEach(() => { vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] }); });
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
+describe('Узкое уведомление режима и безопасные system-классы: synthetic', () => {
+  const ids = { uuid: '00000000-0000-4000-8000-000000000001', session_id: '00000000-0000-4000-8000-000000000002' };
+  const status = (patch: Record<string, unknown> = {}) => ({ type: 'system', subtype: 'status', status: null,
+    permissionMode: 'dontAsk', ...ids, ...patch });
+  it('status до initialize и между ответами не является init и не меняет два запроса', async () => {
+    const h = double(); h.stdout.write(line(status())); await flush();
+    expect(h.writes).toHaveLength(1); expect(h.kill).not.toHaveBeenCalled();
+    h.stdout.write(line(init(), status())); await flush(); expect(h.writes).toHaveLength(2);
+    h.stdout.write(line(status(), settings(), status())); await flush(); h.exit(); await flush();
+    const report = await h.run.done;
+    expect(report).toMatchObject({ outcome: 'observed', statusNotifications: 4, initialize: 'accepted', getSettings: 'accepted', inventoryObserved: false, sessionState: 'unknown' });
+    expect(report).not.toHaveProperty('systemObservation'); expect(JSON.stringify(report)).not.toContain(ids.uuid);
+    expect(JSON.stringify(report)).not.toContain(ids.session_id); expect(h.writes).toHaveLength(2);
+  });
+  it('не отправляет settings до завершения частичной строки status и callback init', async () => {
+    const h = double({ holdWrite: 1 }), bytes = line(status());
+    h.stdout.write(Buffer.concat([line(init()), bytes.subarray(0, bytes.length - 1)])); await flush();
+    h.callbacks[0]!(); await flush(); expect(h.writes).toHaveLength(1);
+    h.stdout.write(bytes.subarray(-1)); await flush(); expect(h.writes).toHaveLength(2);
+    h.stdout.write(line(settings())); await flush(); h.exit(); await flush();
+    expect(await h.run.done).toMatchObject({ outcome: 'observed', statusNotifications: 1 });
+  });
+  it('status не перезапускает response deadline и не допускает поздний init/settings', async () => {
+    const h = double(); await vi.advanceTimersByTimeAsync(B.response - 1);
+    h.stdout.write(line(status())); await flush(); await vi.advanceTimersByTimeAsync(1);
+    h.stdout.emit('data', line(init())); await flush();
+    expect(await h.run.done).toMatchObject({ statusNotifications: 1, initialize: 'pending', getSettings: 'not_sent', reasons: expect.arrayContaining(['response_deadline']) });
+    expect(h.writes).toHaveLength(1);
+  });
+  it('status не обходит исходные byte/line лимиты и не становится разрешением других system', async () => {
+    const h = double(); h.stdout.write(line(status()));
+    h.stdout.write(Buffer.alloc(B.line + 1, 32)); await flush();
+    expect(await h.run.done).toMatchObject({ statusNotifications: 1, reasons: expect.arrayContaining(['output_limit']) });
+    expect(h.writes).toHaveLength(1);
+  });
+  it.each([
+    { status: undefined }, { status: 'requesting' }, { status: 'compacting' }, { status: 'SECRET-status' },
+    { permissionMode: undefined }, { permissionMode: null }, { permissionMode: 'default' }, { permissionMode: 'plan' },
+    { permissionMode: 'bypassPermissions' }, { permissionMode: 'acceptEdits' }, { permissionMode: 'auto' },
+    { permissionMode: 'SECRET-mode' }, { uuid: undefined }, { uuid: 'SECRET-uuid' }, { uuid: 1 },
+    { session_id: undefined }, { session_id: 'SECRET-session' }, { session_id: [] },
+    { compact_result: 'success' }, { compact_error: 'SECRET-error' }, { compact_output_chars: 0 }, { detail: 'SECRET-detail' },
+  ])('отказывается от неполной/активной/расширенной status формы %j', async patch => {
+    const h = double(); h.stdout.write(line(status(patch), init())); await flush();
+    const report = await h.run.done;
+    expect(report.protocolFailure).toBe('system_message_unsupported'); expect(report.systemObservation?.subtype).toBe('status');
+    expect(report).not.toHaveProperty('statusNotifications'); expect(h.writes).toHaveLength(1);
+    expect(JSON.stringify(report)).not.toContain('SECRET');
+  });
+  it.each([
+    [{ type: 'system' }, { subtype: 'absent', shape: 'unclassified' }],
+    [{ type: 'system', subtype: {} }, { subtype: 'invalid', shape: 'unclassified' }],
+    [{ type: 'system', subtype: 'SECRET-subtype' }, { subtype: 'unknown', shape: 'unclassified' }],
+    [status({ permissionMode: undefined }), { subtype: 'status', shape: 'status_valid', statusValue: 'null', permissionMode: 'absent' }],
+    [status({ status: 'requesting' }), { subtype: 'status', shape: 'status_valid', statusValue: 'requesting', permissionMode: 'dontAsk' }],
+    [status({ status: 'compacting', permissionMode: 'plan' }), { subtype: 'status', shape: 'status_valid', statusValue: 'compacting', permissionMode: 'other' }],
+    [status({ status: undefined }), { subtype: 'status', shape: 'status_invalid', statusValue: 'absent', permissionMode: 'dontAsk' }],
+    [status({ status: 'SECRET-value', permissionMode: {} }), { subtype: 'status', shape: 'status_invalid', statusValue: 'invalid', permissionMode: 'invalid' }],
+    [status({ uuid: 'SECRET-uuid', session_id: 'SECRET-session' }), { subtype: 'status', shape: 'status_valid', statusValue: 'null', permissionMode: 'dontAsk' }],
+    [status({ compact_result: 'success', compact_error: 'SECRET-error', compact_output_chars: 1 }), { subtype: 'status', shape: 'status_valid', statusValue: 'null', permissionMode: 'dontAsk' }],
+    [status({ compact_result: 'SECRET-result' }), { subtype: 'status', shape: 'status_invalid', statusValue: 'null', permissionMode: 'dontAsk' }],
+    [status({ compact_error: {} }), { subtype: 'status', shape: 'status_invalid', statusValue: 'null', permissionMode: 'dontAsk' }],
+    [status({ compact_output_chars: 0.5 }), { subtype: 'status', shape: 'status_invalid', statusValue: 'null', permissionMode: 'dontAsk' }],
+    [{ type: 'system', subtype: 'session_state_changed', state: 'idle', ...ids }, { subtype: 'session_state_changed', shape: 'session_state_valid', state: 'idle' }],
+    [{ type: 'system', subtype: 'session_state_changed', state: 'running', ...ids }, { subtype: 'session_state_changed', shape: 'session_state_valid', state: 'running' }],
+    [{ type: 'system', subtype: 'session_state_changed', state: 'requires_action', ...ids }, { subtype: 'session_state_changed', shape: 'session_state_valid', state: 'requires_action' }],
+    [{ type: 'system', subtype: 'session_state_changed', state: 'SECRET-state', ...ids }, { subtype: 'session_state_changed', shape: 'session_state_invalid', state: 'invalid' }],
+    [{ type: 'system', subtype: 'session_state_changed', ...ids }, { subtype: 'session_state_changed', shape: 'session_state_invalid', state: 'absent' }],
+    [{ type: 'system', subtype: 'session_title_changed', title: 'SECRET-title', ...ids }, { subtype: 'session_title_changed', shape: 'session_title_valid' }],
+    [{ type: 'system', subtype: 'session_title_changed', title: {}, ...ids }, { subtype: 'session_title_changed', shape: 'session_title_invalid' }],
+    [{ type: 'system', subtype: 'hook_started', detail: 'SECRET-detail' }, { subtype: 'hook_started', shape: 'unclassified' }],
+    [{ type: 'system', subtype: 'notification', detail: 'SECRET-detail' }, { subtype: 'notification', shape: 'unclassified' }],
+  ])('классификация system не экспортирует входные значения и не разрешает сообщение %#', async (value, observation) => {
+    const h = double(); h.stdout.write(line(value)); await flush(); const report = await h.run.done;
+    expect(report.systemObservation).toEqual(observation); expect(report.protocolFailure).toBe('system_message_unsupported');
+    expect(report.getSettings).toBe('not_sent'); expect(JSON.stringify(report)).not.toContain('SECRET');
+  });
+  it('сохраняет только первый отвергнутый system и замороженный снимок', async () => {
+    const h = double(); h.stdout.write(line(status(), { type: 'system', subtype: 'api_error', message: 'SECRET-error' }, status({ status: 'requesting' })));
+    await flush(); const report = await h.run.done, snapshot = JSON.stringify(report);
+    expect(report.systemObservation).toEqual({ subtype: 'api_error', shape: 'unclassified' }); expect(report.statusNotifications).toBe(1);
+    h.stdout.emit('data', line(status())); h.run.stop(); expect(JSON.stringify(await h.run.done)).toBe(snapshot);
+    expect(Object.isFrozen(report.systemObservation)).toBe(true);
+  });
+});
+
+describe('ui_invalidate: уведомление без UI-ответа или исполнения', () => {
+  const ids = { uuid: '00000000-0000-4000-8000-000000000003', session_id: '00000000-0000-4000-8000-000000000004' };
+  const instance = { surface: 'SECRET-surface', component: 'SECRET-component', instance_id: 'SECRET-instance' };
+  const ui = (patch: Record<string, unknown> = {}) => ({ type: 'system', subtype: 'ui_invalidate', event: 'ui.render', ...ids, ...patch });
+  it.each([{}, { instances: [] }, { instances: [instance] }])('принимает точную форму до initialize без нового запроса %j', async patch => {
+    const h = double(); h.stdout.write(line(ui(patch))); await flush(); expect(h.writes).toHaveLength(1);
+    await h.observe(); h.exit(); await flush(); const report = await h.run.done;
+    expect(report).toMatchObject({ outcome: 'observed', uiInvalidations: 1, inventoryObserved: false, sessionState: 'unknown' });
+    expect(h.writes).toHaveLength(2); expect(JSON.stringify(report)).not.toContain('SECRET'); expect(JSON.stringify(report)).not.toContain(ids.uuid);
+  });
+  it('частичная строка и callback сохраняют причинность; поздний ui не меняет terminal', async () => {
+    const h = double({ holdWrite: 1 }), bytes = line(ui({ instances: [instance] }));
+    h.stdout.write(Buffer.concat([line(init()), bytes.subarray(0, -1)])); await flush(); h.callbacks[0]!(); await flush();
+    expect(h.writes).toHaveLength(1); h.stdout.write(bytes.subarray(-1)); await flush(); expect(h.writes).toHaveLength(2);
+    h.stdout.write(line(ui(), settings(), ui())); await flush(); h.exit(); await flush();
+    const report = await h.run.done, snapshot = JSON.stringify(report); expect(report.uiInvalidations).toBe(3);
+    h.stdout.emit('data', line(ui())); expect(JSON.stringify(await h.run.done)).toBe(snapshot);
+  });
+  it('ui не продлевает deadline и не разрешает поздний initialize', async () => {
+    const h = double(); await vi.advanceTimersByTimeAsync(B.response - 1); h.stdout.write(line(ui())); await flush();
+    await vi.advanceTimersByTimeAsync(1); h.stdout.emit('data', line(ui(), init())); await flush();
+    expect(await h.run.done).toMatchObject({ uiInvalidations: 1, getSettings: 'not_sent', reasons: expect.arrayContaining(['response_deadline']) });
+    expect(h.writes).toHaveLength(1);
+  });
+  it.each([
+    { event: undefined }, { event: 'SECRET-event' }, { event: {} }, { uuid: 'SECRET-uuid' }, { session_id: 'SECRET-session' },
+    { instances: null }, { instances: {} }, { instances: ['SECRET-instance'] },
+    { instances: [{ surface: 'SECRET', component: 'SECRET' }] }, { instances: [{ ...instance, surface: 1 }] },
+    { instances: [{ ...instance, callback: 'SECRET-callback' }] }, { callback: 'SECRET-callback' },
+  ])('отвергает неизвестные, исполняемые и неполные формы %j', async patch => {
+    const h = double(); h.stdout.write(line(ui(patch), init())); await flush(); const report = await h.run.done;
+    expect(report.protocolFailure).toBe('system_message_unsupported'); expect(report.systemObservation?.subtype).toBe('ui_invalidate');
+    expect(report).not.toHaveProperty('uiInvalidations'); expect(h.writes).toHaveLength(1); expect(JSON.stringify(report)).not.toContain('SECRET');
+  });
+  it.each([
+    [ui({ event: undefined }), { subtype: 'ui_invalidate', shape: 'ui_invalidate_invalid', uiEvent: 'absent', instances: 'absent' }],
+    [ui({ event: 'SECRET-event', instances: [] }), { subtype: 'ui_invalidate', shape: 'ui_invalidate_invalid', uiEvent: 'invalid', instances: 'empty' }],
+    [ui({ uuid: 'SECRET-id', instances: [instance] }), { subtype: 'ui_invalidate', shape: 'ui_invalidate_valid', uiEvent: 'ui.render', instances: 'nonempty' }],
+    [ui({ instances: [{ ...instance, component: {} }] }), { subtype: 'ui_invalidate', shape: 'ui_invalidate_invalid', uiEvent: 'ui.render', instances: 'invalid' }],
+    [ui({ instances: [{ ...instance, callback: 'SECRET' }] }), { subtype: 'ui_invalidate', shape: 'ui_invalidate_valid', uiEvent: 'ui.render', instances: 'nonempty' }],
+  ])('схема диагностируется отдельно от более строгого приёма %#', async (value, observation) => {
+    const h = double(); h.stdout.write(line(value)); await flush(); const report = await h.run.done;
+    expect(report.systemObservation).toEqual(observation); expect(report.protocolFailure).toBe('system_message_unsupported');
+    expect(JSON.stringify(report)).not.toContain('SECRET');
+  });
+  it('UI-уведомление не разрешает преждевременный settings', async () => {
+    const h = double(); h.stdout.write(line(ui(), init(), settings())); await flush();
+    expect(await h.run.done).toMatchObject({ uiInvalidations: 1, reasons: expect.arrayContaining(['premature_response']) });
+    expect(h.writes).toHaveLength(1);
+  });
+});
+
 describe('Безопасная точность протокольного отказа: synthetic checks', () => {
   // Ожидания заданы отдельно от реализации; Record требует пример для каждого закрытого кода.
   const cases = {

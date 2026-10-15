@@ -1332,3 +1332,102 @@ P2B_SETTINGS_INSPECTION=1 /Users/nishimata/.nvm/versions/node/v24.15.0/bin/node 
 Фактическое изменение после этой пробы — новый JSON evidence и дополнения трёх документов (в implementation-плане только статус P2b). Код, production, конфигурация, реальные replay 01–04 и первое evidence не менялись. Полные наборы не повторялись: новой поведенческой правки нет; прежний успешный цикл относится к тем же хешам реализации. GUI-smoke не выполнялся: нового основания нет. Вторая одноразовая авторизация исчерпана; никакого разрешения модели или следующего запуска не подразумевается.
 
 Проверка C после документирования: `/usr/bin/time -p git diff --check` — **exit 0, real 0,01 с**; `git diff --exit-code -- src tests package.json package-lock.json scripts electron.vite.config.ts vitest.config.ts vitest.live.config.ts docs/P2B-SETTINGS-INSPECTION-2026-10-15.json` — **exit 0, пустой diff**. Новое evidence и три документа сверены по полным SHA-256 через OpenSSL, exit 0; C не запускал Claude, модели или GUI.
+
+#### Ограниченная серия после работы над system/status — 2026-10-15
+
+Новое решение пользователя: **«делай до тех пор пока не будет успешный результат в разумных пределах. например 3 раза»**. A установил максимум **трёх дополнительных немодельных проб этого продолжения**, с остановкой при первом полном успехе. Разрешение не расширяет tools/argv/env, не включает модель, test:live, историческую пробу 04, обход policy или автоматические повторы внутри стенда. Первые две реальные диагностические пробы и их evidence сохраняются отдельно. Каждый новый запуск имеет собственный заранее проверенный cwd и не более одного Claude плюс двух Node.
+
+**Основание изменения транспорта — статическое чтение B, не догадка по длине stdout.** В callback `ap.onPermissionModeChanged` (байт 221066786; подписка `m_` 221066975, импорт `crypto.randomUUID` 221064419) print-путь помещает в outbound `system/status`, `status:null`, `permissionMode:r`, `uuid`, `session_id`. Это уведомление режима, не подтверждение session idle, initialize или отсутствия ранних эффектов. Схема status (`N0`, 187273639; status enum `m0`, 187155607; permissionMode `ce`, 187122950) допускает больше состояний; стенд поддерживает только **шесть точных ключей**, `status:null`, `permissionMode:dontAsk` и UUID-форму обоих идентификаторов. SDK uuid/session_id — string (`_`, 187155134), поэтому UUID-проверка — сознательное ужесточение стенда. Отсутствие режима, compacting/requesting, другая permissionMode, compact_* и лишние ключи остаются отказом.
+
+B извлёк 56 literals именно `type:system` из окна 187240000–187330000 встроенной SDK-схемы. Необязательный `systemObservation` сохраняет только этот закрытый subtype либо absent/invalid/unknown. Для status, session_state_changed и session_title_changed отражается проверка просмотренной схемы; для остальных — unclassified. Поля statusValue/permissionMode/state — закрытые классы, без raw subtype/title/uuid/session_id/detail/errors. Валидная диагностическая shape **не разрешает** сообщение. State/title остаются отказом. `statusNotifications` считает только узко принятые уведомления, не заменяет initialize/inventory и не перезапускает сроки. IPC отвергает неизвестные enum, несовместимые shape и противоречивые valid-классы. Старые отчёты без новых полей совместимы и не переписываются.
+
+Повторное чтение B initialize IF (187376980) и builder vL/Og (221652000–221658800) подтвердило прежние обязательные контейнеры и pending-массивы на wrapper; ослабления initialize не потребовалось. Артефакт прежний, SHA `0116ee2e…7f70`, без исполнения/import/require/eval. **Новые статические факты не устанавливают subtype сообщения реальной пробы 02**: оно по-прежнему известно только как отвергнутое system, raw не сохранён.
+
+| Файл перед первой попыткой серии | SHA-256 |
+|---|---|
+| `tests/helpers/claude/settings-inspection.ts` | `3ad730e9fe371ad0806fa959e5fbceb67227e37fd7518e53836408d937e64439` |
+| `tests/claude/settings-inspection.test.ts` | `c5a62326a023e20007786258ec7ca16a1731c1eca451cbb4ce82f2792289abdf` |
+| `tests/claude/settings-inspection-supervisor.test.ts` | `6c7d478494c5578582c84af6bfc1de49352a156d6c465ec909b1c75f6e2e76bd` |
+| `tests/helpers/claude/settings-inspection-double.mjs` | `3c492c8a26f219f7793d9f3706151cf976a4c7a44b1c92512e1cea908af0357f` |
+| `tests/helpers/claude/settings-inspection-supervisor.ts` | `599e91181d2a41639f839a2324575fff3177983e6cdfea545768ba3390c6e1d3` |
+| `tests/helpers/claude/settings-inspection-cli.ts` | `6dfdbe24fb86c22ea67a63b81aaa43c04b37618d668250f11f4946f04d11f324` |
+| `tests/helpers/claude/settings-inspection-worker.ts` | `ecfa5b8b994cc3a2d4677339234d28bf0dc51c284218f818baa57f64cee4f837` |
+
+C перед запуском выполнил `/usr/bin/time -p sh scripts/with-node.sh npm exec --offline --no -- vitest run tests/claude/settings-inspection.test.ts tests/claude/settings-inspection-supervisor.test.ts`: **254/254, exit 0, real 5,18 с**; затем `npm run typecheck` через тот же wrapper: **exit 0, real 3,39 с**. Новые 66 регрессий проверяют узкое уведомление, 22 отказные формы, schema-классы, partial line/callback, общий deadline/байты, terminal freeze, IPC-противоречия и два собственных Node-сценария mode-status/active-status через настоящий worker. Промежуточные 245/245 (5,37 с) были до добавления девяти проверок. Это synthetic/own-Node evidence, не runtime Claude.
+
+A→C закрыл чтение четырёх актуальных файлов по таблице; C→A — supervisor/CLI/worker, closed projection/refine, прежние clock/handles/cleanup и идентичность cwd. B→A/C сверил протокол и SHA, дополнительно выполнил **58 безопасных собственных Node-проверок**: enum stripping, пять valid-class contradictions, legacy report02 и неизменный argv; exit 0, 10 мс внутри Node, Claude spawn 0. C→B: production admission по-прежнему требует complete file/os-policy/server-managed, policyDigest/executableConfig, authenticated binding, freshness/recheck и порядок до расширений; get_settings этого не доказывает. Production не изменён. Полный последовательный цикл выполняется после окончательных поведенческих исправлений серии; результаты запусков и проверки дописываются ниже. **Модельная приёмка не готова к выполнению; P2b/0C не закрыты.**
+
+##### Проба 03, обоснованная обработка ui_invalidate и успех пробы 04
+
+Одна и та же точная команда из текущей worktree выполнялась A по одному разу на каждом отдельно подготовленном cwd:
+
+```sh
+P2B_SETTINGS_INSPECTION=1 /Users/nishimata/.nvm/versions/node/v24.15.0/bin/node tests/helpers/claude/settings-inspection-cli.ts --approved-single-probe
+```
+
+**Попытка 1 из 3 этого продолжения — общая диагностическая проба 03.** [Evidence 03](P2B-SETTINGS-INSPECTION-2026-10-15-03.json), SHA-256 `42f05c204379da7f632ea6dee01ccf8736e9beb562745fc10615fbb157b581ec`, происхождение real-diagnostic-safe-projection. Подготовленный cwd `/private/tmp/vs-policy-inspect-p2b-03-8U2qz3`, dev 16777229, inode 66581490, mode 0700, пустота независимо сверена C. UTC-окно наблюдения 11:59:53–11:59:54, launcher **exit 1 / tool wall 0,446669667 с**. Transport failed, initialize pending, get_settings not_sent, systemObservation **ui_invalidate/unclassified**, protocolFailure system_message_unsupported, reasons protocol_unknown/process_failed; stdout **4039**, stderr **0** байт. Transport 316 мс, supervisor 322 мс, deadline false. Claude exitCode 143/signal null, отдельно TERM sent; worker exit 0/signal null, потоки ended, stdin finished, issues пусты. Cwd удалён; отдельный ls A подтвердил отсутствие. Metadata собственного cwd не изменились, remote-settings.json missing до/после. `statusNotifications` отсутствует: узкое уведомление режима в этой пробе не принималось. Нельзя приписывать именно эту форму первым двум пробам или восстанавливать payload 03 из длины.
+
+**Различающийся инженерный шаг перед следующей попыткой.** B прочитал схему `nF` ui_invalidate (187310245): type/system, subtype/ui_invalidate, event/ui.render, uuid/session_id strings, optional instances — массив `{surface,component,instance_id}` из строк. Описание и emit в print (onInvalidate, 221535024; welcomeBack без instances, 221533093) определяют это как fire-and-forget уведомление об устаревшем UI-дереве. Уведомление может следовать за plugin load/reload; принимать его не означает доказывать отсутствие ранней активности плагинов. Стенд не запрашивает UI, не отправляет ui_render, не исполняет callback/render, не хранит значения instances.
+
+По согласованию A/B/C принимается только точная форма **пяти или шести ключей**, event ui.render, UUID обоих id, optional instances строго из трёх строковых ключей каждого элемента. Unknown/extra поля и malformed элементы остаются отказом. Безопасный `uiInvalidations` — только число принятых уведомлений. Для отказа добавлены закрытые uiEvent/instances-классы и ui_invalidate_valid/invalid; SDK-shape и более строгий приём различаются. Историческая проекция ui_invalidate/unclassified без новых полей из evidence03 продолжает приниматься схемой; evidence03 не переписано. Причинность, pending/init/settings, byte/line/deadline guards, TERM/KILL/drain и внешний надзор не ослаблены.
+
+До второго запуска C проверил **285/285 targeted, exit 0, real 5,74 с**, затем typecheck **exit 0, real 3,46 с**. Новые 31 регрессия включают absent/empty/nonempty instances, 12 отказных UI-форм, secret canary, partial line/callback/deadline/premature response, legacy03/IPC contradictions и **три собственных Node-сценария**: без instances, с instances и invalid event. После targeted уточнены только названия двух тестов. Это довело прибавку относительно начала продолжения до **97 проверок**, без ослабления прежних assertions.
+
+| Актуальный файл второй попытки / финальной реализации | SHA-256 |
+|---|---|
+| `tests/helpers/claude/settings-inspection.ts` | `4cd457cd63a2b2a596703e200166a414631fc258483e95891768d265c2dd4ed0` |
+| `tests/claude/settings-inspection.test.ts` | `595adc66a00227f40b1358263e5ce3ba61b33e599a646b3d9f415d7959b28530` |
+| `tests/claude/settings-inspection-supervisor.test.ts` | `9cc073d538202373b424e4b88eb66fb68b397dc8137ba2071b1585b7eb94c6e2` |
+| `tests/helpers/claude/settings-inspection-double.mjs` | `350966405cba4820a58631b652da140f7b62fea15f0323388998967a853d99d0` |
+| `tests/helpers/claude/settings-inspection-supervisor.ts` | `14c4d84aa9c54673debdb84700f7c2d233dcf5b0655f99029a746764d2818da4` |
+| `tests/helpers/claude/settings-inspection-cli.ts` | `66dfdc0e621680688bc08c133e747396f8e6a34e48156b2c7496142cd8bf0735` |
+| `tests/helpers/claude/settings-inspection-worker.ts` (не менялся) | `ecfa5b8b994cc3a2d4677339234d28bf0dc51c284218f818baa57f64cee4f837` |
+
+A→C и C→A актуальных файлов закрыты до запуска; C независимо сверил cwd 04 `/private/tmp/vs-policy-inspect-p2b-04-vZWONW`, dev 16777229, inode 66602142, mode 0700 и пустоту. B→A/C протокола, safe projection и тестов закрыто по таблице; B отдельно выполнил **45 readonly own-Node cases**, exit 0, 5 мс внутри Node: 36 UI-комбинаций, три raw-array отказа, пять counter отказов, stripping, legacy03 и неизменный argv; Claude spawn 0. Новая схема и реализация остаются диагностическими: нового production evaluator/collector не создавалось.
+
+**Попытка 2 из 3 — общая диагностическая проба 04: успех.** [Evidence 04](P2B-SETTINGS-INSPECTION-2026-10-15-04.json), SHA-256 `8b9642e860c500d31c8cf2e0974b0d63950b26a11677da41f24fcb9cde216206`, происхождение real-diagnostic-safe-projection. Номер **04 здесь относится к отдельной серии settings-inspection; историческая модельная replay-проба 04 не повторялась**.
+
+| Наблюдение успешной пробы | Сохранённый факт |
+|---|---|
+| Launcher / UTC-окно | **Exit 0**, tool wall **0,429720167 с**, 12:07:10–12:07:11 UTC; окно не объявляется точным временем жизни процесса |
+| Протокол | **outcome observed; initialize accepted; get_settings accepted; sessionState idle; inventoryObserved false** |
+| Уведомления | **uiInvalidations 1**; raw id/instances не сохранялись, statusNotifications отсутствует |
+| Settings projection | effective object, sources **[]**, policySettings **absent_unknown**, applied present, errors **absent**, executableKeysPresent **[]** |
+| Время / потоки | Transport **291 мс**, supervisor **297 мс**; stdout **4315** байт, stderr **0**; stdin finished, stdout/stderr ended |
+| Завершение | Claude **exit 0 / signal null**, worker **exit 0 / signal null**, signals/reasons/issues пусты; deadline false, wait settled, stopAccepted false |
+| Metadata / cleanup | Собственный cwd без изменения разрешённых metadata; remote-settings.json missing до/после; **cleanup removed**; отдельный ls A подтвердил отсутствие cwd |
+
+В этом конкретном запуске **реально наблюдался успешный fixed executable/argv/stdio workflow initialize → get_settings → чистый выход**. Это сильнее synthetic-проверки и подготовки к разрешению. Консервативные поля контракта cliCompatibility/runtimeVersion по-прежнему unconfirmed: отдельной runtime-проверки версии и полной совместимости нет. `sources:[]` и `executableKeysPresent:[]` отражают только принятую ограниченную проекцию; **не устанавливают known-empty managed-политику**, отсутствие всех расширений, auth-binding, freshness/recheck или порядок до исполнения helpers/hooks/plugins/MCP. Неизменность двух разрешённых metadata не исключает сеть, auth refresh и прочие записи. Полный tree-stop и detached-потомки не гарантируются.
+
+**Серия остановлена после успеха на двух из трёх разрешённых дополнительных попыток.** Третья не выполнялась, следующий cwd не создавался. Старые evidence01/02 сохранены с прежними SHA `59c070ac…3ce` / `9229ee4c…6d76`; historical fixtures, production, настройки и Git-история не менялись. Остаток лимита не является задачей выполнить лишний запуск после достигнутой цели. **Модельная приёмка не готова к выполнению; P2b/0C не закрыты.**
+
+A независимо проверил все четыре реальные safe evidence собственной Node-командой через `/usr/bin/time -p sh scripts/with-node.sh node --input-type=module`: **exit 0, real 0,14 с, CLI spawn 0**. Schema roundtrip без изменений, SHA первых двух evidence, одинаковые argv, batch1/2, все accepted/exit/deadline/cleanup факты04, source SHA, отсутствие обоих cwd и evidence05 подтверждены. B независимо закрыл review evidence03/04 по полным SHA и текущим четырём code SHA; own-Node schema/argv/hash/успешный outcome/absent_unknown — **exit 0, 4 мс внутри Node, CLI spawn 0**. Отдельный ls удалённого cwd04 ожидаемо exit 1/No such file; это подтверждение уборки, не сбой Node-проверки. C прочитал evidence и сопоставил таблицы этого отчёта/live-плана с сохранёнными значениями. Новых дефектов или оснований тратить третью попытку не обнаружено.
+
+##### Финальный последовательный цикл и границы результата
+
+После успеха A заморозил поведенческие файлы. C выполнил один полный последовательный цикл через `/usr/bin/time -p sh scripts/with-node.sh`; одинаковые полные наборы параллельно не запускались. Все результаты относятся к финальной таблице SHA выше, включая узкую обработку ui_invalidate.
+
+| Команда | Exit / результат / real |
+|---|---|
+| `npm exec --offline --no -- vitest run tests/claude` | **0 / 749 из 749 / 20,75 с** |
+| `npm run typecheck` | **0 / 3,38 с** |
+| `npm run lint` | **0 / 1,62 с** |
+| `npm run check:boundaries` | **0 / 32 модуля, 61 зависимость / 0,98 с** |
+| `npm test` | **0 / 831 из 831 / 137,11 с** |
+| `npm run test:node` | **0 / 78 из 78 / 119,89 с** |
+| `npm run build` | **0 / 1,01 с** |
+| GUI-smoke | **Не выполнялся:** нового основания регистрации или отдельной диагностической цели не установлено |
+| `/usr/bin/time -p git diff --check` после сборки | **0 / 0,03 с** |
+
+Заключительная сверка C подтвердила все семь code/test SHA и четыре evidence SHA. `git diff --exit-code -- src tests/fixtures tests/live tests/helpers/process.ts tests/cases package.json package-lock.json scripts electron.vite.config.ts vitest.config.ts vitest.live.config.ts docs/P2B-SETTINGS-INSPECTION-2026-10-15.json docs/P2B-SETTINGS-INSPECTION-2026-10-15-02.json` — **exit 0**, пустой diff. После цикла менялись только документы; успешные полные наборы из-за этого не повторяются. Фактически изменены **11 файлов**: transport, supervisor, CLI, double, оба settings-inspection test-файла, три документа и два новых evidence03/04. Worker, production Electron/preload/renderer, CLI/build config, старые fixtures и первые два evidence не менялись; Git-история не переписывалась.
+
+| Предмет оценки | Состояние после завершения серии |
+|---|---|
+| Диагностический стенд | Проверен doubles/own Node/полным циклом и актуальными A→C/B→A/C→A; достигнут конкретный успешный запуск |
+| Реальный fixed executable/argv/stdio workflow | **Успешно наблюдён** initialize/get_settings и чистый выход в пробе04; общая совместимость и runtime-версия не аттестованы |
+| Production admission | **Blocked**: get_settings projection не подтверждает полноту managed-источников, known empty, executableConfig=none, auth-binding, freshness/recheck и порядок до ранних расширений |
+| Модельная приёмка P2b / закрытие 0C | **Не готовы / не закрыты**; модель не запускалась |
+
+Препятствие диагностике преодолено обоснованным чтением схем/эмиттеров, узкой поддержкой уведомлений и проверенным повтором. Дальнейшие работы по production-источнику/сборщику и модельной приёмке остаются отдельными этапами; положительная диагностическая проекция не подставляется в production как доверенный verdict. **Модельная приёмка не готова к выполнению.**
+
+A независимо сверил именно актуальную завершённую сборку **1,01 с**: OpenSSL exit 0; SHA пяти out-файлов совпали с прежними полными значениями — main `e4ceed3f47f588e4027db23da2c76b2d5a13b88ab32532e85e46b7fb5db6381d`, preload `cf347cbdb2538d293d0ba2f8410202546bd4b94d205990790255d2d0cb691b69`, renderer HTML `2240ce550ed5cfa4f3c4f933cfd249fd52363557cfe0f25bdd57f3dbcfe00b42`, JS `5ac6dd63f90637f1dd325c91c5cb01495990e18bf2d9b46ebdab293b573b21cd`, CSS `07a7d77f9665dc74821d67666e3ab4645bca9a715dd5b82b198312b92320cb41`; Electron `67641b7cfcfa132cd1e69f30b45fa19476c3d6a4bc96ca3c05a9bd91fda91027`. Это идентичность артефактов, не новый GUI-smoke. Нового основания регистрации/отдельной GUI-цели нет; старый abort не повторялся, новых smoke PID/signal/crash reports нет.

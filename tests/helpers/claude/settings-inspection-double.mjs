@@ -5,6 +5,15 @@ const scenario = process.argv[2];
 if (scenario === 'early-exit') process.exit(7);
 if (scenario === 'hang') { for (;;) { /* Намеренно блокирует event loop собственного double. */ } }
 if (scenario === 'ignore-term') process.on('SIGTERM', () => {});
+if (['ui-invalidate', 'ui-without-instances', 'ui-invalid'].includes(scenario)) process.stdout.write(JSON.stringify({
+  type: 'system', subtype: 'ui_invalidate', event: scenario === 'ui-invalid' ? 'SECRET-event' : 'ui.render',
+  uuid: '00000000-0000-4000-8000-000000000001', session_id: '00000000-0000-4000-8000-000000000002',
+  ...(scenario === 'ui-without-instances' ? {} : { instances: [{ surface: 'SECRET-surface', component: 'SECRET-component', instance_id: 'SECRET-instance' }] }),
+}) + '\n');
+if (scenario === 'mode-status' || scenario === 'active-status') process.stdout.write(JSON.stringify({
+  type: 'system', subtype: 'status', status: scenario === 'mode-status' ? null : 'requesting', permissionMode: 'dontAsk',
+  uuid: '00000000-0000-4000-8000-000000000001', session_id: '00000000-0000-4000-8000-000000000002',
+}) + '\n');
 const lines = createInterface({ input: process.stdin });
 let requests = 0;
 function reply(requestId, response) {

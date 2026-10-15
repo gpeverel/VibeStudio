@@ -16,7 +16,7 @@ export const PREPARED_INSPECTION = Object.freeze({
   resolvedExecutable: '/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe',
   executableSha256: '0116ee2e0a513900b633d9951367f18747686478e2b462805b8c31609f047f70',
   executableSize: 239695888,
-  cwd: '/private/tmp/vs-policy-inspect-p2b-next-uOtnXc', cwdDev: 16777229, cwdIno: 66527581,
+  cwd: '/private/tmp/vs-policy-inspect-p2b-04-vZWONW', cwdDev: 16777229, cwdIno: 66602142,
   argv: Object.freeze([
     '--print', '--verbose', '--input-format', 'stream-json', '--output-format', 'stream-json',
     '--restricted', '--safe-mode', '--setting-sources', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',

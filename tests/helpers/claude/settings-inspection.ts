@@ -38,6 +38,33 @@ export const INSPECTION_PROTOCOL_FAILURES = [
   'settings_applied_invalid', 'settings_errors_invalid',
 ] as const;
 export type InspectionProtocolFailure = typeof INSPECTION_PROTOCOL_FAILURES[number];
+/** Только literals из прочитанной SDK-схемы type:system; неизвестные строки не экспортируются. */
+export const INSPECTION_SYSTEM_SUBTYPES = [
+  'init', 'compact_boundary', 'status', 'post_turn_summary', 'task_summary', 'session_metadata', 'informational',
+  'permission_retry', 'stop_hook_summary', 'memory_saved', 'agents_killed', 'instruction_size_warning', 'away_summary',
+  'thinking', 'mirror_error', 'api_retry', 'control_request_progress', 'model_refusal_fallback', 'model_refusal_no_fallback',
+  'model_fallback', 'model_consent_fallback', 'file_snapshot', 'scheduled_task_fire', 'peer_message_hold', 'turn_duration',
+  'api_error', 'local_command_output', 'hook_started', 'hook_progress', 'hook_response', 'plugin_install', 'files_persisted',
+  'task_notification', 'task_started', 'task_updated', 'background_tasks_changed', 'feedback_draft_queued',
+  'session_state_changed', 'session_title_changed', 'worker_shutting_down', 'turn_handoff_available', 'ui_invalidate',
+  'ui_log', 'ui_toast', 'ui_status', 'ui_panes', 'ui_scroll', 'ui_focus', 'commands_changed', 'notification', 'task_progress',
+  'thinking_tokens', 'memory_recall', 'elicitation_complete', 'permission_denied', 'permission_check_status',
+] as const;
+export const INSPECTION_SYSTEM_SHAPES = ['status_valid', 'status_invalid', 'session_state_valid', 'session_state_invalid', 'session_title_valid', 'session_title_invalid', 'ui_invalidate_valid', 'ui_invalidate_invalid', 'unclassified'] as const;
+export const INSPECTION_STATUS_VALUES = ['null', 'compacting', 'requesting', 'absent', 'invalid'] as const;
+export const INSPECTION_PERMISSION_MODES = ['absent', 'dontAsk', 'other', 'invalid'] as const;
+export const INSPECTION_SESSION_STATES = ['idle', 'running', 'requires_action', 'absent', 'invalid'] as const;
+export const INSPECTION_UI_EVENTS = ['ui.render', 'absent', 'invalid'] as const;
+export const INSPECTION_UI_INSTANCES = ['absent', 'empty', 'nonempty', 'invalid'] as const;
+export interface SystemObservation {
+  readonly subtype: typeof INSPECTION_SYSTEM_SUBTYPES[number] | 'absent' | 'invalid' | 'unknown';
+  readonly shape: typeof INSPECTION_SYSTEM_SHAPES[number];
+  readonly statusValue?: typeof INSPECTION_STATUS_VALUES[number];
+  readonly permissionMode?: typeof INSPECTION_PERMISSION_MODES[number];
+  readonly state?: typeof INSPECTION_SESSION_STATES[number];
+  readonly uiEvent?: typeof INSPECTION_UI_EVENTS[number];
+  readonly instances?: typeof INSPECTION_UI_INSTANCES[number];
+}
 type RequestState = 'not_sent' | 'pending' | 'accepted' | 'rejected';
 const SOURCES = ['userSettings', 'projectSettings', 'localSettings', 'flagSettings', 'policySettings'] as const;
 const EXECUTABLE_KEYS = ['hooks', 'mcpServers', 'enabledPlugins', 'extraKnownMarketplaces', 'env', 'apiKeyHelper',
@@ -62,6 +89,10 @@ export interface SettingsInspectionReport {
   readonly settings?: SettingsProjection;
   readonly reasons: readonly InspectionReason[];
   readonly protocolFailure?: InspectionProtocolFailure;
+  readonly systemObservation?: SystemObservation;
+  /** Только число строго распознанных уведомлений режима; не принятие initialize/inventory. */
+  readonly statusNotifications?: number;
+  readonly uiInvalidations?: number;
   readonly stdoutBytes: number;
   readonly stderrBytes: number;
   readonly elapsedMs: number;
@@ -74,6 +105,57 @@ const has = (value: object, key: string): boolean => Object.hasOwn(value, key);
 const codes = new Set(['EPERM', 'ESRCH', 'EPIPE', 'ENOENT', 'EACCES', 'EIO']);
 const errno = (value: unknown): string | undefined => record(value) && typeof value.code === 'string' && codes.has(value.code) ? value.code : undefined;
 const signals = new Set(['SIGTERM', 'SIGKILL', 'SIGABRT', 'SIGINT', 'SIGSEGV', 'SIGILL', 'SIGBUS', 'SIGQUIT', 'SIGHUP', 'SIGPIPE', 'SIGTRAP', 'SIGALRM']);
+const uuid = (value: unknown): boolean => typeof value === 'string'
+  && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+const modeNotificationKeys = ['type', 'subtype', 'status', 'permissionMode', 'uuid', 'session_id'];
+function modeNotification(value: Record<string, unknown>): boolean {
+  // ap.onPermissionModeChanged в print-пути, прочитан статически: status:null, permissionMode:r.
+  // Намеренно уже общей SDK-схемы status: отсутствие режима/compact_* здесь не принимается.
+  return value.subtype === 'status' && value.status === null && value.permissionMode === 'dontAsk'
+    && uuid(value.uuid) && uuid(value.session_id) && Object.keys(value).every(key => modeNotificationKeys.includes(key));
+}
+const uiNotificationKeys = ['type', 'subtype', 'event', 'uuid', 'session_id', 'instances'];
+const uiInstanceKeys = ['surface', 'component', 'instance_id'];
+function uiInstances(value: unknown, strict: boolean): boolean {
+  return Array.isArray(value) && value.every(item => record(item) && uiInstanceKeys.every(key => typeof item[key] === 'string')
+    && (!strict || Object.keys(item).every(key => uiInstanceKeys.includes(key))));
+}
+function uiNotification(value: Record<string, unknown>): boolean {
+  // nF/onInvalidate: fire-and-forget invalidation. Не отвечает UI, не исполняет callbacks/рендер.
+  return value.subtype === 'ui_invalidate' && value.event === 'ui.render' && uuid(value.uuid) && uuid(value.session_id)
+    && Object.keys(value).every(key => uiNotificationKeys.includes(key))
+    && (!has(value, 'instances') || uiInstances(value.instances, true));
+}
+function projectSystem(value: Record<string, unknown>): SystemObservation {
+  const subtype: SystemObservation['subtype'] = !has(value, 'subtype') ? 'absent' : typeof value.subtype !== 'string' ? 'invalid'
+    : INSPECTION_SYSTEM_SUBTYPES.some(item => item === value.subtype) ? value.subtype as typeof INSPECTION_SYSTEM_SUBTYPES[number] : 'unknown';
+  // SDK uuid/session_id — строки. Более строгий UUID выше относится только к принятой узкой ветке.
+  const envelope = typeof value.uuid === 'string' && typeof value.session_id === 'string';
+  if (subtype === 'ui_invalidate') {
+    const uiEvent = !has(value, 'event') ? 'absent' : value.event === 'ui.render' ? 'ui.render' : 'invalid';
+    const instances = !has(value, 'instances') ? 'absent' : !uiInstances(value.instances, false) ? 'invalid'
+      : (value.instances as unknown[]).length === 0 ? 'empty' : 'nonempty';
+    return { subtype, shape: envelope && uiEvent === 'ui.render' && instances !== 'invalid' ? 'ui_invalidate_valid' : 'ui_invalidate_invalid', uiEvent, instances };
+  }
+  if (subtype === 'status') {
+    const statusValue = !has(value, 'status') ? 'absent' : value.status === null ? 'null'
+      : value.status === 'compacting' || value.status === 'requesting' ? value.status : 'invalid';
+    const permissionMode = !has(value, 'permissionMode') ? 'absent' : typeof value.permissionMode !== 'string' ? 'invalid'
+      : value.permissionMode === 'dontAsk' ? 'dontAsk' : 'other';
+    const valid = envelope && statusValue !== 'absent' && statusValue !== 'invalid'
+      && (!has(value, 'permissionMode') || ['default', 'acceptEdits', 'bypassPermissions', 'plan', 'dontAsk', 'auto'].includes(value.permissionMode as string))
+      && (!has(value, 'compact_result') || value.compact_result === 'success' || value.compact_result === 'failed')
+      && (!has(value, 'compact_error') || typeof value.compact_error === 'string')
+      && (!has(value, 'compact_output_chars') || Number.isInteger(value.compact_output_chars));
+    return { subtype, shape: valid ? 'status_valid' : 'status_invalid', statusValue, permissionMode };
+  }
+  if (subtype === 'session_state_changed') {
+    const state = !has(value, 'state') ? 'absent' : value.state === 'idle' || value.state === 'running' || value.state === 'requires_action' ? value.state : 'invalid';
+    return { subtype, shape: envelope && state !== 'absent' && state !== 'invalid' ? 'session_state_valid' : 'session_state_invalid', state };
+  }
+  if (subtype === 'session_title_changed') return { subtype, shape: envelope && typeof value.title === 'string' ? 'session_title_valid' : 'session_title_invalid' };
+  return { subtype, shape: 'unclassified' };
+}
 function freeze<T>(value: T): T {
   if (value && typeof value === 'object') { for (const child of Object.values(value)) freeze(child); Object.freeze(value); }
   return value;
@@ -130,6 +212,9 @@ export function inspectSettings(spawnOwnProcess: () => InspectionChild, options:
   let sessionState: SettingsInspectionReport['sessionState'] = 'unknown';
   let settings: SettingsProjection | undefined;
   let protocolFailure: InspectionProtocolFailure | undefined;
+  let systemObservation: SystemObservation | undefined;
+  let statusNotifications = 0;
+  let uiInvalidations = 0;
   let processState: ProcessCompletion['process'] = { state: 'not_started' };
   let stdout: ProcessStreamState = 'not_started', stderr: ProcessStreamState = 'not_started';
   let stdoutBytes = 0, stderrBytes = 0, lineBytes = 0;
@@ -181,6 +266,8 @@ export function inspectSettings(spawnOwnProcess: () => InspectionChild, options:
       outcome: stopAccepted ? 'stopped' : reasons.length ? (reasons.length === 1 && reasons[0] === 'request_rejected' ? 'rejected' : 'failed') : 'observed',
       stopAccepted, initialize, getSettings, sessionState, inventoryObserved, ...(settings ? { settings } : {}),
       reasons: [...reasons], ...(protocolFailure ? { protocolFailure } : {}),
+      ...(systemObservation ? { systemObservation } : {}), ...(statusNotifications ? { statusNotifications } : {}),
+      ...(uiInvalidations ? { uiInvalidations } : {}),
       stdoutBytes, stderrBytes, stdin, elapsedMs: Math.max(0, Math.round(performance.now() - started)),
       completion: { process: processState, stdout, stderr, signals: attempts.map(attempt => attempt.result!), wait: deadline ? 'deadline' : 'settled',
         issues: [...issues], descendants: 'not_guaranteed' } }));
@@ -293,7 +380,12 @@ export function inspectSettings(spawnOwnProcess: () => InspectionChild, options:
     if (typeof value.type !== 'string') { rejectProtocol('message_type_invalid'); return; }
     if (value.type === 'control_request') { rejectProtocol('control_request_unsupported'); return; }
     if (value.type === 'control_cancel_request') { rejectProtocol('control_cancel_unsupported'); return; }
-    if (value.type === 'system') { rejectProtocol('system_message_unsupported'); return; }
+    if (value.type === 'system') {
+      if (modeNotification(value)) { statusNotifications++; return; }
+      if (uiNotification(value)) { uiInvalidations++; return; }
+      systemObservation ??= projectSystem(value);
+      rejectProtocol('system_message_unsupported'); return;
+    }
     if (value.type !== 'control_response') { rejectProtocol('message_type_unknown'); return; }
     if (!has(value, 'response')) { rejectProtocol('response_missing'); return; }
     if (!record(value.response)) { rejectProtocol('response_not_object'); return; }
