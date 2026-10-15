@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { INSPECTION_BUDGET as B } from '../helpers/claude/settings-inspection.ts';
+import { INSPECTION_BUDGET as B, INSPECTION_PROTOCOL_FAILURES } from '../helpers/claude/settings-inspection.ts';
 import { projectInspectionReport, superviseSettingsInspection } from '../helpers/claude/settings-inspection-supervisor.ts';
 import type { SettingsInspectionReport } from '../helpers/claude/settings-inspection.ts';
 import type { InspectionSupervisorBudget } from '../helpers/claude/settings-inspection-supervisor.ts';
@@ -163,6 +163,25 @@ describe('Независимый supervisor: synthetic handles и IPC', () => {
     expect(result?.completion.issues[0]?.code).toBe('stdin_failed'); expect(JSON.stringify(result)).not.toContain('SECRET');
     expect(projectInspectionReport({ ...raw, reasons: ['SECRET-reason'] })).toBeUndefined();
   });
+
+  it('protocolFailure принимает только закрытые checks при protocol_unknown; старый отчёт совместим', () => {
+    expect(projectInspectionReport(transportReport())).toEqual(transportReport());
+    for (const protocolFailure of INSPECTION_PROTOCOL_FAILURES) {
+      const report = { ...transportReport(), outcome: 'failed', reasons: ['protocol_unknown'], protocolFailure };
+      expect(projectInspectionReport(report)?.protocolFailure).toBe(protocolFailure);
+    }
+    expect(projectInspectionReport({ ...transportReport(), reasons: ['protocol_unknown'], protocolFailure: 'SECRET-check' })).toBeUndefined();
+    expect(projectInspectionReport({ ...transportReport(), protocolFailure: 'json_invalid' })).toBeUndefined();
+  });
+
+  it('неизвестный protocolFailure из IPC приводит к ipc_invalid без утечки', async () => {
+    const h = setup(); h.ready();
+    h.worker.emit('message', { type: 'report', report: { ...transportReport(), reasons: ['protocol_unknown'], protocolFailure: 'SECRET-check' } });
+    await vi.advanceTimersByTimeAsync(B.term + B.kill + B.drain);
+    const report = await h.run.done;
+    expect(report.supervisor.reasons).toContain('ipc_invalid'); expect(report.transport).toBeUndefined();
+    expect(JSON.stringify(report)).not.toContain('SECRET');
+  });
 });
 
 describe('Внешний надзор: собственные synthetic Node-процессы', () => {
@@ -228,7 +247,7 @@ describe('Внешний надзор: собственные synthetic Node-п�
     expect(result.supervisor.elapsedMs).toBeLessThan(budget.outer + 1000);
   });
 
-  it.each(['success', 'reject', 'early-exit', 'late-model'])('настоящий worker и унаследованные pipe handles: synthetic %s', async scenario => {
+  it.each(['success', 'reject', 'early-exit', 'late-model', 'invalid-json', 'system-other'])('настоящий worker и унаследованные pipe handles: synthetic %s', async scenario => {
     const messages: unknown[] = [], diagnostics: string[] = [];
     const spawnCli = vi.fn(() => {
       const child = own(spawn(process.execPath, ['tests/helpers/claude/settings-inspection-double.mjs', scenario], {
@@ -252,6 +271,12 @@ describe('Внешний надзор: собственные synthetic Node-п�
       expect(result.transport?.outcome).not.toBe('observed');
       if (scenario === 'reject') expect(result.transport?.reasons).toContain('request_rejected');
       else if (scenario === 'late-model') expect(result.transport?.reasons).toContain('unexpected_event');
+      else if (scenario === 'invalid-json' || scenario === 'system-other') {
+        expect(result.transport).toMatchObject({ initialize: 'pending', getSettings: 'not_sent', reasons: expect.arrayContaining(['protocol_unknown']),
+          protocolFailure: scenario === 'invalid-json' ? 'json_invalid' : 'system_message_unsupported' });
+        expect(messages).toContainEqual({ type: 'report', report: result.transport });
+        expect(result.supervisor.reasons).toEqual([]);
+      }
       else expect(result.supervisor.cli).toMatchObject({ state: 'exited', exitCode: 7 });
     }
     expect(result.supervisor.cli.state).toBe('exited'); expect(result.supervisor.worker.state).toBe('exited');

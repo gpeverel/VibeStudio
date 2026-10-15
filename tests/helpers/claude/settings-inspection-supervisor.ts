@@ -1,6 +1,6 @@
 import type { ChildProcess, ChildProcessWithoutNullStreams } from 'node:child_process';
 import { z } from 'zod';
-import { INSPECTION_BUDGET } from './settings-inspection.ts';
+import { INSPECTION_BUDGET, INSPECTION_PROTOCOL_FAILURES } from './settings-inspection.ts';
 import type { SettingsInspectionReport } from './settings-inspection.ts';
 import type { InspectionArtifacts, InspectionMetadata } from './settings-inspection-worker.ts';
 
@@ -35,7 +35,7 @@ const artifactsSchema = z.object({ cwdBefore: metadataSchema, cwdAfter: metadata
 const reportSchema = z.object({
   cliCompatibility: z.literal('unconfirmed'), outcome: z.enum(['observed', 'rejected', 'failed', 'stopped']), stopAccepted: z.boolean(),
   initialize: requestSchema, getSettings: requestSchema, sessionState: z.enum(['unknown', 'idle', 'running', 'requires_action']),
-  inventoryObserved: z.boolean(),
+  inventoryObserved: z.boolean(), protocolFailure: z.enum(INSPECTION_PROTOCOL_FAILURES).optional(),
   settings: z.object({ effective: z.literal('object'), sources: z.array(z.enum(['userSettings', 'projectSettings', 'localSettings', 'flagSettings', 'policySettings'])).max(5),
     policySettings: z.enum(['present', 'absent_unknown']), applied: z.enum(['present', 'absent']),
     errors: z.discriminatedUnion('presence', [z.object({ presence: z.literal('absent') }), z.object({ presence: z.literal('present'), count: number })]),
@@ -45,7 +45,7 @@ const reportSchema = z.object({
   stdin: z.enum(['not_started', 'unconfirmed', 'finished', 'errored', 'forced_closed']),
   completion: z.object({ process: processSchema, stdout: streamSchema, stderr: streamSchema, signals: z.array(signalSchema).max(2),
     wait: z.enum(['settled', 'deadline']), issues: z.array(issueSchema).max(32), descendants: z.literal('not_guaranteed') }),
-});
+}).refine(report => report.protocolFailure === undefined || report.reasons.includes('protocol_unknown'));
 export const MAX_INSPECTION_IPC_BYTES = 16_384;
 export function projectInspectionReport(value: unknown): SettingsInspectionReport | undefined {
   const result = reportSchema.safeParse(value);

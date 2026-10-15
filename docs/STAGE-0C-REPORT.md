@@ -1223,3 +1223,69 @@ C выполнил заключительную статическую свер�
 Точная команда и полный предмет решения находятся в разделе «Подготовленный внешний запуск» live-плана: максимум один настоящий Claude и два вспомогательных Node, до двух control-запросов initialize/get_settings, ноль prompt и повторов; fixed executable/argv/env/cwd; ответ 10 с, работа 15 с, TERM/KILL/drain в исходных 18 с. Preflight вне этого срока, окно TOCTOU, штатные auth refresh/служебная сеть/cache/log/state, неизвестные ранние helpers/hooks/plugins/MCP, unconfirmed exit/cleanup, возможная потеря доставки отчёта и одноразовый cwd перечислены явно. Exit 1 может быть допустимым отрицательным исходом по JSON. После отказа нет перебора соединений, снятия флагов, автоматического пересоздания cwd или повторного запуска.
 
 Разрешение теперь можно запросить на **одну конкретную немодельную пробу** этой команды. Оно требуется из-за действующего запрета настоящего CLI, а не для правок/doubles; opt-in аргумент сам по себе разрешением не является. До ответа пользователя выполнение остановлено. Код после успешного цикла 597/597, 679/679 и 78/78 не менялся; добавлены только результаты полученных ревью и окончательные условия в трёх документах. **Модельная приёмка не готова к выполнению; P2b/0C не закрыты.**
+
+#### Первая разрешённая немодельная проба — 2026-10-15
+
+Исторический статус «реальный CLI не запускался» выше относится к подготовке. После решения пользователя **«Разрешить одну пробу»** A выполнил одну команду подготовленного entrypoint. Сохранённый безопасный результат — [P2B-SETTINGS-INSPECTION-2026-10-15.json](P2B-SETTINGS-INSPECTION-2026-10-15.json), SHA-256 `59c070ac6a9e11914f243ccd86cc71ec73314b9ec07a2f19e9fdd2f53582a3ce`. Файл не изменён при дальнейшем продолжении; его происхождение **real-diagnostic-safe-projection**, в отличие от synthetic-тестов.
+
+| Наблюдение | Факт первой пробы |
+|---|---|
+| Запуски/время | Entry point один раз; один Claude + два вспомогательных Node, повторов нет. Launcher exit **1**, tool wall **0,415548334 с**; доступное окно UTC **10:25:28–10:26:18**, не точные границы жизни ребёнка |
+| Протокол | initialize **pending**, get_settings **not_sent**, inventory **false**, session_state **unknown** |
+| Отказ/вывод | outcome **failed**, reasons **protocol_unknown, process_failed**; stdout **162 байта**, stderr **0 байт** |
+| Завершение | Claude exitCode **143**, signal **null**; отдельно успешная отправка **SIGTERM**. Worker exitCode **0**, signal **null**; оба exit подтверждены. Код 143 не переименован в наблюдённый signal |
+| Надзор | Transport **287 мс**, supervisor **295 мс**, deadline **false**, supervisor reasons пуст; stdin finished, stdout/stderr ended |
+| Metadata/cleanup | Cwd до/после: directory, size 64, одинаковый mtime; remote-settings.json missing до/после; cleanup **removed**, отдельный ls подтвердил отсутствие старого собственного cwd |
+
+Исходные stdout/stderr/settings/account и произвольные ошибки не сохранялись. По **162 байтам нельзя восстановить тип сообщения, проваленное поле или причину protocol_unknown**. Проба установила остановку/выход данного запуска и отрицательный результат до принятия initialize; до get_settings не дошла. Совместимость протокола/argv, runtime-версия, production-источник и модельная приёмка не подтверждены. Неизменность разрешённых metadata не исключает других файловых/сетевых эффектов и detached-потомков. Первое одноразовое разрешение израсходовано.
+
+#### Работа над точностью отказа и подготовка второй пробы
+
+Основание — недостаточная различимость `protocol_unknown`, а не доказанный дефект определённого CLI-поля. C сохранил transport и добавил необязательный **protocolFailure**: первый проваленный check из **44 фиксированных кодов** `INSPECTION_PROTOCOL_FAILURES`. Различаются UTF-8/JSON, объект/type, неподдержанные control_request/control_cancel/system, response/subtype/error/payload, отсутствующие и некорректные pending/initialize-контейнеры, effective/sources/записи/дубли/applied/errors. Фактические неизвестные type/subtype/key/request_id, значения и исходные ошибки не выводятся. Старое reason `protocol_unknown` сохраняется; остальные причины, критерии приёма, причинность, абсолютные сроки, byte/line limits и terminal freeze не ослаблены.
+
+A расширил существующую проекцию supervisor тем же enum: неизвестный код либо код без reason protocol_unknown отклоняется; старый отчёт без поля совместим. Worker не менялся, уже применяет проекцию перед IPC. A подготовил новый собственный пустой cwd `/private/tmp/vs-policy-inspect-p2b-next-uOtnXc`, **dev 16777229, inode 66527581, mode 0700**; B/C независимо сверили stat/ls. Fixed executable/argv/env, бюджеты и один запуск сохранены; изменены идентичность cwd и комментарий о разрешении. Preflight A прошёл без запуска CLI. Автоматического повтора первой пробы нет.
+
+Точечная матрица C: `/usr/bin/time -p sh scripts/with-node.sh npm exec --offline --no -- vitest run tests/claude/settings-inspection.test.ts tests/claude/settings-inspection-supervisor.test.ts` — **exit 0, 188/188, real 5,10 с** (transport 144, supervisor/integration/output 44). Добавлено **55** проверок: 44 отдельных malformed input, шесть прежних причин без нового поля, first check/terminal freeze, legacy report, закрытый enum/противоречивый report/неизвестный IPC. Два новых собственных Node-double сценария invalid-json/system-other проходят настоящий worker и унаследованные pipes; canary отсутствует в результате, IPC и диагностике worker. Это не fixtures настоящего Claude.
+
+| Актуальный файл | SHA-256 |
+|---|---|
+| `tests/helpers/claude/settings-inspection.ts` | `200635eb0dda36d2e4f155e549698d78ba6ae93a4eb01dca61c2753fafd3f0a3` |
+| `tests/claude/settings-inspection.test.ts` | `21964a34d659d46a70a89a0b85a6af3612c7d63aa6c21ab70b368efe10a98a02` |
+| `tests/claude/settings-inspection-supervisor.test.ts` | `6e7b2ef2b71a3fe9ae35e451eaa91f511764f0d163d53faa5d047df11d9d3449` |
+| `tests/helpers/claude/settings-inspection-double.mjs` | `d9e0cb9e983228914d59a6fd4dd6c73cd5523c1a7f22032343925413bed68522` |
+| `tests/helpers/claude/settings-inspection-supervisor.ts` | `44bee86c7c50203ecae730282641a47c81489eb54c4ecb83eb06eff18dd8e82b` |
+| `tests/helpers/claude/settings-inspection-worker.ts` | `ecfa5b8b994cc3a2d4677339234d28bf0dc51c284218f818baa57f64cee4f837` |
+| `tests/helpers/claude/settings-inspection-cli.ts` | `b79ce943976285f645f6096ad785ebfa4b11b8a627eac65c1da39abccd9756d6` |
+
+**Актуальные перекрёстные ревью закрыты в проверенной области.** A→C: прочитаны transport, обе матрицы и Node-double по этой таблице; предикаты/сроки, malformed inputs и безопасная передача enum сохранены. B→A: protocol/argv/env/проекция текущих cli/supervisor/worker/transport проверены; B дополнительно прочитал матрицу C. Собственная Node-проверка B: все 44 enum + legacy + неизвестный/object/без reason + secret stripping + argv comparison, **exit 0, 0,04 с**, настоящий CLI не запускался. C→A: schema/refine, cwd, неизменный argv и worker проверены чтением и end-to-end doubles. C→B: существующий admission SHA `a605c4630c3ee3f933805bbf2c26f562722bf6878767bc26ac5640a4e8787003` по-прежнему требует полный ManagedObservation file/os-policy/server-managed/digest/executableConfig=none, auth-binding, свежесть и порядок до исполнения расширений; это не доказано. Production не меняется.
+
+Доступные способы исследовать старый отказ: (1) реальный safe evidence подтвердил агрегированную причину; raw намеренно отсутствует; (2) разбор каждой ветви transport уточнил безопасный контракт без восстановления данных; (3) независимые A/B ревью и synthetic/Node проверки подтвердили различимость будущего отказа. Это не три живые попытки. Для нового runtime-факта требуется **отдельное разрешение на одну подготовленную немодельную пробу**. Новая диагностика делает её информативной, но не обещает успеха и не объясняет задним числом первую. **Модельная приёмка не готова к выполнению; P2b/0C не закрыты.**
+
+#### Последовательная проверка уточнённой диагностики и состояние разрешения
+
+C выполнил один полный цикл после закрытия актуальных A/B ревью; все npm-команды через `/usr/bin/time -p sh scripts/with-node.sh`. Поведенческие файлы после ревью не менялись. Новый цикл нужен из-за уточнённого transport/IPC; исторические результаты выше не подменены текущими.
+
+| Команда | Exit / результат / real |
+|---|---|
+| `npm exec --offline --no -- vitest run tests/claude` | **0 / 652 из 652 / 21,04 с** |
+| `npm run typecheck` | **0 / 3,76 с** |
+| `npm run lint` | **0 / 1,68 с** |
+| `npm run check:boundaries` | **0 / 32 модуля, 61 зависимость / 0,69 с** |
+| `npm test` | **0 / 734 из 734 / 150,91 с** |
+| `npm run test:node` | **0 / 78 из 78 / 145,40 с** |
+| `npm run build` | **0 / 1,02 с** |
+| GUI-smoke | **Не запускался:** нет нового основания регистрации или конкретной диагностической цели |
+| `/usr/bin/time -p git diff --check` после сборки | **0 / 0,02 с** |
+
+A независимо сверил именно новую сборку **1,02 с**, а не историческую: OpenSSL **exit 0, real 0,01 с**, пять out-файлов и Electron совпали с полными ранее записанными SHA-256 (`e4ceed3f…`, `cf347cbd…`, `2240ce55…`, `5ac6dd63…`, `07a7d77f…`, Electron `67641b7c…`). Это не новое GUI/runtime-наблюдение. GUI остаётся blocked по прежней причине: основание регистрации/новой цели не установлено; старый abort ради повторения не воспроизводился. Новых npm/Electron smoke exit/PID/signal/crash report нет.
+
+Заключительная сверка A/C семи code/test SHA и первого evidence совпала с таблицей. `git diff --exit-code -- src tests/fixtures tests/live tests/helpers/process.ts tests/cases package.json package-lock.json scripts electron.vite.config.ts vitest.config.ts vitest.live.config.ts` — **exit 0**, пустой diff. Фактически изменены **девять файлов**: transport, supervisor, cli, Node-double, два test-файла и три документа; worker и первое реальное evidence не менялись. C не менял Git-историю. После кода дополнялись только документы; успешные полные наборы из-за этого не повторялись.
+
+| Предмет оценки | Текущее состояние |
+|---|---|
+| Диагностический стенд для отдельного разрешения второй пробы | **Готов**: точная безопасная диагностика, прежний внешний надзор, новый заранее проверенный cwd, doubles/Node, полный цикл и актуальные A→C/B→A/C→A/C→B |
+| Работоспособность реального CLI с fixed argv/stdio | **Не подтверждена**: первая проба остановилась до принятия initialize; вторую не запускали |
+| Production admission | **Blocked**: полнота managed/auth-binding/freshness/порядок до расширений не доказаны, сборщик не заменён положительной подстановкой |
+| Модельная приёмка P2b / закрытие 0C | **Не готовы / не закрыты** |
+
+Полный предмет следующего решения — последний раздел [live-плана](STAGE-0C-PRACTICAL-LIVE-PLAN.md): одна вторая немодельная проба точной команды, один новый Claude и два Node, новый фиксированный cwd, до двух control-запросов, ноль prompt/повторов, прежние argv/env/hash/10–15–18 с, ограниченный результат с protocolFailure и явно описанные побочные эффекты. Первое разрешение уже использовано. **До отдельного конкретного разрешения повтор не выполняется. Модельная приёмка не готова к выполнению.**

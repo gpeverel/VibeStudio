@@ -1,8 +1,8 @@
 import { EventEmitter } from 'node:events';
 import { PassThrough, Writable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { INSPECTION_BUDGET as B, inspectSettings } from '../helpers/claude/settings-inspection.ts';
-import type { InspectionChild, InspectionOptions } from '../helpers/claude/settings-inspection.ts';
+import { INSPECTION_BUDGET as B, INSPECTION_PROTOCOL_FAILURES, inspectSettings } from '../helpers/claude/settings-inspection.ts';
+import type { InspectionChild, InspectionOptions, InspectionProtocolFailure } from '../helpers/claude/settings-inspection.ts';
 import { syntheticInit } from '../helpers/claude/practical-evidence.ts';
 
 /** Все ответы и handles ниже — synthetic transport doubles, НЕ реальные CLI fixtures.
@@ -47,6 +47,88 @@ function double(options: { holdWrite?: boolean | number; holdFinish?: boolean; h
 }
 beforeEach(() => { vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] }); });
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
+
+describe('Безопасная точность протокольного отказа: synthetic checks', () => {
+  // Ожидания заданы отдельно от реализации; Record требует пример для каждого закрытого кода.
+  const cases = {
+    utf8_invalid: Buffer.from([0xc3, 0x28, 10]),
+    json_invalid: Buffer.from('SECRET-not-json\n'),
+    message_not_object: line(['SECRET-value']),
+    message_type_missing: line({ 'SECRET-key': true }),
+    message_type_invalid: line({ type: { secret: 'SECRET-value' } }),
+    message_type_unknown: line({ type: 'SECRET-type' }),
+    control_request_unsupported: line({ type: 'control_request', request: { subtype: 'SECRET-subtype' } }),
+    control_cancel_unsupported: line({ type: 'control_cancel_request', request_id: 'SECRET-id' }),
+    system_message_unsupported: line({ type: 'system', subtype: 'SECRET-subtype' }),
+    response_missing: line({ type: 'control_response', 'SECRET-key': true }),
+    response_not_object: line({ type: 'control_response', response: 'SECRET-value' }),
+    response_subtype_missing: line(init(initPayload(), { subtype: undefined })),
+    response_subtype_unknown: line(init(initPayload(), { subtype: 'SECRET-subtype' })),
+    response_error_missing: line(init(initPayload(), { subtype: 'error' })),
+    response_error_invalid: line(init(initPayload(), { subtype: 'error', error: { secret: 'SECRET-value' } })),
+    response_payload_missing: line(init(initPayload(), { response: undefined })),
+    response_payload_not_object: line(init(initPayload(), { response: ['SECRET-value'] })),
+    pending_permissions_missing: line(init(initPayload(), { pending_permission_requests: undefined })),
+    pending_permissions_invalid: line(init(initPayload(), { pending_permission_requests: 'SECRET-value' })),
+    pending_dialogs_missing: line(init(initPayload(), { pending_user_dialog_requests: undefined })),
+    pending_dialogs_invalid: line(init(initPayload(), { pending_user_dialog_requests: 'SECRET-value' })),
+    initialize_commands_missing: line(init({ ...initPayload(), commands: undefined })),
+    initialize_commands_invalid: line(init({ ...initPayload(), commands: ['SECRET-value'] })),
+    initialize_agents_missing: line(init({ ...initPayload(), agents: undefined })),
+    initialize_agents_invalid: line(init({ ...initPayload(), agents: ['SECRET-value'] })),
+    initialize_models_missing: line(init({ ...initPayload(), models: undefined })),
+    initialize_models_invalid: line(init({ ...initPayload(), models: ['SECRET-value'] })),
+    initialize_output_style_missing: line(init({ ...initPayload(), output_style: undefined })),
+    initialize_output_style_invalid: line(init({ ...initPayload(), output_style: { secret: 'SECRET-value' } })),
+    initialize_available_output_styles_missing: line(init({ ...initPayload(), available_output_styles: undefined })),
+    initialize_available_output_styles_invalid: line(init({ ...initPayload(), available_output_styles: [{ secret: 'SECRET-value' }] })),
+    initialize_account_missing: line(init({ ...initPayload(), account: undefined })),
+    initialize_account_invalid: line(init({ ...initPayload(), account: 'SECRET-value' })),
+    initialize_session_state_invalid: line(init({ ...initPayload(), session_state: 'SECRET-state' })),
+    settings_effective_missing: line(settings({ sources: [], secret: 'SECRET-value' })),
+    settings_effective_invalid: line(settings({ effective: ['SECRET-value'], sources: [] })),
+    settings_sources_missing: line(settings({ effective: {}, secret: 'SECRET-value' })),
+    settings_sources_invalid: line(settings({ effective: {}, sources: 'SECRET-value' })),
+    settings_source_entry_invalid: line(settings({ effective: {}, sources: ['SECRET-value'] })),
+    settings_source_unknown: line(settings({ effective: {}, sources: [{ source: 'SECRET-source', settings: {} }] })),
+    settings_source_settings_invalid: line(settings({ effective: {}, sources: [{ source: 'policySettings', settings: 'SECRET-value' }] })),
+    settings_source_duplicate: line(settings({ effective: {}, sources: [{ source: 'policySettings', settings: {} }, { source: 'policySettings', settings: { secret: 'SECRET-value' } }] })),
+    settings_applied_invalid: line(settings({ ...settingsPayload(), applied: { model: 'SECRET-model', effort: 'SECRET-effort' } })),
+    settings_errors_invalid: line(settings({ ...settingsPayload(), errors: 'SECRET-value' })),
+  } satisfies Record<InspectionProtocolFailure, Buffer>;
+
+  it.each(INSPECTION_PROTOCOL_FAILURES)('%s сохраняет только имя первого проваленного check', async check => {
+    const h = double(); const afterInit = check.startsWith('settings_');
+    if (afterInit) await h.acceptInit();
+    h.stdout.write(cases[check]); await flush();
+    const report = await h.run.done;
+    expect(report.protocolFailure).toBe(check); expect(report.reasons).toContain('protocol_unknown');
+    expect(report.outcome).toBe('failed'); expect(report.settings).toBeUndefined();
+    expect(h.writes).toHaveLength(afterInit ? 2 : 1); expect(h.spawn).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(report)).not.toContain('SECRET');
+  });
+
+  it('первый check переживает ещё одну строку, поздние события и terminal freeze', async () => {
+    const h = double(); h.stdout.write(Buffer.concat([cases.response_missing, cases.json_invalid])); await flush();
+    const report = await h.run.done, snapshot = JSON.stringify(report);
+    expect(report.protocolFailure).toBe('response_missing'); expect(Object.isFrozen(report)).toBe(true);
+    h.stdout.emit('data', cases.message_type_unknown); h.run.stop(); h.stderr.emit('error', new Error('SECRET-late'));
+    expect(JSON.stringify(await h.run.done)).toBe(snapshot); expect(h.writes).toHaveLength(1);
+  });
+
+  it.each([
+    ['request_id_mismatch', success('SECRET-id', initPayload())],
+    ['premature_response', settings()],
+    ['request_rejected', init(initPayload(), { subtype: 'error', error: 'SECRET-error' })],
+    ['pending_request', init(initPayload(), { pending_permission_requests: [{ secret: 'SECRET-value' }] })],
+    ['unexpected_event', { type: 'assistant', content: 'SECRET-value' }],
+    ['inventory_mismatch', { type: 'system', subtype: 'init', secret: 'SECRET-value' }],
+  ] as const)('%s остаётся прежним отказом без protocolFailure', async (reason, value) => {
+    const h = double(); h.stdout.write(line(value)); await flush();
+    const report = await h.run.done; expect(report.reasons).toContain(reason);
+    expect(report).not.toHaveProperty('protocolFailure'); expect(JSON.stringify(report)).not.toContain('SECRET');
+  });
+});
 
 describe('get_settings: synthetic transport, без разрешения CLI', () => {
   it('создаёт один handle, посылает ровно два запроса по порядку и закрывает stdin без prompt', async () => {

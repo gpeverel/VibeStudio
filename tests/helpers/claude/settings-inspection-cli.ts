@@ -10,13 +10,13 @@ import { superviseSettingsInspection } from './settings-inspection-supervisor.ts
 import { inspectionMetadata } from './settings-inspection-worker.ts';
 
 /** Фиксированный одноразовый диагностический стенд, не production admission.
- * Наличие флага не является разрешением пользователя. Настоящий CLI здесь не запускался. */
+ * Наличие флага не является разрешением пользователя; каждый реальный запуск согласуется отдельно. */
 export const PREPARED_INSPECTION = Object.freeze({
   executable: '/opt/homebrew/bin/claude',
   resolvedExecutable: '/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe',
   executableSha256: '0116ee2e0a513900b633d9951367f18747686478e2b462805b8c31609f047f70',
   executableSize: 239695888,
-  cwd: '/private/tmp/vs-policy-inspect-p2b-2yz3qM', cwdDev: 16777229, cwdIno: 66433400,
+  cwd: '/private/tmp/vs-policy-inspect-p2b-next-uOtnXc', cwdDev: 16777229, cwdIno: 66527581,
   argv: Object.freeze([
     '--print', '--verbose', '--input-format', 'stream-json', '--output-format', 'stream-json',
     '--restricted', '--safe-mode', '--setting-sources', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',

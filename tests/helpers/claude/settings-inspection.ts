@@ -22,6 +22,22 @@ export type InspectionReason = 'spawn_failed' | 'protocol_unknown' | 'request_id
   | 'request_rejected' | 'pending_request' | 'unexpected_event' | 'inventory_mismatch' | 'output_limit'
   | 'response_deadline' | 'work_deadline' | 'outer_deadline' | 'stdin_failed' | 'stream_failed'
   | 'signal_failed' | 'exit_unconfirmed' | 'drain_timeout' | 'missing_response' | 'process_failed' | 'process_handle_unavailable';
+/** Первый проваленный check. Только закрытые имена проверок, без входных значений/ключей. */
+export const INSPECTION_PROTOCOL_FAILURES = [
+  'utf8_invalid', 'json_invalid', 'message_not_object', 'message_type_missing', 'message_type_invalid', 'message_type_unknown',
+  'control_request_unsupported', 'control_cancel_unsupported', 'system_message_unsupported',
+  'response_missing', 'response_not_object', 'response_subtype_missing', 'response_subtype_unknown',
+  'response_error_missing', 'response_error_invalid', 'response_payload_missing', 'response_payload_not_object',
+  'pending_permissions_missing', 'pending_permissions_invalid', 'pending_dialogs_missing', 'pending_dialogs_invalid',
+  'initialize_commands_missing', 'initialize_commands_invalid', 'initialize_agents_missing', 'initialize_agents_invalid',
+  'initialize_models_missing', 'initialize_models_invalid', 'initialize_output_style_missing', 'initialize_output_style_invalid',
+  'initialize_available_output_styles_missing', 'initialize_available_output_styles_invalid',
+  'initialize_account_missing', 'initialize_account_invalid', 'initialize_session_state_invalid',
+  'settings_effective_missing', 'settings_effective_invalid', 'settings_sources_missing', 'settings_sources_invalid',
+  'settings_source_entry_invalid', 'settings_source_unknown', 'settings_source_settings_invalid', 'settings_source_duplicate',
+  'settings_applied_invalid', 'settings_errors_invalid',
+] as const;
+export type InspectionProtocolFailure = typeof INSPECTION_PROTOCOL_FAILURES[number];
 type RequestState = 'not_sent' | 'pending' | 'accepted' | 'rejected';
 const SOURCES = ['userSettings', 'projectSettings', 'localSettings', 'flagSettings', 'policySettings'] as const;
 const EXECUTABLE_KEYS = ['hooks', 'mcpServers', 'enabledPlugins', 'extraKnownMarketplaces', 'env', 'apiKeyHelper',
@@ -45,6 +61,7 @@ export interface SettingsInspectionReport {
   readonly inventoryObserved: boolean;
   readonly settings?: SettingsProjection;
   readonly reasons: readonly InspectionReason[];
+  readonly protocolFailure?: InspectionProtocolFailure;
   readonly stdoutBytes: number;
   readonly stderrBytes: number;
   readonly elapsedMs: number;
@@ -61,22 +78,27 @@ function freeze<T>(value: T): T {
   if (value && typeof value === 'object') { for (const child of Object.values(value)) freeze(child); Object.freeze(value); }
   return value;
 }
-function projectSettings(value: unknown): SettingsProjection | undefined {
-  if (!record(value) || !record(value.effective) || !Array.isArray(value.sources)) return;
+function projectSettings(value: Record<string, unknown>): SettingsProjection | InspectionProtocolFailure {
+  if (!has(value, 'effective')) return 'settings_effective_missing';
+  if (!record(value.effective)) return 'settings_effective_invalid';
+  if (!has(value, 'sources')) return 'settings_sources_missing';
+  if (!Array.isArray(value.sources)) return 'settings_sources_invalid';
   const sources: typeof SOURCES[number][] = [];
   const objects = [value.effective];
   for (const entry of value.sources) {
-    if (!record(entry) || !SOURCES.some(source => source === entry.source) || !record(entry.settings)) return;
+    if (!record(entry)) return 'settings_source_entry_invalid';
+    if (!SOURCES.some(source => source === entry.source)) return 'settings_source_unknown';
+    if (!record(entry.settings)) return 'settings_source_settings_invalid';
     const source = entry.source as typeof SOURCES[number];
-    if (sources.includes(source)) return;
+    if (sources.includes(source)) return 'settings_source_duplicate';
     sources.push(source); objects.push(entry.settings);
   }
   if (has(value, 'applied')) {
     const applied = value.applied;
     if (!record(applied) || typeof applied.model !== 'string'
-      || !(applied.effort === null || (typeof applied.effort === 'string' && ['low', 'medium', 'high', 'xhigh', 'max'].includes(applied.effort)))) return;
+      || !(applied.effort === null || (typeof applied.effort === 'string' && ['low', 'medium', 'high', 'xhigh', 'max'].includes(applied.effort)))) return 'settings_applied_invalid';
   }
-  if (has(value, 'errors') && !Array.isArray(value.errors)) return;
+  if (has(value, 'errors') && !Array.isArray(value.errors)) return 'settings_errors_invalid';
   return {
     effective: 'object', sources, policySettings: sources.includes('policySettings') ? 'present' : 'absent_unknown',
     applied: has(value, 'applied') ? 'present' : 'absent',
@@ -107,6 +129,7 @@ export function inspectSettings(spawnOwnProcess: () => InspectionChild, options:
   let initialize: RequestState = 'not_sent', getSettings: RequestState = 'not_sent';
   let sessionState: SettingsInspectionReport['sessionState'] = 'unknown';
   let settings: SettingsProjection | undefined;
+  let protocolFailure: InspectionProtocolFailure | undefined;
   let processState: ProcessCompletion['process'] = { state: 'not_started' };
   let stdout: ProcessStreamState = 'not_started', stderr: ProcessStreamState = 'not_started';
   let stdoutBytes = 0, stderrBytes = 0, lineBytes = 0;
@@ -157,7 +180,8 @@ export function inspectSettings(spawnOwnProcess: () => InspectionChild, options:
     resolve(freeze({ cliCompatibility: 'unconfirmed',
       outcome: stopAccepted ? 'stopped' : reasons.length ? (reasons.length === 1 && reasons[0] === 'request_rejected' ? 'rejected' : 'failed') : 'observed',
       stopAccepted, initialize, getSettings, sessionState, inventoryObserved, ...(settings ? { settings } : {}),
-      reasons: [...reasons], stdoutBytes, stderrBytes, stdin, elapsedMs: Math.max(0, Math.round(performance.now() - started)),
+      reasons: [...reasons], ...(protocolFailure ? { protocolFailure } : {}),
+      stdoutBytes, stderrBytes, stdin, elapsedMs: Math.max(0, Math.round(performance.now() - started)),
       completion: { process: processState, stdout, stderr, signals: attempts.map(attempt => attempt.result!), wait: deadline ? 'deadline' : 'settled',
         issues: [...issues], descendants: 'not_guaranteed' } }));
   };
@@ -200,6 +224,11 @@ export function inspectSettings(spawnOwnProcess: () => InspectionChild, options:
     });
   };
   const fail = (code: InspectionReason) => { if (!finished) { reason(code); stop(); } };
+  const rejectProtocol = (check: InspectionProtocolFailure) => {
+    if (finished) return;
+    protocolFailure ??= check;
+    fail('protocol_unknown');
+  };
   const budgetExpired = () => {
     // Просроченный timer может ещё ждать очереди event loop. Его флаг не разрешает позднюю запись/ответ.
     const elapsed = performance.now() - started;
@@ -245,11 +274,13 @@ export function inspectSettings(spawnOwnProcess: () => InspectionChild, options:
   } });
   const consume = () => {
     if (budgetExpired()) { parts = []; lineBytes = 0; return; }
-    let value: unknown;
-    try { value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(parts))); }
-    catch { parts = []; lineBytes = 0; fail('protocol_unknown'); return; }
+    let text: string, value: unknown;
+    try { text = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(parts)); }
+    catch { parts = []; lineBytes = 0; rejectProtocol('utf8_invalid'); return; }
     parts = []; lineBytes = 0;
-    if (!record(value)) { fail('protocol_unknown'); return; }
+    try { value = JSON.parse(text); }
+    catch { rejectProtocol('json_invalid'); return; }
+    if (!record(value)) { rejectProtocol('message_not_object'); return; }
     if (value.type === 'system' && value.subtype === 'init') {
       if (inventoryObserved) { fail('inventory_mismatch'); return; }
       inventory.feed(Buffer.from(JSON.stringify(value) + '\n'));
@@ -258,37 +289,59 @@ export function inspectSettings(spawnOwnProcess: () => InspectionChild, options:
       return;
     }
     if (typeof value.type === 'string' && ['assistant', 'user', 'result', 'stream_event', 'tool_use', 'tool_result'].includes(value.type)) { fail('unexpected_event'); return; }
-    if (value.type !== 'control_response' || !record(value.response)) { fail('protocol_unknown'); return; }
+    if (!has(value, 'type')) { rejectProtocol('message_type_missing'); return; }
+    if (typeof value.type !== 'string') { rejectProtocol('message_type_invalid'); return; }
+    if (value.type === 'control_request') { rejectProtocol('control_request_unsupported'); return; }
+    if (value.type === 'control_cancel_request') { rejectProtocol('control_cancel_unsupported'); return; }
+    if (value.type === 'system') { rejectProtocol('system_message_unsupported'); return; }
+    if (value.type !== 'control_response') { rejectProtocol('message_type_unknown'); return; }
+    if (!has(value, 'response')) { rejectProtocol('response_missing'); return; }
+    if (!record(value.response)) { rejectProtocol('response_not_object'); return; }
     const response = value.response;
     const which = response.request_id === 'p2b-policy-init' ? 'init' : response.request_id === 'p2b-policy-read' ? 'settings' : undefined;
     if (!which) { fail('request_id_mismatch'); return; }
     const state = which === 'init' ? initialize : getSettings;
     if (state !== 'pending') { fail(state === 'not_sent' ? 'premature_response' : 'request_id_mismatch'); return; }
     if (response.subtype === 'error') {
-      if (typeof response.error !== 'string') { fail('protocol_unknown'); return; }
+      if (!has(response, 'error')) { rejectProtocol('response_error_missing'); return; }
+      if (typeof response.error !== 'string') { rejectProtocol('response_error_invalid'); return; }
       if (which === 'init') initialize = 'rejected'; else getSettings = 'rejected';
       fail('request_rejected'); return;
     }
-    if (response.subtype !== 'success' || !record(response.response)) { fail('protocol_unknown'); return; }
-    for (const key of ['pending_permission_requests', 'pending_user_dialog_requests']) {
+    if (!has(response, 'subtype')) { rejectProtocol('response_subtype_missing'); return; }
+    if (response.subtype !== 'success') { rejectProtocol('response_subtype_unknown'); return; }
+    if (!has(response, 'response')) { rejectProtocol('response_payload_missing'); return; }
+    if (!record(response.response)) { rejectProtocol('response_payload_not_object'); return; }
+    for (const [key, name] of [['pending_permission_requests', 'permissions'], ['pending_user_dialog_requests', 'dialogs']] as const) {
       if (!has(response, key) && which !== 'init') continue;
-      if (!Array.isArray(response[key])) { fail('protocol_unknown'); return; }
+      if (!has(response, key)) { rejectProtocol(`pending_${name}_missing`); return; }
+      if (!Array.isArray(response[key])) { rejectProtocol(`pending_${name}_invalid`); return; }
       if (response[key].length) { fail('pending_request'); return; }
     }
     const payload = response.response;
     if (which === 'init') {
-      if (!['commands', 'agents', 'models'].every(key => Array.isArray(payload[key]) && payload[key].every(record))
-        || typeof payload.output_style !== 'string' || !Array.isArray(payload.available_output_styles)
-        || !payload.available_output_styles.every(item => typeof item === 'string') || !record(payload.account)) { fail('protocol_unknown'); return; }
+      for (const key of ['commands', 'agents', 'models'] as const) {
+        if (!has(payload, key)) { rejectProtocol(`initialize_${key}_missing`); return; }
+        if (!Array.isArray(payload[key]) || !payload[key].every(record)) { rejectProtocol(`initialize_${key}_invalid`); return; }
+      }
+      if (!has(payload, 'output_style')) { rejectProtocol('initialize_output_style_missing'); return; }
+      if (typeof payload.output_style !== 'string') { rejectProtocol('initialize_output_style_invalid'); return; }
+      if (!has(payload, 'available_output_styles')) { rejectProtocol('initialize_available_output_styles_missing'); return; }
+      if (!Array.isArray(payload.available_output_styles) || !payload.available_output_styles.every(item => typeof item === 'string')) {
+        rejectProtocol('initialize_available_output_styles_invalid'); return;
+      }
+      if (!has(payload, 'account')) { rejectProtocol('initialize_account_missing'); return; }
+      if (!record(payload.account)) { rejectProtocol('initialize_account_invalid'); return; }
       if (has(payload, 'session_state')) {
-        if (payload.session_state !== 'idle' && payload.session_state !== 'running' && payload.session_state !== 'requires_action') { fail('protocol_unknown'); return; }
+        if (payload.session_state !== 'idle' && payload.session_state !== 'running' && payload.session_state !== 'requires_action') { rejectProtocol('initialize_session_state_invalid'); return; }
         sessionState = payload.session_state;
         if (sessionState !== 'idle') { fail('pending_request'); return; }
       }
       initialize = 'accepted';
     } else {
-      settings = projectSettings(payload);
-      if (!settings) { fail('protocol_unknown'); return; }
+      const projection = projectSettings(payload);
+      if (typeof projection === 'string') { rejectProtocol(projection); return; }
+      settings = projection;
       getSettings = 'accepted'; clearTimeout(responseTimer); timers.delete(responseTimer);
       try { options.onSettingsAccepted?.(); } catch { issue('process_result_failed', 'done'); fail('process_failed'); }
     }

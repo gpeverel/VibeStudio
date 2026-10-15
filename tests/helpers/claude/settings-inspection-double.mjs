@@ -20,6 +20,10 @@ lines.on('line', line => {
   if (request.type !== 'control_request' || request.request?.subtype !== kind || request.request_id !== id) process.exit(96);
   if (scenario === 'ignore-term') return;
   if (kind === 'initialize') {
+    if (scenario === 'invalid-json') { process.stdout.write('SECRET-not-json\n'); return; }
+    if (scenario === 'system-other') {
+      process.stdout.write(JSON.stringify({ type: 'system', subtype: 'SECRET-subtype', detail: 'SECRET-value' }) + '\n'); return;
+    }
     reply(id, { commands: [], agents: [], output_style: 'normal', available_output_styles: [], models: [],
       account: { secret: 'SECRET-synthetic-account' } });
   } else if (scenario === 'reject') {
