@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "provenance": "real-diagnostic-safe-projection",
+  "probeOrdinal": 2,
+  "authorization": {
+    "decision": "Разрешить одну пробу",
+    "scope": "Одна повторная немодельная проба подготовленной редакции стенда; без повторов и изменения флагов"
+  },
+  "observationWindowUtc": {
+    "before": "2026-10-15 11:08:06 UTC",
+    "after": "2026-10-15 11:08:07 UTC"
+  },
+  "launcher": {
+    "command": "P2B_SETTINGS_INSPECTION=1 /Users/nishimata/.nvm/versions/node/v24.15.0/bin/node tests/helpers/claude/settings-inspection-cli.ts --approved-single-probe",
+    "invocations": 1,
+    "exitCode": 1,
+    "toolWallTimeSeconds": 0.493115834
+  },
+  "checkedSha256": {
+    "tests/helpers/claude/settings-inspection-cli.ts": "b79ce943976285f645f6096ad785ebfa4b11b8a627eac65c1da39abccd9756d6",
+    "tests/helpers/claude/settings-inspection-supervisor.ts": "44bee86c7c50203ecae730282641a47c81489eb54c4ecb83eb06eff18dd8e82b",
+    "tests/helpers/claude/settings-inspection-worker.ts": "ecfa5b8b994cc3a2d4677339234d28bf0dc51c284218f818baa57f64cee4f837",
+    "tests/helpers/claude/settings-inspection.ts": "200635eb0dda36d2e4f155e549698d78ba6ae93a4eb01dca61c2753fafd3f0a3",
+    "/Users/nishimata/.nvm/versions/node/v24.15.0/bin/node": "3200fbd9f7fd4410426dd541e10d1ab829d3472f270d743c7fabd1696c03fe32",
+    "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe": "0116ee2e0a513900b633d9951367f18747686478e2b462805b8c31609f047f70"
+  },
+  "report": {
+    "identity": {
+      "executable": "/opt/homebrew/bin/claude",
+      "executableSha256": "0116ee2e0a513900b633d9951367f18747686478e2b462805b8c31609f047f70",
+      "declaredPackageVersion": "2.1.295",
+      "runtimeVersion": "unconfirmed",
+      "cwd": "/private/tmp/vs-policy-inspect-p2b-next-uOtnXc",
+      "argv": [
+        "--print",
+        "--verbose",
+        "--input-format",
+        "stream-json",
+        "--output-format",
+        "stream-json",
+        "--restricted",
+        "--safe-mode",
+        "--setting-sources",
+        "",
+        "--strict-mcp-config",
+        "--mcp-config",
+        "{\"mcpServers\":{}}",
+        "--tools",
+        "Read,Glob,Grep",
+        "--allowedTools",
+        "Read,Glob,Grep",
+        "--permission-mode",
+        "dontAsk",
+        "--permission-prompts",
+        "none",
+        "--disable-slash-commands",
+        "--no-chrome",
+        "--disallowedTools",
+        "Bash,PowerShell,Edit,Write,NotebookEdit,Agent,Task,Skill,WebFetch,WebSearch",
+        "--no-session-persistence",
+        "--system-prompt-snapshot",
+        "off"
+      ],
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ]
+    },
+    "topology": {
+      "claudeLimit": 1,
+      "auxiliaryNodeProcesses": 2,
+      "promptCount": 0,
+      "retries": 0
+    },
+    "cliCompatibility": "unconfirmed",
+    "transport": {
+      "cliCompatibility": "unconfirmed",
+      "outcome": "failed",
+      "stopAccepted": false,
+      "initialize": "pending",
+      "getSettings": "not_sent",
+      "sessionState": "unknown",
+      "inventoryObserved": false,
+      "protocolFailure": "system_message_unsupported",
+      "reasons": [
+        "protocol_unknown",
+        "process_failed"
+      ],
+      "stdoutBytes": 162,
+      "stderrBytes": 0,
+      "elapsedMs": 297,
+      "stdin": "finished",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 143,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "signals": [
+          {
+            "signal": "SIGTERM",
+            "target": "process",
+            "status": "sent"
+          }
+        ],
+        "wait": "settled",
+        "issues": [],
+        "descendants": "not_guaranteed"
+      }
+    },
+    "artifacts": {
+      "cwdBefore": {
+        "state": "present",
+        "kind": "directory",
+        "size": 64,
+        "mtimeMs": 1792061113097.9817
+      },
+      "cwdAfter": {
+        "state": "present",
+        "kind": "directory",
+        "size": 64,
+        "mtimeMs": 1792061113097.9817
+      },
+      "remoteBefore": {
+        "state": "missing"
+      },
+      "remoteAfter": {
+        "state": "missing"
+      },
+      "cleanup": "removed"
+    },
+    "supervisor": {
+      "cli": {
+        "state": "exited",
+        "exitCode": 143,
+        "signal": null
+      },
+      "worker": {
+        "state": "exited",
+        "exitCode": 0,
+        "signal": null
+      },
+      "signals": [
+        {
+          "signal": "SIGTERM",
+          "target": "process",
+          "status": "sent",
+          "process": "cli"
+        }
+      ],
+      "reasons": [],
+      "elapsedMs": 303,
+      "deadline": false,
+      "stopAccepted": false,
+      "descendants": "not_guaranteed"
+    }
+  },
+  "postRun": {
+    "ownCwdAbsent": true,
+    "verification": "Отдельный ls -ld после пробы: No such file or directory"
+  },
+  "limitations": [
+    "Сохранена только закрытая проекция стенда; исходные stdout/stderr, settings/account и значения env не сохранялись.",
+    "system_message_unsupported означает JSON-объект с type=system, не принятый веткой subtype=init. Конкретный subtype и содержимое не сохранены; нельзя утверждать, что это безопасное уведомление или объяснение первого отказа.",
+    "Одинаковые 162 байта двух проб не доказывают равенство содержимого ответов.",
+    "ExitCode 143 и signal=null наблюдались отдельно от успешной отправки SIGTERM; код не подменяется сигналом завершения.",
+    "get_settings не отправлялся; совместимость CLI, runtime-версия, пригодность production-источника и модельная приёмка не подтверждены.",
+    "Неизменность допустимых metadata не доказывает отсутствие прочих сетевых или файловых эффектов; detached-потомки не охватываются.",
+    "Разрешённая одна повторная проба израсходована; нового cwd и следующего запуска после неё не создавалось."
+  ]
+}
