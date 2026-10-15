@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -16,12 +16,10 @@ afterEach(() => {
   vi.useRealTimers(); vi.restoreAllMocks();
   while (directories.length) rmSync(directories.pop()!, { recursive: true, force: true });
 });
-const enoent = (): Error => Object.assign(new Error('SECRET-filesystem-message'), { code: 'ENOENT' });
 function probes(overrides: Partial<AdmissionProbes> = {}): AdmissionProbes {
   return {
-    platform: 'darwin',
     stat: async () => ({ size: 1234, mtimeMs: 1000, isFile: true }),
-    readFile: async () => { throw enoent(); }, ...overrides,
+    ...overrides,
   };
 }
 const assess = (context = syntheticContext(), facts = syntheticFacts(context)) => admission.assessPracticalFacts(context, facts);
@@ -35,7 +33,7 @@ describe('P2b: production-алгоритм над явно synthetic факта�
     expect(result.expectedInventory).toEqual(syntheticExpectation());
     expect(result.contextFingerprint).toMatch(/^[a-f0-9]{64}$/);
     expect(result.detail).toContain('synthetic');
-    expect(result.limitations).toEqual(['no_os_sandbox', 'no_provider_only_network', 'detached_children_not_guaranteed']);
+    expect(result.limitations).toEqual(['no_os_sandbox', 'no_provider_only_network', 'detached_children_not_guaranteed', 'cli_configuration_not_audited']);
     expect(result).not.toHaveProperty('evidence'); expect(result).not.toHaveProperty('launch');
     expect(context.detection.capabilities.readOnly).toBe('unverified');
   });
@@ -79,11 +77,34 @@ describe('P2b: production-алгоритм над явно synthetic факта�
     expect(JSON.stringify(result)).not.toContain('SECRET');
   });
 
-  it.each([[], ['file'], ['file', 'os-policy'], ['file', 'server-managed']].map(observed => ({ observed })))('не все managed-источники наблюдены: $observed', ({ observed }) => {
+  it.each([[], ['file'], ['file', 'os-policy'], ['file', 'server-managed']].map(observed => ({ observed })))('частичное наблюдение $observed не требует полного аудита', ({ observed }) => {
     const context = syntheticContext(); const facts = syntheticFacts(context);
     if (facts.managed.state !== 'known') throw new Error('Нужны synthetic данные');
     const result = assess(context, { ...facts, managed: syntheticKnown({ ...facts.managed.value, observed } as typeof facts.managed.value) });
-    expect(result).toMatchObject({ status: 'blocked', reason: 'prerequisite_unknown' });
+    expect(result.status).toBe('ready');
+    expect(result.limitations).toContain('cli_configuration_not_audited');
+  });
+
+  it.each(['unobservable', 'unreadable'] as const)('managed %s допускается без превращения в known empty', reason => {
+    const context = syntheticContext();
+    const facts: ClaudeAdmissionFacts = { ...syntheticFacts(context), managed: { state: 'unknown', reason } };
+    const before = structuredClone(facts);
+    const result = assess(context, facts);
+    expect(result.status).toBe('ready');
+    expect(result.limitations).toContain('cli_configuration_not_audited');
+    expect(result.detail).toContain('полностью не проверяется');
+    expect(facts).toEqual(before);
+    expect(facts.managed).not.toHaveProperty('value');
+  });
+
+  it.each([
+    { state: 'unknown', reason: 'executable_config' },
+    { state: 'conflict', reason: 'unobservable' },
+    { state: 'conflict', reason: 'unreadable' },
+  ])('несовместимые managed state/reason $state/$reason не обходят отказ', managed => {
+    const context = syntheticContext();
+    expect(assess(context, { ...syntheticFacts(context), managed } as ClaudeAdmissionFacts))
+      .toMatchObject({ status: 'blocked', reason: 'assessment_failed' });
   });
 
   it('явный конфликт обязательной политики блокирует, детали берутся из закрытого словаря', () => {
@@ -153,41 +174,37 @@ describe('P2b: production-алгоритм над явно synthetic факта�
   });
 });
 
-describe('P2b: production-сборщик с искусственными файловыми данными', () => {
-  it.each(['absent', 'empty', 'null', 'array', 'damaged', 'denied'] as const)('%s managed-файл не подтверждает MDM/server-managed', async form => {
+describe('P2b: production-сборщик доверяет штатной конфигурации CLI', () => {
+  it('собирает только identity executable, не обращается к конфигурации или credentials', async () => {
     const context = syntheticContext();
-    const read = vi.fn(async (): Promise<string> => {
-      if (form === 'absent') throw enoent();
-      if (form === 'denied') throw Object.assign(new Error('SECRET-error'), { code: 'EACCES' });
-      return { empty: '{}', null: 'null', array: '[]', damaged: 'SECRET-broken-json' }[form];
+    const stat = vi.fn(async (path: string) => {
+      if (path !== context.detection.binaryPath) throw new Error('SECRET-unexpected-path');
+      return { size: 1234, mtimeMs: 1000, isFile: true };
     });
-    const facts = await admission.collectClaudeFacts(context, probes({ readFile: read }));
-    expect(read).toHaveBeenCalledTimes(2);
-    expect(facts.managed).toMatchObject({ state: 'unknown', reason: ['absent', 'empty'].includes(form) ? 'unobservable' : 'unreadable' });
-    expect(assess(context, facts)).toMatchObject({ status: 'blocked', reason: 'prerequisite_unknown' });
-    expect(JSON.stringify(facts)).not.toContain('SECRET');
-  });
-
-  it.each(['hooks', 'mcpServers', 'enabledPlugins', 'env', 'apiKeyHelper', 'permissions'])('managed %s: конфликт, без raw-конфигурации', async key => {
-    const context = syntheticContext();
-    const facts = await admission.collectClaudeFacts(context, probes({ readFile: async () => JSON.stringify({ [key]: { command: 'SECRET-command', TOKEN: 'SECRET-token' } }) }));
-    expect(facts.managed.state).toBe('conflict');
-    expect(assess(context, facts)).toMatchObject({ status: 'blocked', reason: 'configuration_conflict' });
+    const io = { stat, get readFile(): never { throw new Error('SECRET-config-access'); } };
+    const facts = await admission.collectClaudeFacts(context, io);
+    expect(stat).toHaveBeenCalledExactlyOnceWith(context.detection.binaryPath);
+    expect(facts.managed).toEqual({ state: 'unknown', reason: 'unobservable' });
+    expect(assess(context, facts)).toMatchObject({ status: 'ready', limitations: expect.arrayContaining(['cli_configuration_not_audited']) });
     expect(JSON.stringify([facts, assess(context, facts)])).not.toContain('SECRET');
   });
 
-  it('локальный искусственный файл читается production-алгоритмом, исполнитель не запускается', async () => {
+  it('production stat собственного файла даёт ready с unknown без запуска executable', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'vs-p2b-data-')); directories.push(dir);
-    const bin = join(dir, 'never-executed'); const config = join(dir, 'managed.json');
+    const bin = join(dir, 'never-executed');
     writeFileSync(bin, 'synthetic executable identity only');
-    writeFileSync(config, '{"hooks":{"SECRET":{"command":"SECRET-command"}}}');
     const context = syntheticContext(dir, bin);
-    const facts = await admission.collectClaudeFacts(context, probes({
-      stat: async path => { const st = statSync(path); return { size: st.size, mtimeMs: st.mtimeMs, isFile: st.isFile() }; },
-      readFile: async () => readFileSync(config, 'utf8'),
-    }));
+    const facts = await admission.collectClaudeFacts(context);
     expect(facts.executable).toMatchObject({ state: 'known', value: { path: bin, size: 34 } });
-    expect(facts.managed.state).toBe('conflict');
+    expect(facts.managed).toEqual({ state: 'unknown', reason: 'unobservable' });
+    expect(assess(context, facts).status).toBe('ready');
+    const evaluator = createProductionAdmission();
+    const first = await evaluator.assess(context);
+    if (first.status !== 'ready') throw new Error('Не получен допуск тестового контекста');
+    expect(await evaluator.recheck(context, first.contextFingerprint)).toBe(true);
+    writeFileSync(bin, 'different synthetic executable contents');
+    expect(statSync(bin).size).not.toBe(34);
+    expect(await evaluator.recheck(context, first.contextFingerprint)).toBe(false);
   });
 
   it.each([false, 'unreadable'] as const)('исполняемый файл %s не даёт ready', async kind => {
@@ -261,7 +278,7 @@ async function outcome(run: AgentRun) {
 }
 
 /** Меняется только сбор фактов; factory, алгоритм, recheck и интеграция production остаются настоящими. */
-function integrated(collect: ClaudeFactCollector = async context => syntheticFacts(context), processRun = processDouble()) {
+function integrated(collect: ClaudeFactCollector = context => admission.collectClaudeFacts(context, probes()), processRun = processDouble()) {
   vi.spyOn(admission, 'createClaudeAdmission').mockImplementation(() => createProductionAdmission({ collect }));
   const context = syntheticContext();
   const start = vi.fn<(request: ProcessRequest) => ProcessRun>(() => processRun);
@@ -271,13 +288,25 @@ function integrated(collect: ClaudeFactCollector = async context => syntheticFac
 }
 
 describe('P2b: production-интеграция и сохранение lifecycle P2a на doubles', () => {
-  it('без assessPractical подключён production-сборщик, unknown managed блокирует prompt', async () => {
-    const h = integrated(context => admission.collectClaudeFacts(context, probes()));
+  it('production-сборщик допускает unknown, явно сообщает предел и сохраняет init/completion проверки', async () => {
+    const collect = vi.fn((context: PracticalAdmissionContext) => admission.collectClaudeFacts(context, probes()));
+    const h = integrated(collect);
     const run = await h.adapter.start(h.context.request);
     const { result } = await outcome(run);
-    expect(result).toMatchObject({ kind: 'error', reason: 'practical_admission_blocked', completion: { process: { state: 'not_started' } } });
-    expect(result.kind === 'error' && result.detail).toContain('managed');
-    expect(result.kind === 'error' && result.detail).not.toContain('assessment_missing');
+    expect(result).toMatchObject({ kind: 'success', stopAccepted: false, completion: completion() });
+    expect(collect).toHaveBeenCalledTimes(2);
+    expect(h.start).toHaveBeenCalledTimes(1);
+    expect(run.diagnostics.find(item => item.code === 'practical_limitations')?.detail).toContain('cli_configuration_not_audited');
+  });
+
+  it('конкретный конфликт после первоначального unknown останавливает recheck до prompt', async () => {
+    let calls = 0;
+    const h = integrated(async context => ({ ...syntheticFacts(context), managed: ++calls === 1
+      ? { state: 'unknown', reason: 'unobservable' }
+      : { state: 'conflict', reason: 'executable_config', items: ['managed-settings.permissions'] } }));
+    const { result } = await outcome(await h.adapter.start(h.context.request));
+    expect(result).toMatchObject({ kind: 'error', reason: 'practical_admission_blocked' });
+    expect(result.kind === 'error' && result.detail).toContain('context_changed');
     expect(h.start).not.toHaveBeenCalled();
   });
 
@@ -307,11 +336,11 @@ describe('P2b: production-интеграция и сохранение lifecycle
     const entered = deferred<PracticalAdmissionContext>(); const pending = deferred<ClaudeAdmissionFacts>(); let calls = 0;
     const h = integrated(async context => {
       if (++calls === pauseAt) { entered.resolve(context); return pending.promise; }
-      return syntheticFacts(context);
+      return { ...syntheticFacts(context), managed: { state: 'unknown', reason: 'unobservable' } };
     });
     const run = await h.adapter.start(h.context.request);
     const context = await entered.promise;
-    const stopping = run.interrupt(); pending.resolve(syntheticFacts(context)); await stopping;
+    const stopping = run.interrupt(); pending.resolve({ ...syntheticFacts(context), managed: { state: 'unknown', reason: 'unobservable' } }); await stopping;
     const { result } = await outcome(run);
     expect(result).toMatchObject({ kind: 'interrupted', stopAccepted: true, completion: { process: { state: 'not_started' } } });
     expect(h.start).not.toHaveBeenCalled();

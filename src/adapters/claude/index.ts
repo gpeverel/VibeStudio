@@ -8,7 +8,7 @@ import { buildClaudeArgs, buildClaudeEnv, forbiddenEnvNames } from './args.ts';
 import { detectClaude } from './detect.ts';
 import { ClaudeStreamParser } from './parser.ts';
 import type { ParserOptions } from './parser.ts';
-import { UNVERIFIED_ACCESS_DETAIL, getAccessProfileKind, isRuntimeInventoryExpectation, validateAccessProfile } from './profile.ts';
+import { PRACTICAL_LIMITATIONS, UNVERIFIED_ACCESS_DETAIL, getAccessProfileKind, isRuntimeInventoryExpectation, validateAccessProfile } from './profile.ts';
 import type { AccessVerifier, PracticalAdmissionContext, PracticalAdmissionEvaluator, PracticalAdmissionLimitation, PracticalAdmissionReason, RuntimeInventoryExpectation } from './profile.ts';
 
 export interface ClaudeAdapterOptions {
@@ -20,8 +20,8 @@ export interface ClaudeAdapterOptions {
   /** Только strict-маршрут (профиль без kind): проверенный launch. */
   verifyAccess?: AccessVerifier;
   /** Только практический маршрут. Доверенная композиция/тестовый стенд, никогда не IPC и не config.
-   * Без неё работает production-оценщик admission.ts (P2b): на реальной CLI он блокирует допуск,
-   * пока эффективная managed-политика не наблюдаема. Переопределение — явная подстановка. */
+   * Без неё работает production-оценщик admission.ts (P2b), доверяющий штатной конфигурации CLI
+   * при сохранении проверок обязательных настроек запуска. Переопределение — явная подстановка. */
   assessPractical?: PracticalAdmissionEvaluator;
   parserLimits?: ParserOptions;
   maxQueue?: number;
@@ -70,8 +70,6 @@ function isCleanCompletion(completion: ProcessCompletion): boolean {
 
 const PRACTICAL_REASONS: readonly PracticalAdmissionReason[] = ['assessment_missing', 'project_untrusted', 'prerequisite_unknown', 'configuration_conflict', 'cli_unsupported', 'assessment_failed',
   'context_changed', 'runtime_inventory_unknown', 'runtime_inventory_mismatch'];
-/** Все три ограничения безусловны для practical-local-v1: пропуск не означает их отсутствие. */
-const PRACTICAL_LIMITATIONS: readonly PracticalAdmissionLimitation[] = ['no_os_sandbox', 'no_provider_only_network', 'detached_children_not_guaranteed'];
 interface PracticalVerdict {
   error?: 'practical_admission_blocked' | 'practical_admission_unsupported';
   reason: PracticalAdmissionReason | 'ready';
@@ -217,9 +215,11 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): AgentAd
         return { ...payload, schemaVersion: 1, eventId: randomUUID(), sessionId: request.sessionId,
           turnId: request.turnId, participantId: request.participantId, seq, timestamp: new Date().toISOString() };
       };
-      const diagnostic = (item: AgentDiagnostic): void => {
+      const diagnostic = (item: AgentDiagnostic): boolean => {
         const bytes = Buffer.byteLength(item.code + item.detail);
-        if (diagnosticBytes + bytes <= limits.maxDiagBytes) { diagnostics.push(item); diagnosticBytes += bytes; }
+        if (diagnosticBytes + bytes > limits.maxDiagBytes) return false;
+        diagnostics.push(item); diagnosticBytes += bytes;
+        return true;
       };
       const finish = (result: AgentRunResult): void => {
         if (finished) return;
@@ -304,12 +304,16 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): AgentAd
             try { admission = await assess(context); } catch { admission = undefined; }
             if (aborted()) { finish({ kind: 'interrupted' }); return; }
             const verdict = checkPracticalAdmission(admission, productionAdmission !== undefined);
-            if (verdict.limitations.length) diagnostic({ code: 'practical_limitations', detail: verdict.limitations.join(',') });
+            const limitationsVisible = verdict.limitations.length > 0
+              && diagnostic({ code: 'practical_limitations', detail: verdict.limitations.join(',') });
             if (verdict.error) {
               finish({ kind: 'error', reason: verdict.error, detail: `Практический допуск не выдан (${verdict.reason}): ${verdict.detail}` }); return;
             }
-            // Допуск относится к контексту на момент оценки: executable/версия/конфигурация перепроверяются прямо перед запуском.
-            // Это не исключает гонки после этой проверки.
+            if (!limitationsVisible) {
+              finish({ kind: 'error', reason: 'practical_admission_blocked', detail: 'Практический допуск не выдан (assessment_failed): лимит диагностики не позволяет сообщить границы допуска' }); return;
+            }
+            // Повторно собираем доступные факты executable и сверяем отпечаток с замороженным контекстом.
+            // Detect версии/auth не повторяется, глобальная конфигурация не читается; внешние гонки остаются.
             if (productionAdmission && verdict.contextFingerprint) {
               let unchanged = false;
               try { unchanged = await productionAdmission.recheck(context, verdict.contextFingerprint); } catch { unchanged = false; }

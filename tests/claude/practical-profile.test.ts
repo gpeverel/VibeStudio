@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import * as admission from '../../src/adapters/claude/admission.ts';
 import { buildClaudeArgs } from '../../src/adapters/claude/args.ts';
 import { createClaudeAdapter } from '../../src/adapters/claude/index.ts';
 import type { ClaudeAdapterOptions } from '../../src/adapters/claude/index.ts';
@@ -9,7 +8,7 @@ import type { PracticalAdmission, PracticalAdmissionContext } from '../../src/ad
 import { createProcessRunner } from '../../src/adapters/process-runner/index.ts';
 import type { AgentCapabilities, AgentDetection, AgentEvent, AgentRun, AgentRunRequest } from '../../src/core/ports/agent.ts';
 import type { ProcessRequest, ProcessRun } from '../../src/core/ports/process-runner.ts';
-import { jsonLines, syntheticExpectation, syntheticFacts, syntheticInit } from '../helpers/claude/practical-evidence.ts';
+import { jsonLines, syntheticExpectation, syntheticInit } from '../helpers/claude/practical-evidence.ts';
 import { flagValue, legacyStrictProfile, legacyStrictRequest, practicalLocalReadProfile, practicalRequest, readOnlyProfile, request } from '../helpers/claude/requests.ts';
 import { Stand } from '../helpers/claude/stand.ts';
 import type { FakeScenario } from '../helpers/claude/stand.ts';
@@ -18,7 +17,7 @@ import type { FakeScenario } from '../helpers/claude/stand.ts';
 // Эти тесты не аттестуют настоящие CLI/auth/config и не заменяют приёмку P2b.
 const SYNTHETIC_READY: PracticalAdmission = {
   status: 'ready', detail: 'synthetic: разрешение только тестов P1',
-  limitations: ['no_os_sandbox', 'no_provider_only_network', 'detached_children_not_guaranteed'],
+  limitations: ['no_os_sandbox', 'no_provider_only_network', 'detached_children_not_guaranteed', 'cli_configuration_not_audited'],
   expectedInventory: syntheticExpectation(), contextFingerprint: 'c'.repeat(64),
 };
 const CAPS: AgentCapabilities = {
@@ -40,12 +39,6 @@ afterEach(async () => {
   managedRuns.clear(); vi.useRealTimers(); vi.restoreAllMocks();
   while (stands.length) stands.pop()?.cleanup();
 });
-const productionFactory = admission.createClaudeAdmission;
-function syntheticUnknownManaged(): void {
-  vi.spyOn(admission, 'createClaudeAdmission').mockImplementation(() => productionFactory({
-    collect: async context => ({ ...syntheticFacts(context), managed: { state: 'unknown', reason: 'unobservable' } }),
-  }));
-}
 
 function harness(options: Partial<ClaudeAdapterOptions> = {}, scenario = success(), detectionPatch: Partial<AgentDetection> = {}) {
   const s = new Stand();
@@ -142,13 +135,33 @@ describe('P1: legacy strict не получает практический до�
 });
 
 describe('P1: practical требует отдельную полную оценку', () => {
-  it('нет assessPractical: production-оценка unknown managed запрещает prompt, strict verifier не вызывается', async () => {
-    syntheticUnknownManaged();
+  it('без подстановки admission: штатный сборщик допускает собственный Node-double и сообщает отсутствие аудита', async () => {
     const h = harness({ assessPractical: undefined });
-    const { result, run } = await blocked(h);
-    expect(result).toMatchObject({ reason: 'practical_admission_blocked' });
-    expect(JSON.stringify([result, run.diagnostics])).toContain('prerequisite_unknown');
+    const run = await h.adapter.start(h.req());
+    const { result } = await outcome(run);
+    expect(result.kind).toBe('success');
+    expect(h.launch).toHaveBeenCalledTimes(1);
+    expect(h.assess).not.toHaveBeenCalled();
+    expect(run.diagnostics.find(item => item.code === 'practical_limitations')?.detail).toContain('cli_configuration_not_audited');
     expect(h.verify).not.toHaveBeenCalled();
+  });
+
+  it.each([1, Buffer.byteLength('practical_limitations' + SYNTHETIC_READY.limitations.join(',')) - 1])('maxDiagBytes=%s: обязательные границы допуска не теряются молча', async maxDiagBytes => {
+    const h = harness({ assessPractical: undefined, maxDiagBytes });
+    const { result } = await blocked(h);
+    expect(result).toMatchObject({ reason: 'practical_admission_blocked' });
+    expect(result.kind === 'error' && result.detail).toContain('лимит диагностики');
+  });
+
+  it('ровно достаточный diagnostic budget сохраняет все ограничения до запуска Node-double', async () => {
+    const maxDiagBytes = Buffer.byteLength('practical_limitations' + SYNTHETIC_READY.limitations.join(','));
+    const h = harness({ assessPractical: undefined, maxDiagBytes });
+    const run = await h.adapter.start(h.req());
+    const { result } = await outcome(run);
+    expect(result.kind).toBe('success');
+    expect(run.diagnostics.find(item => item.code === 'practical_limitations')?.detail.split(','))
+      .toEqual(SYNTHETIC_READY.limitations);
+    expect(h.launch).toHaveBeenCalledTimes(1);
   });
 
   it.each(['project_untrusted', 'prerequisite_unknown', 'configuration_conflict'] as const)('blocked/%s запрещает prompt без fallback', async reason => {
@@ -174,6 +187,7 @@ describe('P1: practical требует отдельную полную оцен�
     ['пустое пояснение', { ...SYNTHETIC_READY, detail: '' }],
     ['нет ограничений', { status: 'ready', detail: 'synthetic', limitations: [] }],
     ['часть ограничений отсутствует', { status: 'ready', detail: 'synthetic', limitations: ['no_os_sandbox'] }],
+    ['старый ready без новой границы доверия', { ...SYNTHETIC_READY, limitations: SYNTHETIC_READY.limitations.filter(item => item !== 'cli_configuration_not_audited') }],
     ['ограничение неизвестно', { status: 'ready', detail: 'synthetic', limitations: ['unknown'] }],
     ['ограничения дублируются', { ...SYNTHETIC_READY, limitations: [...SYNTHETIC_READY.limitations, 'no_os_sandbox'] }],
   ])('ошибочная runtime-оценка: %s', async (_name, admission) => {
@@ -194,7 +208,7 @@ describe('P1: practical требует отдельную полную оцен�
     expect(JSON.stringify([result, run.diagnostics])).not.toContain('SECRET');
     const diagnostic = run.diagnostics.find(item => item.code === 'practical_limitations');
     expect(diagnostic?.detail.split(',').sort()).toEqual([
-      'detached_children_not_guaranteed', 'no_os_sandbox', 'no_provider_only_network',
+      'cli_configuration_not_audited', 'detached_children_not_guaranteed', 'no_os_sandbox', 'no_provider_only_network',
     ]);
   });
 
@@ -207,8 +221,7 @@ describe('P1: practical требует отдельную полную оцен�
   });
 
   it('ready/verified из данных запроса не заменяют доверенную оценку', async () => {
-    syntheticUnknownManaged();
-    const h = harness({ assessPractical: undefined });
+    const h = harness({ assessPractical: undefined }, success(), { version: null });
     const injected = { ...h.req(), admission: SYNTHETIC_READY, verified: true };
     const { result } = await blocked(h, injected);
     expect(result).toMatchObject({ reason: 'practical_admission_blocked' });

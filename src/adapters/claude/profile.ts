@@ -39,7 +39,11 @@ export type PracticalAdmissionReason =
   | 'configuration_conflict' | 'cli_unsupported' | 'assessment_failed'
   | 'context_changed' | 'runtime_inventory_unknown' | 'runtime_inventory_mismatch';
 export type PracticalAdmissionLimitation =
-  | 'no_os_sandbox' | 'no_provider_only_network' | 'detached_children_not_guaranteed';
+  | 'no_os_sandbox' | 'no_provider_only_network' | 'detached_children_not_guaranteed' | 'cli_configuration_not_audited';
+/** Обязательные границы принятой модели доверия, включая отсутствие полного аудита CLI. */
+export const PRACTICAL_LIMITATIONS: readonly PracticalAdmissionLimitation[] = Object.freeze([
+  'no_os_sandbox', 'no_provider_only_network', 'detached_children_not_guaranteed', 'cli_configuration_not_audited',
+]);
 
 /** Допуск только конкретного practical-запроса; не AccessVerification и не launch.
  * Ready без привязки сохраняет старую synthetic-подстановку P1.
@@ -47,7 +51,7 @@ export type PracticalAdmissionLimitation =
  * Production обязан возвращать ProductionPracticalAdmission с обоими полями. */
 export type PracticalAdmission = {
   detail: string;
-  /** Ready требует всех трёх ограничений v1: отсутствие данных не означает отсутствие ограничений. */
+  /** Ready требует всех PRACTICAL_LIMITATIONS: отсутствие данных не означает отсутствие ограничений. */
   limitations: readonly PracticalAdmissionLimitation[];
 } & (
   | { status: 'ready'; contextFingerprint?: never; expectedInventory?: never }

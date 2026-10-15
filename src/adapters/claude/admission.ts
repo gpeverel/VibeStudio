@@ -1,14 +1,14 @@
 import { createHash } from 'node:crypto';
-import { readFile, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { stat } from 'node:fs/promises';
 import type { AgentCapabilities } from '../../core/ports/agent.ts';
 import { CLAUDE_ENV_ALLOWLIST } from './args.ts';
-import { BLOCKED_TOOLS, READ_ONLY_TOOLS, inventoryId } from './profile.ts';
-import type { PracticalAdmissionContext, PracticalAdmissionEvaluator, PracticalAdmissionLimitation, PracticalAdmissionReason, ProductionPracticalAdmission, RuntimeInventoryExpectation } from './profile.ts';
+import { BLOCKED_TOOLS, PRACTICAL_LIMITATIONS, READ_ONLY_TOOLS, inventoryId } from './profile.ts';
+import type { PracticalAdmissionContext, PracticalAdmissionEvaluator, PracticalAdmissionReason, ProductionPracticalAdmission, RuntimeInventoryExpectation } from './profile.ts';
 
 /** Практический допуск Claude (P2b): чистый алгоритм над фактами + production-сборщик фактов.
- * Ready выдаётся только при известных обязательных предпосылках. Неизвестное остаётся неизвестным
- * и блокирует допуск: отсутствие managed-файла не доказывает отсутствие managed/MDM/server-политики.
+ * Штатная конфигурация установленной CLI входит в принятую пользователем модель доверия.
+ * Полнота managed-наблюдения не обязательна: unknown остаётся unknown, а не known empty.
+ * Неподтверждённые обязательные настройки запуска и конкретные конфликты по-прежнему блокируют.
  * Допуск привязан отпечатком к executable, версии, argv, значениям разрешённого env, cwd и профилю;
  * это предпусковая проверка и она не обещает отсутствия внешних гонок. */
 
@@ -20,17 +20,19 @@ export type AdmissionFact<T, R extends string> =
   | { readonly state: 'unknown'; readonly reason: R }
   | { readonly state: 'conflict'; readonly reason: R; /** Только метки из закрытого словаря managed-ключей. */ readonly items?: readonly string[] };
 export type ExecutableFactReason = 'path_unknown' | 'unavailable' | 'not_regular_file';
+/** executable_config — доказанный конфликт с режимом, не само наличие пользовательского helper/hook. */
 export type ManagedFactReason = 'unobservable' | 'unreadable' | 'executable_config';
 
 export interface ExecutableIdentity { readonly path: string; readonly size: number; readonly mtimeMs: number }
-/** Для effective managed-политики нужны все три источника; файл — лишь один из них. */
+/** Известные категории наблюдений; полнота их покрытия больше не является условием допуска. */
 export type ManagedSource = 'file' | 'os-policy' | 'server-managed';
-export const REQUIRED_MANAGED_SOURCES: readonly ManagedSource[] = ['file', 'os-policy', 'server-managed'];
-/** policyDigest — sha256 нормализованной effective-политики (не значения): разные политики дают разные отпечатки. */
+const MANAGED_SOURCES: readonly ManagedSource[] = ['file', 'os-policy', 'server-managed'];
+/** Необязательное наблюдение доверенного сборщика, ограниченное перечисленными источниками.
+ * Digest отражает наблюдённую политику и не доказывает полноту effective-конфигурации. */
 export interface ManagedObservation {
   readonly observed: readonly ManagedSource[];
   readonly policyDigest: string;
-  /** Явный известный итог: effective-политика не задаёт hooks/MCP/plugins/env/helpers/allow-права. */
+  /** В наблюдённой области нет исполняемой конфигурации; остальные источники могут быть неизвестны. */
   readonly executableConfig: 'none';
 }
 
@@ -42,20 +44,11 @@ export interface ClaudeAdmissionFacts {
 export type ClaudeFactCollector = (context: PracticalAdmissionContext) => Promise<ClaudeAdmissionFacts>;
 
 export interface AdmissionProbes {
-  readonly platform: NodeJS.Platform;
   stat(path: string): Promise<{ size: number; mtimeMs: number; isFile: boolean }>;
-  readFile(path: string, maxBytes: number): Promise<string>;
 }
-const MAX_MANAGED_BYTES = 262_144;
 const DETAIL_LIMIT = 480;
 const defaultProbes: AdmissionProbes = {
-  platform: process.platform,
   stat: async path => { const info = await stat(path); return { size: info.size, mtimeMs: info.mtimeMs, isFile: info.isFile() }; },
-  readFile: async (path, maxBytes) => {
-    const info = await stat(path);
-    if (info.size > maxBytes) throw Object.assign(new Error('too large'), { code: 'EFBIG' });
-    return readFile(path, 'utf8');
-  },
 };
 
 /** Наблюдаемый контракт: init 2.1.295 (реальные replay). Любая другая версия unsupported до своего контракта. */
@@ -67,28 +60,18 @@ export const BUILTIN_AGENT_NAMES = ['claude', 'Explore', 'general-purpose', 'Pla
 const REQUIRED_CAPABILITIES: readonly (keyof AgentCapabilities)[] = [
   'streamJson', 'partialMessages', 'sessionId', 'restricted', 'safeMode', 'tools', 'settingSources', 'strictMcpConfig', 'permissionPrompts',
 ];
-const PRACTICAL_LIMITATIONS: readonly PracticalAdmissionLimitation[] = ['no_os_sandbox', 'no_provider_only_network', 'detached_children_not_guaranteed'];
 /** Env-учётные данные: видимый вход из них неотличим от штатного входа CLI. */
 const CREDENTIAL_ENV = ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN'] as const;
 const EXECUTABLE_MANAGED_KEYS = ['hooks', 'mcpServers', 'enabledPlugins', 'extraKnownMarketplaces', 'env', 'apiKeyHelper', 'awsAuthRefresh', 'awsCredentialExport', 'statusLine', 'permissions'] as const;
 const MANAGED_LABELS = ['managed-settings', 'managed-mcp'] as const;
 const MANAGED_ITEMS: ReadonlySet<string> = new Set(MANAGED_LABELS.flatMap(label => EXECUTABLE_MANAGED_KEYS.map(key => `${label}.${key}`)));
 
-/** Известные документированные пути файлов; перечень не исчерпывает managed-источники. */
-function managedFilePaths(platform: NodeJS.Platform): string[] {
-  const dir = platform === 'darwin' ? '/Library/Application Support/ClaudeCode'
-    : platform === 'linux' ? '/etc/claude-code' : platform === 'win32' ? 'C:\\Program Files\\ClaudeCode' : '';
-  return dir ? [join(dir, 'managed-settings.json'), join(dir, 'managed-mcp.json')] : [];
-}
-const errno = (cause: unknown): string => String((cause as { code?: unknown } | null)?.code ?? 'UNKNOWN').slice(0, 32);
-
-/** Production-сборщик: только чтение файловой системы, без запуска процессов и без модели.
- * Effective managed (OS-политика, server-managed) документированным интерфейсом CLI до запуска
- * не наблюдается, поэтому на реальных данных managed остаётся unknown и допуск блокируется. */
+/** Production проверяет метаданные executable, не читает конфигурацию/credentials и не запускает CLI.
+ * Глобальная/managed-политика доверена пользователю и явно остаётся ненаблюдённой.
+ * Отказы CLI и расхождения runtime inventory обрабатываются существующим адаптером. */
 export async function collectClaudeFacts(context: PracticalAdmissionContext, probes: AdmissionProbes = defaultProbes): Promise<ClaudeAdmissionFacts> {
   const executable = await collectExecutable(context.detection.binaryPath, probes);
-  const managed = await collectManaged(probes);
-  return { executable, managed };
+  return { executable, managed: { state: 'unknown', reason: 'unobservable' } };
 }
 
 async function collectExecutable(path: string | null, probes: AdmissionProbes): Promise<ClaudeAdmissionFacts['executable']> {
@@ -99,30 +82,6 @@ async function collectExecutable(path: string | null, probes: AdmissionProbes): 
     return { state: 'known', provenance: 'real', value: { path, size: info.size, mtimeMs: info.mtimeMs } };
   } catch { return { state: 'unknown', reason: 'unavailable' }; }
 }
-
-async function collectManaged(probes: AdmissionProbes): Promise<ClaudeAdmissionFacts['managed']> {
-  let unreadable = false;
-  const conflicts: string[] = [];
-  for (const path of managedFilePaths(probes.platform)) {
-    const label = path.endsWith('managed-mcp.json') ? 'managed-mcp' : 'managed-settings';
-    let text: string;
-    try { text = await probes.readFile(path, MAX_MANAGED_BYTES); }
-    catch (cause) {
-      // Отсутствие файла не доказывает отсутствие политики; недоступность — отдельная неизвестность.
-      if (errno(cause) !== 'ENOENT') unreadable = true;
-      continue;
-    }
-    let parsed: unknown;
-    try { parsed = JSON.parse(text); } catch { unreadable = true; continue; }
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) { unreadable = true; continue; }
-    // Только имена из закрытого списка: значения и прочие ключи не выдаются.
-    for (const key of EXECUTABLE_MANAGED_KEYS) if (key in parsed && !isEmpty((parsed as Record<string, unknown>)[key])) conflicts.push(`${label}.${key}`);
-  }
-  if (conflicts.length) return { state: 'conflict', reason: 'executable_config', items: conflicts };
-  return { state: 'unknown', reason: unreadable ? 'unreadable' : 'unobservable' };
-}
-const isEmpty = (value: unknown): boolean => value === undefined || value === null
-  || (Array.isArray(value) && !value.length) || (typeof value === 'object' && !Array.isArray(value) && !Object.keys(value as object).length);
 
 const BOOLEAN_FLAGS = ['--print', '--verbose', '--include-partial-messages', '--restricted', '--safe-mode', '--strict-mcp-config', '--disable-slash-commands', '--no-chrome', '--no-session-persistence'];
 const VALUE_FLAGS = ['--input-format', '--output-format', '--setting-sources', '--mcp-config', '--tools', '--permission-mode', '--permission-prompts', '--disallowedTools',
@@ -183,6 +142,7 @@ function stable(value: unknown): string {
 export function computeAdmissionFingerprint(context: PracticalAdmissionContext, facts: Pick<ClaudeAdmissionFacts, 'executable' | 'managed'>): string {
   const env = Object.entries(context.env).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   return createHash('sha256').update(stable({
+    trustPolicy: 'user-cli-configuration-v1',
     version: context.detection.version, binaryPath: context.detection.binaryPath, capabilities: context.detection.capabilities,
     executable: facts.executable, managed: facts.managed, args: context.args, env, cwd: context.request.cwd,
     profile: context.request.profile, resume: context.request.resume, agentSessionId: context.request.agentSessionId,
@@ -215,7 +175,7 @@ const EXECUTABLE_REASONS: Readonly<Record<ExecutableFactReason, string>> = {
 const MANAGED_REASONS: Readonly<Record<ManagedFactReason, string>> = {
   unobservable: 'effective managed-политика (OS-политика, server-managed) не наблюдаема документированным интерфейсом CLI; отсутствие managed-файлов её не доказывает',
   unreadable: 'managed-файл недоступен или повреждён; effective managed-политика не наблюдаема, отсутствие файлов её не доказывает',
-  executable_config: 'managed-политика задаёт исполняемую конфигурацию',
+  executable_config: 'наблюдён конфликт managed-политики с выбранным режимом',
 };
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const isProvenance = (value: unknown): value is FactProvenance => value === 'real' || value === 'synthetic';
@@ -235,11 +195,15 @@ const validExecutable = (value: Record<string, unknown>): boolean =>
 /** Array.from превращает пропуски разреженного массива в undefined: every их бы пропустил. */
 const validSources = (observed: readonly unknown[]): boolean => {
   const slots = Array.from(observed);
-  return new Set(slots).size === slots.length && slots.every(source => (REQUIRED_MANAGED_SOURCES as readonly unknown[]).includes(source));
+  return new Set(slots).size === slots.length && slots.every(source => (MANAGED_SOURCES as readonly unknown[]).includes(source));
 };
 const validManaged = (value: Record<string, unknown>): boolean =>
   Array.isArray(value.observed) && validSources(value.observed)
   && typeof value.policyDigest === 'string' && /^[0-9a-f]{64}$/.test(value.policyDigest) && value.executableConfig === 'none';
+function validManagedFact(fact: unknown): boolean {
+  if (!validFact(fact, Object.keys(MANAGED_REASONS), validManaged) || !isRecord(fact)) return false;
+  return fact.state === 'known' || (fact.state === 'unknown' ? fact.reason !== 'executable_config' : fact.reason === 'executable_config');
+}
 const conflictItems = (items: readonly string[] | undefined): string => (items ?? []).filter(item => MANAGED_ITEMS.has(item)).join(', ');
 
 /** Чистый алгоритм: решение зависит только от контекста запуска и собранных фактов.
@@ -267,7 +231,7 @@ export function assessPracticalFacts(context: PracticalAdmissionContext, facts: 
   if (extraEnv.length) return verdict('blocked', 'configuration_conflict', `env вне allowlist: ${extraEnv.length} имён (имена не выводятся)`);
   const argvIssue = checkPracticalArgv(context);
   if (argvIssue) return verdict('blocked', 'configuration_conflict', argvIssue);
-  if (!isRecord(facts) || !validFact(facts.executable, Object.keys(EXECUTABLE_REASONS), validExecutable) || !validFact(facts.managed, Object.keys(MANAGED_REASONS), validManaged)) {
+  if (!isRecord(facts) || !validFact(facts.executable, Object.keys(EXECUTABLE_REASONS), validExecutable) || !validManagedFact(facts.managed)) {
     return verdict('blocked', 'assessment_failed', 'предпусковые факты неполны или повреждены');
   }
   const executable = facts.executable;
@@ -276,17 +240,15 @@ export function assessPracticalFacts(context: PracticalAdmissionContext, facts: 
   }
   if (executable.value.path !== detection.binaryPath) return verdict('blocked', 'configuration_conflict', 'идентичность исполняемого файла не совпадает с диагностикой');
   const managed = facts.managed;
-  if (managed.state !== 'known') {
-    const items = managed.state === 'conflict' ? conflictItems(managed.items) : '';
-    return verdict('blocked', managed.state === 'conflict' ? 'configuration_conflict' : 'prerequisite_unknown', `${MANAGED_REASONS[managed.reason]}${items ? `: ${items}` : ''}`);
+  if (managed.state === 'conflict') {
+    const items = conflictItems(managed.items);
+    return verdict('blocked', 'configuration_conflict', `${MANAGED_REASONS[managed.reason]}${items ? `: ${items}` : ''}`);
   }
-  const unobserved = REQUIRED_MANAGED_SOURCES.filter(source => !managed.value.observed.includes(source));
-  if (unobserved.length) return verdict('blocked', 'prerequisite_unknown', `managed-источники не наблюдены: ${unobserved.join(', ')}`);
-  const synthetic = executable.provenance === 'synthetic' || managed.provenance === 'synthetic';
+  const synthetic = executable.provenance === 'synthetic' || (managed.state === 'known' && managed.provenance === 'synthetic');
   return {
     status: 'ready',
     detail: `${synthetic ? 'synthetic-факты (не реальный запуск): ' : ''}допуск привязан к CLI ${detection.version}, argv, env, cwd и профилю; `
-      + 'регистрация builtin plugins не доказывает их исполнение, ранние hooks не исключены',
+      + 'штатная конфигурация CLI доверена пользователю и полностью не проверяется; ранние hooks не исключены',
     limitations: PRACTICAL_LIMITATIONS,
     contextFingerprint: computeAdmissionFingerprint(context, facts),
     expectedInventory: expectedInventoryFor(context),
