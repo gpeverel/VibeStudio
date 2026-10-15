@@ -11,7 +11,11 @@ import type { ProcessCompletion, ProcessCompletionIssue, ProcessSignalResult, Pr
  * outer — общий таймер этого JS-процесса. Независимого внешнего supervisor здесь нет.
  */
 export type InspectionChild = Pick<ChildProcessWithoutNullStreams,
-  'stdin' | 'stdout' | 'stderr' | 'on' | 'kill' | 'pid' | 'unref'>;
+  'stdin' | 'stdout' | 'stderr' | 'on' | 'pid' | 'unref'> & {
+  /** Мост возвращает результат владельца handle, а не факт отправки IPC.
+   * Неполученное подтверждение ограничено существующим drain/outer. */
+  kill(signal: 'SIGTERM' | 'SIGKILL'): boolean | Promise<boolean>;
+};
 export const INSPECTION_BUDGET = Object.freeze({ response: 10_000, work: 15_000, outer: 18_000,
   term: 1_000, kill: 1_000, drain: 1_000, line: 1_048_576, output: 2_097_152 });
 export type InspectionReason = 'spawn_failed' | 'protocol_unknown' | 'request_id_mismatch' | 'premature_response'
@@ -82,10 +86,18 @@ function projectSettings(value: unknown): SettingsProjection | undefined {
 }
 
 /** Только узкий transport API; возвращает конечный снимок, не verdict production admission. */
-export function inspectSettings(spawnOwnProcess: () => InspectionChild): {
+export interface InspectionOptions {
+  /** Общий t0 в шкале performance.now() этого worker; перенос не перезапускает бюджет. */
+  readonly startedAt?: number;
+  /** Только факт принятия, без payload. Не является конечным результатом. */
+  readonly onSettingsAccepted?: () => void;
+}
+export function inspectSettings(spawnOwnProcess: () => InspectionChild, options: InspectionOptions = {}): {
   readonly done: Promise<SettingsInspectionReport>; stop(): void;
 } {
-  const started = performance.now();
+  const now = performance.now();
+  const started = options.startedAt ?? now;
+  if (!Number.isFinite(started) || started > now) throw new Error('Некорректное начало диагностического бюджета');
   let resolve!: (report: SettingsInspectionReport) => void;
   const done = new Promise<SettingsInspectionReport>(yes => { resolve = yes; });
   let child: InspectionChild | undefined;
@@ -99,7 +111,8 @@ export function inspectSettings(spawnOwnProcess: () => InspectionChild): {
   let stdout: ProcessStreamState = 'not_started', stderr: ProcessStreamState = 'not_started';
   let stdoutBytes = 0, stderrBytes = 0, lineBytes = 0;
   let parts: Uint8Array[] = [];
-  const reasons: InspectionReason[] = [], issues: ProcessCompletionIssue[] = [], sent: ProcessSignalResult[] = [];
+  const reasons: InspectionReason[] = [], issues: ProcessCompletionIssue[] = [];
+  const attempts: { signal: 'SIGTERM' | 'SIGKILL'; result?: ProcessSignalResult }[] = [];
   const timers = new Set<ReturnType<typeof setTimeout>>();
   let drainTimer: ReturnType<typeof setTimeout> | undefined;
   const later = (ms: number, action: () => void) => {
@@ -119,6 +132,11 @@ export function inspectSettings(spawnOwnProcess: () => InspectionChild): {
   };
   const finish = () => {
     if (finished) return;
+    for (const attempt of attempts) if (!attempt.result) {
+      attempt.result = { signal: attempt.signal, target: 'process', status: 'failed' };
+      reason('signal_failed'); issue('signal_failed', attempt.signal === 'SIGTERM' ? 'interrupt' : 'kill');
+      deadline = true;
+    }
     const inputPending = stdin === 'unconfirmed' || writing && stdin !== 'errored';
     if (processState.state === 'unconfirmed') { reason('exit_unconfirmed'); issue('exit_unconfirmed', 'wait'); }
     if (child && inputPending) {
@@ -140,33 +158,41 @@ export function inspectSettings(spawnOwnProcess: () => InspectionChild): {
       outcome: stopAccepted ? 'stopped' : reasons.length ? (reasons.length === 1 && reasons[0] === 'request_rejected' ? 'rejected' : 'failed') : 'observed',
       stopAccepted, initialize, getSettings, sessionState, inventoryObserved, ...(settings ? { settings } : {}),
       reasons: [...reasons], stdoutBytes, stderrBytes, stdin, elapsedMs: Math.max(0, Math.round(performance.now() - started)),
-      completion: { process: processState, stdout, stderr, signals: [...sent], wait: deadline ? 'deadline' : 'settled',
+      completion: { process: processState, stdout, stderr, signals: attempts.map(attempt => attempt.result!), wait: deadline ? 'deadline' : 'settled',
         issues: [...issues], descendants: 'not_guaranteed' } }));
   };
   const settle = () => {
     if (processState.state !== 'unconfirmed' && stdout !== 'unconfirmed' && stderr !== 'unconfirmed'
-      && stdin !== 'unconfirmed' && (!writing || stdin === 'errored')) finish();
+      && stdin !== 'unconfirmed' && (!writing || stdin === 'errored') && attempts.every(attempt => attempt.result)) finish();
   };
   const drain = () => { if (!drainTimer) drainTimer = later(INSPECTION_BUDGET.drain, finish); settle(); };
   const signal = (name: 'SIGTERM' | 'SIGKILL') => {
     if (!child || finished || processState.state !== 'unconfirmed') return;
-    try {
-      const sentOk = child.kill(name);
-      sent.push({ signal: name, target: 'process', status: sentOk ? 'sent' : 'failed' });
-      if (!sentOk) { reason('signal_failed'); issue('signal_failed', name === 'SIGTERM' ? 'interrupt' : 'kill'); }
-    } catch (error) {
+    const attempt: typeof attempts[number] = { signal: name };
+    attempts.push(attempt);
+    const complete = (sentOk: boolean, error?: unknown) => {
+      if (finished || attempt.result) return;
       const errorCode = errno(error);
-      sent.push({ signal: name, target: 'process', status: errorCode === 'ESRCH' ? 'not_found' : 'failed', ...(errorCode ? { errorCode } : {}) });
-      reason('signal_failed'); issue('signal_failed', name === 'SIGTERM' ? 'interrupt' : 'kill');
-    }
+      attempt.result = { signal: name, target: 'process', status: sentOk ? 'sent' : errorCode === 'ESRCH' ? 'not_found' : 'failed',
+        ...(errorCode ? { errorCode } : {}) };
+      if (!sentOk) { reason('signal_failed'); issue('signal_failed', name === 'SIGTERM' ? 'interrupt' : 'kill'); }
+      settle();
+    };
+    try {
+      const result = child.kill(name);
+      if (typeof result === 'boolean') complete(result);
+      else void Promise.resolve(result).then(value => complete(value === true), error => complete(false, error));
+    } catch (error) { complete(false, error); }
   };
   const stop = () => {
     if (finished || stopping) return;
     stopping = true; endInput();
     if (processState.state !== 'unconfirmed') { drain(); return; }
     signal('SIGTERM');
+    if (finished) return;
     later(INSPECTION_BUDGET.term, () => {
       signal('SIGKILL');
+      if (finished) return;
       later(INSPECTION_BUDGET.kill, () => {
         if (processState.state === 'unconfirmed') { deadline = true; reason('exit_unconfirmed'); issue('exit_unconfirmed', 'wait'); }
         drain();
@@ -174,8 +200,20 @@ export function inspectSettings(spawnOwnProcess: () => InspectionChild): {
     });
   };
   const fail = (code: InspectionReason) => { if (!finished) { reason(code); stop(); } };
+  const budgetExpired = () => {
+    // Просроченный timer может ещё ждать очереди event loop. Его флаг не разрешает позднюю запись/ответ.
+    const elapsed = performance.now() - started;
+    const code = elapsed >= INSPECTION_BUDGET.outer ? 'outer_deadline'
+      : elapsed >= INSPECTION_BUDGET.work ? 'work_deadline'
+      : getSettings !== 'accepted' && elapsed >= INSPECTION_BUDGET.response ? 'response_deadline' : undefined;
+    if (!code) return false;
+    deadline = true; issue('timeout', 'wait'); fail(code);
+    if (code === 'outer_deadline') finish();
+    return true;
+  };
   const send = (kind: 'initialize' | 'get_settings') => {
     if (failed() || writing || !child || stdinEnded || stdout !== 'unconfirmed' || processState.state !== 'unconfirmed') return;
+    if (budgetExpired()) return;
     const id = kind === 'initialize' ? 'p2b-policy-init' : 'p2b-policy-read';
     if (kind === 'initialize') initialize = 'pending'; else getSettings = 'pending';
     writing = true;
@@ -206,6 +244,7 @@ export function inspectSettings(spawnOwnProcess: () => InspectionChild): {
     cliVersion: '2.1.295', permissionMode: 'dontAsk',
   } });
   const consume = () => {
+    if (budgetExpired()) { parts = []; lineBytes = 0; return; }
     let value: unknown;
     try { value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(parts))); }
     catch { parts = []; lineBytes = 0; fail('protocol_unknown'); return; }
@@ -251,6 +290,7 @@ export function inspectSettings(spawnOwnProcess: () => InspectionChild): {
       settings = projectSettings(payload);
       if (!settings) { fail('protocol_unknown'); return; }
       getSettings = 'accepted'; clearTimeout(responseTimer); timers.delete(responseTimer);
+      try { options.onSettingsAccepted?.(); } catch { issue('process_result_failed', 'done'); fail('process_failed'); }
     }
   };
   const data = (chunk: unknown, source: 'stdout' | 'stderr') => {
@@ -270,9 +310,14 @@ export function inspectSettings(spawnOwnProcess: () => InspectionChild): {
     }
     scheduleNext();
   };
-  const responseTimer = later(INSPECTION_BUDGET.response, () => { deadline = true; issue('timeout', 'wait'); fail('response_deadline'); });
-  later(INSPECTION_BUDGET.work, () => { deadline = true; issue('timeout', 'wait'); fail('work_deadline'); });
-  later(INSPECTION_BUDGET.outer, () => { deadline = true; reason('outer_deadline'); issue('timeout', 'wait'); finish(); });
+  const remaining = (budget: number) => Math.max(0, budget - (performance.now() - started));
+  const responseTimer = later(remaining(INSPECTION_BUDGET.response), () => { deadline = true; issue('timeout', 'wait'); fail('response_deadline'); });
+  later(remaining(INSPECTION_BUDGET.work), () => { deadline = true; issue('timeout', 'wait'); fail('work_deadline'); });
+  later(remaining(INSPECTION_BUDGET.outer), () => { deadline = true; reason('outer_deadline'); issue('timeout', 'wait'); finish(); });
+  if (remaining(INSPECTION_BUDGET.response) === 0) {
+    deadline = true; reason('response_deadline'); issue('timeout', 'wait'); finish();
+    return { done, stop() {} };
+  }
   // Вызов фабрики уже мог создать процесс, даже если handle не вернулся.
   processState = { state: 'unconfirmed' }; stdout = stderr = stdin = 'unconfirmed';
   try {

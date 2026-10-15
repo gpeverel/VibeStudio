@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { PassThrough, Writable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { INSPECTION_BUDGET as B, inspectSettings } from '../helpers/claude/settings-inspection.ts';
-import type { InspectionChild } from '../helpers/claude/settings-inspection.ts';
+import type { InspectionChild, InspectionOptions } from '../helpers/claude/settings-inspection.ts';
 import { syntheticInit } from '../helpers/claude/practical-evidence.ts';
 
 /** Все ответы и handles ниже — synthetic transport doubles, НЕ реальные CLI fixtures.
@@ -19,10 +19,11 @@ const init = (payload: unknown = initPayload(), patch: Record<string, unknown> =
 const settings = (payload: unknown = settingsPayload(), patch: Record<string, unknown> = {}) => success('p2b-policy-read', payload, patch);
 const line = (...values: unknown[]) => Buffer.from(values.map(value => JSON.stringify(value)).join('\n') + '\n');
 const flush = () => vi.advanceTimersByTimeAsync(0);
-function double(options: { holdWrite?: boolean | number; holdFinish?: boolean; ignoreKill?: boolean; signalError?: string; falseKill?: boolean } = {}) {
+function double(options: { holdWrite?: boolean | number; holdFinish?: boolean; holdKill?: boolean; ignoreKill?: boolean; signalError?: string; falseKill?: boolean } = {}, inspectionOptions: InspectionOptions = {}) {
   const emitter = new EventEmitter();
   const stdout = new PassThrough(), stderr = new PassThrough();
   const writes: string[] = [], callbacks: ((error?: Error | null) => void)[] = [], finals: ((error?: Error | null) => void)[] = [];
+  const signalReplies: { resolve(value: boolean): void; reject(error: unknown): void }[] = [];
   const stdin = new Writable({ write(chunk: Buffer, _encoding, callback) {
     writes.push(chunk.toString('utf8'));
     if (options.holdWrite === true || options.holdWrite === writes.length) callbacks.push(callback); else callback();
@@ -32,19 +33,20 @@ function double(options: { holdWrite?: boolean | number; holdFinish?: boolean; i
     if (end) { stdout.end(); stderr.end(); }
   };
   const kill = vi.fn((signal: string) => {
+    if (options.holdKill) return new Promise<boolean>((resolve, reject) => { signalReplies.push({ resolve, reject }); });
     if (options.signalError) throw Object.assign(new Error('SECRET-signal'), { code: options.signalError });
     if (!options.ignoreKill) queueMicrotask(() => exit(null, signal));
     return !options.falseKill;
   });
   const child = Object.assign(emitter, { stdin, stdout, stderr, pid: 12345, kill, unref: vi.fn() }) as unknown as InspectionChild;
   const spawn = vi.fn(() => child);
-  const run = inspectSettings(spawn);
+  const run = inspectSettings(spawn, inspectionOptions);
   const acceptInit = async () => { stdout.write(line(init())); await flush(); };
   const observe = async (payload: unknown = settingsPayload()) => { await acceptInit(); stdout.write(line(settings(payload))); await flush(); };
-  return { child, emitter, stdout, stderr, stdin, writes, callbacks, finals, exit, kill, spawn, run, acceptInit, observe };
+  return { child, emitter, stdout, stderr, stdin, writes, callbacks, finals, signalReplies, exit, kill, spawn, run, acceptInit, observe };
 }
 beforeEach(() => { vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] }); });
-afterEach(() => { vi.useRealTimers(); });
+afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('get_settings: synthetic transport, без разрешения CLI', () => {
   it('создаёт один handle, посылает ровно два запроса по порядку и закрывает stdin без prompt', async () => {
@@ -312,5 +314,125 @@ describe('get_settings: synthetic transport, без разрешения CLI', (
     const h = double(); const value = syntheticInit(kind === 'extra' ? { tools: ['Read', 'Glob', 'Grep', 'Bash'] } : kind === 'missing' ? { plugins: undefined } : {});
     h.stdout.write(line(value, ...(kind === 'repeat' ? [value] : []))); await flush();
     expect((await h.run.done).reasons).toContain('inventory_mismatch'); expect(h.writes).toHaveLength(1);
+  });
+
+  it.each(['sent', 'false', 'EPERM', 'ESRCH', 'SECRET-code'] as const)('асинхронный ответ владельца %s учитывается после exit/EOF', async result => {
+    const h = double({ holdKill: true }); await h.observe(); h.run.stop(); h.exit(); await flush();
+    let settled = false; void h.run.done.then(() => { settled = true; }); await flush();
+    expect(settled).toBe(false);
+    if (result === 'sent' || result === 'false') h.signalReplies[0]!.resolve(result === 'sent');
+    else h.signalReplies[0]!.reject(Object.assign(new Error('SECRET-signal'), { code: result }));
+    await flush(); const report = await h.run.done;
+    expect(report.completion.process).toEqual({ state: 'exited', exitCode: 0, signal: null });
+    expect(report.completion.signals).toEqual([{ signal: 'SIGTERM', target: 'process',
+      status: result === 'sent' ? 'sent' : result === 'ESRCH' ? 'not_found' : 'failed',
+      ...(['EPERM', 'ESRCH'].includes(result) ? { errorCode: result } : {}),
+    }]);
+    expect(report.reasons.includes('signal_failed')).toBe(result !== 'sent');
+    expect(JSON.stringify(report)).not.toContain('SECRET'); expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('потеря подтверждения сигнала ограничена drain; поздний ответ не меняет terminal', async () => {
+    const h = double({ holdKill: true }); await h.observe(); h.run.stop(); h.exit();
+    await vi.advanceTimersByTimeAsync(B.drain); const report = await h.run.done; const snapshot = JSON.stringify(report);
+    expect(report.completion).toMatchObject({ process: { state: 'exited' }, wait: 'deadline',
+      signals: [{ signal: 'SIGTERM', status: 'failed' }] });
+    expect(report.reasons).toContain('signal_failed'); expect(report.elapsedMs).toBe(B.drain);
+    h.signalReplies[0]!.resolve(true); await flush();
+    expect(JSON.stringify(await h.run.done)).toBe(snapshot); expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('ожидание обоих сигналов не перезапускает outer и не превращает потерянный exit в not_started', async () => {
+    const h = double({ holdKill: true }); await h.observe(); await vi.advanceTimersByTimeAsync(B.outer);
+    const report = await h.run.done;
+    expect(report.elapsedMs).toBe(B.outer); expect(h.kill.mock.calls.map(call => call[0])).toEqual(['SIGTERM', 'SIGKILL']);
+    expect(report.completion).toMatchObject({ process: { state: 'unconfirmed' }, wait: 'deadline',
+      signals: [{ signal: 'SIGTERM', status: 'failed' }, { signal: 'SIGKILL', status: 'failed' }] });
+    expect(report.reasons).toEqual(expect.arrayContaining(['signal_failed', 'exit_unconfirmed']));
+    expect(h.spawn).toHaveBeenCalledTimes(1); expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('переставленные подтверждения сохраняют порядок TERM/KILL и не доказывают exit', async () => {
+    const h = double({ holdKill: true }); h.run.stop(); await vi.advanceTimersByTimeAsync(B.term);
+    h.signalReplies[1]!.resolve(true); h.signalReplies[0]!.resolve(false); await flush();
+    await vi.advanceTimersByTimeAsync(B.kill + B.drain); const report = await h.run.done;
+    expect(report.completion).toMatchObject({ process: { state: 'unconfirmed' },
+      signals: [{ signal: 'SIGTERM', status: 'failed' }, { signal: 'SIGKILL', status: 'sent' }] });
+    expect(report.reasons).toContain('exit_unconfirmed'); expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('переданный общий t0 учитывает время до запуска worker и initialize', async () => {
+    const h = double({}, { startedAt: performance.now() - (B.response - 1) });
+    await h.acceptInit(); await vi.advanceTimersByTimeAsync(1);
+    const report = await h.run.done;
+    expect(report.elapsedMs).toBe(B.response); expect(report.reasons).toContain('response_deadline');
+    expect(h.writes).toHaveLength(2); expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('истёкший общий t0 не вызывает фабрику и не отправляет initialize', async () => {
+    const spawn = vi.fn((): InspectionChild => { throw new Error('Фабрика не должна вызываться'); });
+    const run = inspectSettings(spawn, { startedAt: performance.now() - B.response });
+    expect(await run.done).toMatchObject({ outcome: 'failed', reasons: ['response_deadline'],
+      completion: { process: { state: 'not_started' }, wait: 'deadline' } });
+    expect(spawn).not.toHaveBeenCalled(); expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([B.response, B.work, B.outer])('задержанный callback записи при t=%s не отправляет get_settings до просроченного timer', async elapsed => {
+    const h = double({ holdWrite: true }); h.stdout.write(line(init())); await flush();
+    vi.spyOn(performance, 'now').mockReturnValue(elapsed);
+    h.callbacks[0]!(); await flush(); const report = await h.run.done;
+    expect(h.writes).toHaveLength(1); expect(report.getSettings).toBe('not_sent');
+    expect(report.reasons).toContain(elapsed === B.outer ? 'outer_deadline' : elapsed === B.work ? 'work_deadline' : 'response_deadline');
+    expect(report.completion.wait).toBe('deadline'); expect(h.spawn).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('поздний initialize при остановившейся очереди timers не разрешает второй запрос', async () => {
+    const h = double(); vi.spyOn(performance, 'now').mockReturnValue(B.response + 1);
+    h.stdout.write(line(init())); await flush(); const report = await h.run.done;
+    expect(h.writes).toHaveLength(1); expect(report.getSettings).toBe('not_sent');
+    expect(report.reasons).toContain('response_deadline'); expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('поздний settings не отменяет response deadline и не вызывает callback принятия', async () => {
+    const accepted = vi.fn(), h = double({}, { onSettingsAccepted: accepted }); await h.acceptInit();
+    vi.spyOn(performance, 'now').mockReturnValue(B.response);
+    h.stdout.write(line(settings())); await flush(); const report = await h.run.done;
+    expect(report.getSettings).toBe('pending'); expect(report.settings).toBeUndefined();
+    expect(report.reasons).toContain('response_deadline'); expect(accepted).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('фабрика, занявшая оставшийся бюджет, не получает initialize после возврата handle', async () => {
+    const emitter = new EventEmitter(), stdin = new PassThrough(), stdout = new PassThrough(), stderr = new PassThrough();
+    const write = vi.spyOn(stdin, 'write'), clock = vi.spyOn(performance, 'now').mockReturnValue(0);
+    const child = Object.assign(emitter, { stdin, stdout, stderr, pid: 12345, unref() {}, kill() {
+      queueMicrotask(() => { emitter.emit('exit', null, 'SIGTERM'); stdout.end(); stderr.end(); }); return true;
+    } }) as unknown as InspectionChild;
+    const spawn = vi.fn(() => { clock.mockReturnValue(B.response); return child; });
+    const run = inspectSettings(spawn); await flush(); const report = await run.done;
+    expect(write).not.toHaveBeenCalled(); expect(report.initialize).toBe('not_sent');
+    expect(report.reasons).toContain('response_deadline'); expect(spawn).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([NaN, Infinity, 1])('недопустимый startedAt=%s отклоняется до фабрики', startedAt => {
+    const spawn = vi.fn((): InspectionChild => { throw new Error('Фабрика не должна вызываться'); });
+    expect(() => inspectSettings(spawn, { startedAt })).toThrow('Некорректное начало');
+    expect(spawn).not.toHaveBeenCalled(); expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('callback принятия settings вызывается один раз без payload, не завершает transport', async () => {
+    const accepted = vi.fn(); const h = double({}, { onSettingsAccepted: accepted }); await h.observe();
+    expect(accepted).toHaveBeenCalledExactlyOnceWith();
+    let settled = false; void h.run.done.then(() => { settled = true; }); await flush(); expect(settled).toBe(false);
+    h.exit(); await flush(); expect((await h.run.done).outcome).toBe('observed');
+  });
+
+  it('ошибка callback принятия безопасно прекращает transport', async () => {
+    const h = double({}, { onSettingsAccepted: () => { throw new Error('SECRET-callback'); } }); await h.observe();
+    const report = await h.run.done;
+    expect(report.reasons).toContain('process_failed'); expect(JSON.stringify(report)).not.toContain('SECRET');
+    expect(h.spawn).toHaveBeenCalledTimes(1); expect(vi.getTimerCount()).toBe(0);
   });
 });
