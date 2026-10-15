@@ -28,7 +28,8 @@ export interface AccessProfile {
 }
 
 /** Политика чтения доверенного проекта, а не обеспеченная ОС-граница процесса.
- * Builtin/managed-совместимость оценивается отдельно от проектных расширений. */
+ * Штатная конфигурация CLI доверена пользователю; полный managed-аудит не требуется.
+ * Обязательные настройки запуска и наблюдённый inventory проверяются адаптером. */
 export interface PracticalLocalReadProfile {
   kind: 'practical-local-v1';
   mode: 'read-only';
