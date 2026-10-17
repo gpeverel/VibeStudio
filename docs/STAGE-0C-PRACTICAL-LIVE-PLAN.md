@@ -1,5 +1,31 @@
 # P2b: отдельный сценарий practical live-приёмки
 
+## Следующее отдельное разрешение: одна auth-проба, 2026-10-17
+
+Пользователь подтвердил, что обычная установленная Claude работает. В p01 тот же факт в среде стенда не подтвердился: `loggedIn:false`, модельных вызовов 0. Причина расхождения не установлена; повторный login и изменение production-профиля не предлагаются как доказанное исправление. Подготовлена **одна немодельная `auth status`**, без `--safe-mode --restricted` только в этой диагностике. Разрешение на неё ещё не получено. Ответ «Да, работает» был уточнением, а не согласием на новый запуск.
+
+Точная команда из корня текущей worktree; выполняет только A один раз после отдельного разрешения:
+
+```sh
+LIVE=1 AUTH_STATUS_PROBE=1 CLAUDE_BIN=/opt/homebrew/bin/claude sh scripts/with-node.sh node --experimental-transform-types tests/live/claude-auth-status.probe.ts
+```
+
+Технические opt-in флаги не заменяют разрешение. Ни version/help, ни модель, ни повтор p01, ни весь test:live этой командой не запускаются. Вызов ProcessRunner здесь является самостоятельной диагностикой auth, а не обходом production createClaudeAdapter ради модельной приёмки.
+
+- Executable: `/opt/homebrew/bin/claude` → `/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe`, 239695888 байт, SHA-256 `0116ee2e0a513900b633d9951367f18747686478e2b462805b8c31609f047f70`. До spawn проверяются realpath, regular file, executable mode, размер, хеш и identity; остаточный TOCTOU сохраняется. NVM-установка с default PATH оказалась 500-байтной заглушкой и не используется.
+- Проверенный entry: `tests/live/claude-auth-status.probe.ts`, SHA-256 `1a0872dbe5dbfeccf931b7a431097948bb045daef709031f9c2dc20546dffa30`; helper `tests/helpers/claude/auth-status-observation.ts`, SHA-256 `81ae766cc3a14db8478dcc6e8893ee1b9fa9c381af42c536d0304b5fe895379e`; матрица 35 synthetic-тестов `tests/claude/auth-status-observation.test.ts`, SHA-256 `8781c59f49f9e1d2ab0f406faaec0e7cc2354aa10a85b92892eaab0350603b4b`. B→A и A→C закрыты; команды и результаты C — в конце отчёта.
+- Прямых процессов Claude **не более 1**, argv ровно `auth status`, stdin пуст, cwd=`os.tmpdir()`, shell=false. Launcher `sh scripts/with-node.sh` выполняет две короткие проверки `node --version`, затем один Node-коллектор; npm/Vitest/esbuild не участвуют. Штатные helpers самой доверенной CLI этим числом не ограничены; detached-потомки не гарантированно останавливаются.
+- Env строится неизменным buildClaudeEnv: HOME, PATH, USER, LOGNAME, LANG, LC_ALL, LC_CTYPE, TMPDIR, CLAUDE_CONFIG_DIR, плюс `DISABLE_AUTOUPDATER=1` и `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`; отсутствующие переменные не добавляются. ANTHROPIC_API_KEY/CLAUDE_CODE_OAUTH_TOKEN отклоняются до запуска, даже если пусты. HOME не меняется, credentials не читаются и не копируются. Значения env не записываются в evidence.
+- CLI timeout **5 с**, stop grace **0,1 с**, drain **0,5 с**; коллектор **8 с**, cleanup **1 с**. Это внутренние таймеры и абсолютные перепроверки, не внешний supervisor. Предварительное синхронное хеширование, синхронная запись evidence, блокировка event loop и сон Mac этим сроком не ограничены. Лимит общей проверки 900 с не изменяется. При ошибке используются только собственный handle и конечный cleanup; после unconfirmed нового запуска нет. Выход Node не доказывает остановку неподтверждённой CLI.
+- Evidence сохраняется в собственном `vs-auth-status-evidence-*/results.json`, mode 0600: фиксированный executable/argv, символическое cwd, только имена env, время, бюджеты, boolean/null loggedIn, закрытые authMethod/apiProvider/status/reason/completion/stop, byte counts. Raw stdout/stderr, произвольные ошибки, account/email/token, ответы модели, env values и чужие transcripts не сохраняются. Общий бюджет читаемых stdout+stderr — 262144 байта.
+- Модельных запросов и модельной стоимости нет. CLI может обратиться к служебной сети, штатной авторизации/refresh и записать свои служебные данные; их отсутствие и расходы не гарантируются. Полный managed-аудит не требуется.
+
+`authenticated` (exit команды 0) требует parsed true, CLI exit 0 и чистого завершения. `unauthenticated` (exit команды 1) — parsed false при CLI exit 0/1 и чистом завершении. Невалидный/несогласованный ответ, timeout, неподтверждённые exit/EOF/cleanup, preflight или ошибка evidence дают exit 2/unconfirmed. Ни один результат не подтверждает provider refresh, модель или P2b автоматически.
+
+Это **не причинный A/B режимных флагов**: p01 был запущен через npm exec/Vitest, которые могли дополнить PATH; новые и прежние значения env не сравнивались и не сохранялись. Отличаются также время и родительский процесс. True подтвердит доступный вход только в новой пробе; false оставит причину неизвестной. Из одного наблюдения нельзя заключать необходимость убрать guard-флаги из production. Новый модельный набор потребует отдельного решения по результату. Далее сохранены действующая модельная методика и история.
+
+Проверки подготовки пробы: **Claude 898/898 (21,34 с), полный Vitest 981/981 (135,66 с), Node 78/78 (124,95 с); typecheck/lint/boundaries/build/diff-check — exit 0**. Полный Vitest проверил окончательный SHA матрицы; промежуточная lint-ошибка типизации и её исправление сохранены в отчёте. Новых настоящих CLI-вызовов 0; инженерная подготовка завершена, отдельное разрешение на указанную команду ожидается.
+
 ## Продолжение 2026-10-17: действующая методика модельного набора
 
 **Разрешённый поручением «Завершите P2b» однократный набор выполнен A: exit 1 на auth-gate, 3 диагностики и 0 модельных запусков. P2b остаётся открыт; автоматические повторы не разрешены.** Этот раздел заменяет прежние критерии и формулировки бюджетов ниже. История исследований, диагностическая проба04 initialize/get_settings и историческая модельная replay-проба04 сохраняются раздельно. Повтор ни одной из них в этот набор не входит. Владение: A — live-файл и обвязка, единственный исполнитель; B — критерии/совместимость и ревью A; C — независимая матрица, документы и последовательные общие проверки.
