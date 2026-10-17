@@ -33,7 +33,12 @@ async function git(cwd: string, ...args: string[]): Promise<string> {
     '--no-optional-locks',
     '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgSign=false',
     '-c', 'merge.autoStash=false', ...args,
-  ], { cwd, env, encoding: 'utf8', timeout: 60_000, maxBuffer: 16 * 1024 * 1024 });
+  ], {
+    cwd, env, encoding: 'utf8', timeout: 60_000, maxBuffer: 16 * 1024 * 1024,
+    // SIGTERM можно игнорировать: execFile тогда продолжает ждать и допускает поздний exit 0.
+    // Завершаем только свой дочерний Git, не дерево внешних helpers.
+    killSignal: 'SIGKILL',
+  });
   return stdout;
 }
 
