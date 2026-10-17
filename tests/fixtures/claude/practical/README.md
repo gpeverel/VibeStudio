@@ -1,6 +1,6 @@
 # Реальные наблюдения practical-набора
 
-Это безопасные отчёты production-стенда, не synthetic doubles и не сырые JSONL для parser replay. Старые `../real/01–04` сохранены отдельно. Отчёты не содержат raw stdout/stderr, ответов модели, значений env, credentials или чужих transcripts.
+Это безопасные отчёты practical-стенда и отдельно согласованной немодельной auth-диагностики, не synthetic doubles и не сырые JSONL для parser replay. Старые `../real/01–04` сохранены отдельно. Отчёты не содержат raw stdout/stderr, ответов модели, значений env, credentials или чужих transcripts.
 
 ## 2026-10-17-p01
 
@@ -19,3 +19,21 @@ LIVE=1 PRACTICAL_LIVE=1 CLAUDE_BIN=/opt/homebrew/bin/claude sh scripts/with-node
 Результат: версия 2.1.295 и help завершились с exit 0; auth status — exit 1. `resultReason=not_authenticated` по действующему detect означает parsed `loggedIn:false`. Это утверждение о конкретном запуске, не диагноз аккаунта/Keychain/sandbox. Модельных запусков 0, диагностик 3. Остальные четыре сценария не запускались, автоматических повторов нет. Completion всех прямых процессов подтверждён, cleanup passed, root removed.
 
 `readMarker/lifecycle/limitations=failed` — последствия недостигнутого модельного сценария. Пустой limitations не относится к ready, которого не было. `toolScope=passed` без модели не доказывает ограничений реальных tools. Отсутствие transcript без положительного контроля layout в acceptance остаётся unconfirmed. Этот fixture подтверждает отказ auth-gate до модели и завершение диагностики; **он не подтверждает модельную работу Claude, P2b или весь 0C**.
+
+## 2026-10-17-auth01
+
+После явного ответа пользователя «Разрешаю одну auth-пробу» A выполнил ровно один согласованный standalone entry:
+
+```sh
+LIVE=1 AUTH_STATUS_PROBE=1 CLAUDE_BIN=/opt/homebrew/bin/claude sh scripts/with-node.sh node --experimental-transform-types tests/live/claude-auth-status.probe.ts
+```
+
+Начало из evidence — `2026-10-17T15:51:25.354Z` (18:51:25.354 MSK). Команда exit 1; измерение `/usr/bin/time -p`: real 0,47 с, user 0,39 с, sys 0,13 с. Прямых auth-попыток 1, моделей 0, повторов нет. Production createClaudeAdapter и модельная методика не подменялись: это отдельная диагностическая команда `auth status` через существующий ProcessRunner, без `--safe-mode --restricted`.
+
+`2026-10-17-auth01.json` — побайтовая копия собственного `/var/folders/b9/2rsrd3m96dq19pt0gnhl5flr0000gn/T/vs-auth-status-evidence-K1xkcg/results.json`, 1573 байта, mode исходника/копии 0600. SHA-256 **`3b12d16a6ac83542b82a79b1d5d28e97a6b6bd15849c4aca6c4da061957ca1d2`**; cmp и SHA проверены C. Git не сохраняет POSIX mode 0600 при переносе checkout.
+
+Проверенная редакция entry — `1a0872dbe5dbfeccf931b7a431097948bb045daef709031f9c2dc20546dffa30`, helper — `81ae766cc3a14db8478dcc6e8893ee1b9fa9c381af42c536d0304b5fe895379e`. Executable и его SHA те же, что в p01. B независимо прочитал исходный JSON и сверил SHA: открытых несогласованностей нет.
+
+Результат: `unauthenticated/completed`, `loggedIn:false`, `authMethod:none`, `apiProvider:firstParty`. CLI exit 1 без сигнала, stdout/stderr ended, wait settled, issues пусты; cleanup confirmed, stop not_needed. Учтено 217 байт stdout и 0 stderr, содержимое не сохранено. SIGKILL собственной группы со статусом not_found не подтверждает остановку detached-потомков.
+
+Отсутствие подтверждённой авторизации наблюдалось и без двух режимных флагов. Это **не причинный A/B с p01**: различаются время и родительский запуск, тождественность PATH не доказана. Причина неизвестна; fixture не обосновывает снятие production-ограничений, диагноз аккаунта/Keychain/sandbox или повторный login. Provider refresh, реальная модельная работа, P2b и весь 0C не подтверждены. Исходное разрешение на одну команду израсходовано, новые вызовы не выполнялись.
