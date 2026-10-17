@@ -1475,3 +1475,228 @@ A выполнил последовательный полный цикл пос
 Первоначальный tests/claude завершился, но итоговый вывод потерялся при усечении контекста инструмента; только этот шаг повторён для проверяемой записи 748/748 выше. Это повтор ради утраченного доказательства, не новый отказ тестов. Остальные полные наборы шли последовательно без повторов. Вспомогательный shasum завершился exit 9 из-за Perl/LC_CTYPE=C.UTF-8; OpenSSL успешно сверил шесть code/test SHA без изменения окружения, они совпали с закрытым B-ревью. После финальных документальных правок полные наборы не повторяются.
 
 A сверил завершённую сборку 1,06 с: пять out SHA совпали с полными значениями предыдущей сборки (main e4ceed3f…, preload cf347cbd…, HTML 2240ce55…, JS 5ac6dd63…, CSS 07a7d77f…), Electron — 67641b7c…. Нового технического основания GUI нет; smoke не выполнялся, новые GUI PID/signal/crash reports отсутствуют. Проверка diff сохранности args/detect/parser, Electron/UI, fixtures/live, diagnostic transport/helpers, package/scripts/config и всех четырёх JSON evidence дала exit 0 и пустой diff. Успешные checks подтверждают реализацию изменённого доверенного допуска на doubles и локальном Node; реального модельного результата production-профиля они не подтверждают.
+
+#### Подготовка practical live после изменения доверия — 2026-10-17
+
+Продолжение начато с HEAD `18c2f4b18720cdce3bf73e9aa46874108e21d51d`. A и C независимо сверили шесть SHA production/test-файлов из предыдущей таблицы: все совпали. Исходный SHA `tests/live/claude-practical.live.ts` — `db6433db8d3864a0990031cc7c0cddcadf7484fdf9a966350b90152225a3b8e3`, `vitest.live.config.ts` — `8ea3852f5a6898a91f39555eab9d873c512e55b9a8fb12fb23c1a8df405bbee1`. OpenSSL — exit 0; повторный shasum — exit 9 из-за той же несовместимой Perl/LC_CTYPE, без изменения окружения. Прежние успешные полные наборы на старте не повторялись. COORDINATE прошёл без записи, затем для IMPLEMENT предоставлен workspace-write; обхода read-only не было.
+
+Владение согласовано до реализации: A — live-файл и новый `tests/helpers/claude/practical-live.ts`, B — критерии/совместимость и независимое ревью A, C — новый `tests/claude/practical-live.test.ts`, три документа и единственный последовательный общий цикл. Production admission и модель доверия не пересматриваются. Сохраняются история, реальные fixtures и evidence диагностической серии. Настоящие Claude/Codex, auth/version/help/get_settings, модельные запросы и GUI в инженерной подготовке не запускаются.
+
+До реального результата согласована исправленная методика p-read: известный закрытый runtime inventory, наблюдаемые tool start/finish, контрольный эффект и отсутствие persistence проверяются раздельно. Явный denial исключённого Write/Edit — passed только при событии CLI; отсутствие события unconfirmed, проза не доказательство. Исключённый `--tools` инструмент может не быть предложен модели, поэтому прежняя обязательность permission_denied не проверяла обещанный закрытый набор корректно. Права ради события не расширяются. Для p-resume память метки и изменение argv наблюдаемы отдельно, а применение новой системной инструкции остаётся unconfirmed. Hook/MCP-маркеры и inventory не доказывают отсутствие всех ранних расширений; plugin recognition и provider refresh сохраняют неизвестность. Полный managed-аудит не возвращается в предпосылки.
+
+Найдены инженерные пробелы исходного стенда: evidence писался до сценарных assertions; отказ `run.kill()` мог сорвать сохранение; `afterAll` удалял root при неподтверждённом exit; `bail: 1` не запрещал следующую диагностику внутри detect. Adapter deadline включает detect: 94 с плюс до 2 с до terminal; таймер Vitest 110 с не является независимым надзором. Новые регрессии должны проверять эти ветви на явно synthetic doubles, без утверждения реальной совместимости CLI.
+
+| Предмет | Состояние в начале продолжения |
+|---|---|
+| Код и стенд | Инженерная подготовка и независимая матрица в работе; новый набор проверок ещё не выполнен |
+| Реальная работа Claude practical | Все пять сценариев не запускались; результатов passed/failed нет |
+| Приёмка P2b | Открыта; instructionApplication и другие ненаблюдённые свойства не выдаются за passed |
+| Весь 0C | Открыт; P3/Codex/SessionEngine/UI/продуктовый Swarm не начаты |
+
+##### Независимая матрица и найденные дефекты
+
+C добавил `tests/claude/practical-live.test.ts`: **56 явно synthetic проверок**, без OS spawn. Проверяются порядок и верхние пределы диагностик/моделей, отрицательная диагностика и запрет следующего процесса, потерянный handle, зависшие start/events/done/kill/interrupt, подтверждение exit отдельно от отправленного сигнала, сценарный exception с сохранением evidence, обязательные limitations, terminal identity/count, tools и связь start/finish по toolCallId, неизвестность отдельных свойств, безопасная проекция ошибок и абсолютный deadline. Один тест использует настоящий production adapter/detect/admission над runner-double; metadata берутся у собственного Node executable, который не исполняется этим runner. Это не положительное свидетельство реальной CLI/auth/модели.
+
+История адресных запусков через `/usr/bin/time -p sh scripts/with-node.sh npm exec --offline --no -- vitest run tests/claude/practical-live.test.ts`: **52 passed / 1 timeout, exit 1, 62,51 с** — тест ожидал прежний cleanup-предел interrupt; после выделения отдельного stop budget его fake clock исправлен, **53/53, exit 0, 0,78 с**. Следующее добавление — **54/54, exit 0, 0,90 с**; усиление late-stop теста до фактического полного stop budget воспроизвело новый дефект, адресный `-t 'поздний исход interrupt'` — **exit 1, 0,75 с**. Report после scenario deadline менялся поздним результатом interrupt: в общий `checks` дописывался stop. A добавил cancel guard после await и отдельный снимок checks. Также в evidence добавлен типизированный `resultReason` без произвольного detail, cleanup учитывает AgentRun.done, а runner проверяет абсолютный deadline до spawn. Последняя адресная матрица — **56/56, exit 0, 0,67 с**. Ошибки теста и найденный дефект стенда не выдаются за отказы настоящей Claude.
+
+На момент начала общего цикла SHA теста — `5aa4c021eeb2fbe6d73a42ca2b1a2cca680cefc3161ce7470971dc1539b90963`, helper — `51a2356b6d3e161d6443b98cbec54feaffcc8f68ac85057913a7babb2e253254`, live — `7bde6cd1763f8a0c1c06b5cf16554dda4b42fa172489ff1f3f76b0169cef026c`. C→A этих редакций выполнено чтением и независимой матрицей; окончательные отзывы после всех исправлений фиксируются отдельно ниже. C дополнительно статически сверил executable: `/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe`, размер 239695888, SHA `0116ee2e0a513900b633d9951367f18747686478e2b462805b8c31609f047f70`, stat/OpenSSL exit 0. Исполнения установленного пакета не было.
+
+В общем цикле первый `tests/claude` — **804/804, exit 0, real 22,16 с**. Первый typecheck — **exit 2, 2,53 с**: TS18048 для `rootIdentity` в teardown live-файла, строка 221; отсутствие identity после частичного beforeAll требует явного сохранения root. Замечание передано A для узкой правки. Остальные независимые проверки выполнены последовательно; успешный tests/claude не повторялся. После исправления требуется адресно повторить typecheck и ревью изменённой ветви live-файла; он не импортируется unit-набором.
+
+Сверка `git diff --exit-code -- src tests/fixtures package.json package-lock.json scripts vitest.config.ts vitest.live.config.ts electron.vite.config.ts docs/P2B-SETTINGS-INSPECTION-2026-10-15*.json` — **exit 0**, пустой diff: production, реальные fixtures, четыре диагностических evidence, package/scripts и конфигурация сборки/тестов не менялись.
+
+##### Реальная матрица: отдельно от synthetic-тестов
+
+| Сценарий | Реальный результат | Что остаётся проверить/различать |
+|---|---|---|
+| p-read | **Не выполнялся** | Known Read/Glob/Grep, фактические start/успешные finish всех трёх, случайная метка, неизменность контроля и отсутствие своего transcript; explicit denial отдельно, отсутствие unconfirmed |
+| p-persist | **Не выполнялся** | Сохранение transcript собственного нового UUID; modeWord не доказывает применение инструкции |
+| p-resume | **Не выполнялся** | Восстановление метки и передача другого argv; instructionApplication остаётся unconfirmed при любом совпадении слова |
+| p-extensions | **Не выполнялся** | Ожидаемый inventory и отсутствие наблюдённых hook/MCP-эффектов; pluginRecognition и ранние эффекты не аттестуются |
+| p-stop | **Не выполнялся** | Принятый ранний Stop после spawn, interrupted, один terminal, exit/EOF; активный модельный stream и detached-потомки не охвачены |
+
+Настоящих CLI/модельных запусков в этом продолжении **0**. Ни успешные unit-наборы, ни статический SHA, ни успешный немодельный get_settings от 2026-10-15 не меняют эти пять строк на passed. Новые реальные fixtures или live-evidence не создавались. Отдельное разрешение требуется именно на настоящие CLI/модельные вызовы с возможными расходами, штатными записями и сетью; обычные правки и doubles уже авторизованы.
+
+##### Последовательный цикл C и состояние передачи
+
+Каждая npm-команда выполнялась через `/usr/bin/time -p sh scripts/with-node.sh`; наборы не запускались параллельно. Лимит 900 с не увеличивался. После документальных дополнений успешные полные наборы не повторяются.
+
+| Команда | Exit / результат | Real |
+|---|---|---:|
+| `sh scripts/with-node.sh npm exec --offline --no -- vitest run tests/claude` | **0 / 804 из 804** | **22,16 с** |
+| `sh scripts/with-node.sh npm run typecheck` | **2 / TS18048: rootIdentity в live:221** | **2,53 с** |
+| `sh scripts/with-node.sh npm run lint` | **0** | **1,59 с** |
+| `sh scripts/with-node.sh npm run check:boundaries` | **0 / 32 модуля, 60 зависимостей** | **0,67 с** |
+| `sh scripts/with-node.sh npm test` | **0 / 886 из 886** | **131,65 с** |
+| `sh scripts/with-node.sh npm run test:node` | **0 / 78 из 78** | **134,05 с** |
+| `sh scripts/with-node.sh npm run build` | **0** | **0,95 с** |
+| `git diff --check` | **0** | **0,01 с** |
+| GUI-smoke | **Не выполнялся: отдельной новой GUI-цели нет** | — |
+
+Контрольные SHA после сборки совпали с началом цикла:
+
+| Артефакт | SHA-256 |
+|---|---|
+| `tests/claude/practical-live.test.ts` | `5aa4c021eeb2fbe6d73a42ca2b1a2cca680cefc3161ce7470971dc1539b90963` |
+| `tests/helpers/claude/practical-live.ts` | `51a2356b6d3e161d6443b98cbec54feaffcc8f68ac85057913a7babb2e253254` |
+| `tests/live/claude-practical.live.ts` | `7bde6cd1763f8a0c1c06b5cf16554dda4b42fa172489ff1f3f76b0169cef026c` |
+| `vitest.live.config.ts` (не менялся) | `8ea3852f5a6898a91f39555eab9d873c512e55b9a8fb12fb23c1a8df405bbee1` |
+
+Изменены шесть файлов: live-файл A, новый helper A, новый test-файл C, этот отчёт, practical live-план и статус P2b implementation-плана. До typecheck C→A завершил чтение и независимую матрицу по указанным SHA; найденный затем TS18048 остаётся открытым замечанием к live-файлу. C передал test SHA для A→C; подтверждения актуальных A→C и B→A на момент этой записи C ещё не получил, поэтому завершёнными их не объявляет. Старые отзывы к предыдущим SHA не подставляются вместо новых.
+
+**Конкретные оставшиеся действия:** A добавляет явный guard наличия `rootIdentity` перед проверкой dev/ino и удалением собственного root; отсутствие identity сохраняет каталог. Затем нужны успешный typecheck, повторное ревью этой ветви по новому SHA и актуальные A→C/B→A. Точная команда, executable, argv/env/cwd, пять сценариев, бюджеты, вспомогательные процессы, расходы и безопасный evidence уже перечислены в актуальном начале [live-плана](STAGE-0C-PRACTICAL-LIVE-PLAN.md). Запрос реального разрешения до завершения этих инженерных действий не сделан.
+
+| Предмет | Состояние после цикла C |
+|---|---|
+| Код и стенд | Новая матрица и семь проверок прошли; **готовность к запуску не объявлена** из-за typecheck и незавершённой фиксации независимых отзывов |
+| Реальная работа Claude practical | **Не проверена**: все пять сценариев не запускались |
+| Приёмка P2b | **Открыта**; даже весь положительный ограниченный набор не докажет instructionApplication автоматически |
+| Весь 0C | **Открыт**; P3/Codex/SessionEngine/UI/продуктовый Swarm не начаты |
+
+##### Адресные исправления по ревью после общего цикла — 2026-10-17
+
+Предыдущие таблицы сохраняют состояние первой редакции. A→C получено для 56 тестов SHA `5aa4c021eeb2fbe6d73a42ca2b1a2cca680cefc3161ce7470971dc1539b90963`: независимое статическое чтение без открытых замечаний, не заявление о выполненном A тестовом прогоне. Затем A изменил helper/live по замечаниям B и C; это потребовало новых регрессий и повторного ревью изменённой области.
+
+В live добавлен явный guard `rootIdentity` перед dev/ino и удалением собственного root: частичный beforeAll без identity сохраняет каталог. В helper denial Read/Glob/Grep становится обязательным отказом даже после другого успешного tool_result; Write/Edit/Bash и неизвестное имя сохраняются закрыто, неизвестное имя — `other`. Произвольная причина denial не сериализуется. Отдельный `extensionInventory` независимо сверяет два ожидаемых builtin-плагина и пустой MCP; callback не может заменить его passed. До resume требуется подтверждённый p-persist и наличие собственного transcript, иначе ни start, ни detect не вызываются; `execution=not_started`, outcome unconfirmed. Инструкция resume сверяется с фактическим first/resume builder и правильным UUID/argv, но её самостоятельное применение остаётся unconfirmed.
+
+Новый `acceptance` в evidence требует все пять сценариев, обязательные проверки и положительное подтверждение расположения собственного transcript в p-persist. Пока расположение не подтверждено, отрицательные поиски transcript остаются в сводке unconfirmed; исходные reports сохраняются. Сводка явно отделяет notRun, failed и required unconfirmed. Даже её passed относится только к ограниченным наблюдениям: P2b/0C не закрываются, providerRefresh/pluginRecognition/instructionApplication/earlyEffectsAbsent/detachedChildrenStopped остаются unconfirmed. Суммарный cleanup увеличен с 3 до 5 с для stop grace 2 с + drain 2 с и служебного запаса; отдельный interrupt также до 5 с. Сценарий 100 с, testTimeout 110 с, hookTimeout 30 с сохранены. Чтением установленного Vitest подтверждён отдельный default teardownTimeout 10 с; это не независимый supervisor.
+
+C расширил матрицу с 56 до **77 synthetic-тестов**: rejected AgentRun.done при успешном kill, проглоченный отказ runner, предусловие resume, закрытая проекция denial всех tools, невозможность подменить ненаблюдаемые свойства, шесть вариантов extensionInventory и шесть проверок acceptance-сводки. Новые тесты не создают OS-процессы. Реальную SIGTERM→SIGKILL-эскалацию эта матрица не проверяет: её источник — существующие ProcessRunner-тесты на собственных Node-процессах, а не synthetic AgentRun.
+
+Адресные команды выполнялись C последовательно через `/usr/bin/time -p sh scripts/with-node.sh`:
+
+| Команда / редакция | Exit / результат | Real |
+|---|---|---:|
+| `npm exec --offline --no -- vitest run tests/claude/practical-live.test.ts`, промежуточная матрица | **0 / 76 из 76** | **0,68 с** |
+| `npm run typecheck`, после добавления A обязательного execution | **2 / TS2322: synthetic fixture C не содержал execution** | **2,43 с** |
+| `npm exec --offline --no -- vitest run tests/claude/practical-live.test.ts`, fixture дополнен, добавлен notRun-кейс | **0 / 77 из 77** | **0,64 с** |
+| `npm run typecheck`, guard A и fixture C | **0** | **3,07 с** |
+| `npm exec --offline --no -- eslint tests/claude/practical-live.test.ts tests/helpers/claude/practical-live.ts tests/live/claude-practical.live.ts` | **0** | **0,91 с** |
+
+TS18048 закрыт. Промежуточный TS2322 был несовпадением новой формы LiveReport с тестовым fixture и устранён добавлением `execution`; эта ошибка не относится к реальному CLI. Полные успешные наборы из предыдущего цикла не пересчитываются как новые 825/907 и не повторяются из-за документальных дополнений. Адресные проверки относятся к актуальным изменённым ветвям.
+
+| Текущий артефакт после адресных проверок | SHA-256 |
+|---|---|
+| `tests/claude/practical-live.test.ts` | `e8d0248ae79bf427f8e68b1216c77f1014a3429619e77c7ba0ecdedbed2d6f11` |
+| `tests/helpers/claude/practical-live.ts` | `fdec826e7c720612012293b34c9bad597ad823907095ea170858638e1ad7b864` |
+| `tests/live/claude-practical.live.ts` | `51c4899e3b7f52cfaab17c3f30c10cc1c8c3a60edf2c1e9100178be2cd6b0fbb` |
+
+C→A этих helper/live SHA закрыто чтением изменённых denial/inventory/prerequisite/acceptance/cleanup/инструкций и guard rootIdentity, 77 регрессиями и успешным typecheck. Новая область test SHA передана A для повторного A→C. Актуальное B→A на момент этой записи ещё не получено. B сообщил о прогоне целого live-файла на synthetic CLI и отрицательных сценариях; часть путей/SHA/команд потеряна в переданном сообщении, поэтому C запросил точные источники и не выдаёт эту предварительную передачу за завершённое ревью текущих SHA. Настоящий Claude в этих сообщённых synthetic-прогонах не запускался.
+
+Остаётся завершить независимые отзывы по текущим SHA и привязать точные synthetic-артефакты B. Команда и весь предмет будущего разрешения актуализированы в начале live-плана. Сам запрос отдельного разрешения выполняет A после инженерной фиксации; разрешения и реальных запусков пока нет. После документальных обновлений `git diff --check` — **exit 0, real 0,02 с**; SHA трёх code/test-файлов не изменились. Повторная проверка отсутствия diff production, реальных fixtures, package/scripts/config и четырёх диагностических JSON — **exit 0**.
+
+| Предмет | Состояние после адресных исправлений |
+|---|---|
+| Код и стенд | 77 synthetic-тестов, typecheck и адресный lint прошли; TS18048 закрыт; готовность ожидает актуальных A→C/B→A |
+| Реальная работа Claude practical | **Не проверена**; p-read/p-persist/p-resume/p-extensions/p-stop отдельно остаются «не выполнялся» |
+| Приёмка P2b | **Открыта**; ненаблюдаемые свойства не переименованы в успех |
+| Весь 0C | **Открыт**; следующий пакет работ не начат |
+
+##### Финальная фиксация стенда и полный цикл C — 2026-10-17
+
+B передал актуальное B→A по helper `fdec826e7c720612012293b34c9bad597ad823907095ea170858638e1ad7b864` и live `51c4899e3b7f52cfaab17c3f30c10cc1c8c3a60edf2c1e9100178be2cd6b0fbb`: блокирующих замечаний нет, TS18048 закрыт. Отдельно проверены tsc для node-конфига, ESLint трёх файлов и 77 synthetic-тестов C. Закрыты семь методических замечаний: denials всех tools, acceptance, extensionInventory, unconfirmed для ненайденного persisted transcript, cleanup 5 с, точная first/resume-инструкция и предусловие resume. Остаточные ограничения — TOCTOU executable, отсутствие независимого supervisor и остановка всего набора при required unconfirmed — сохранены в live-плане.
+
+По предложению A C добавил 78-й synthetic-тест: собственный kill завершается через 4 с, на 3001 мс report ещё не выдан, после завершения cleanup passed без увеличения testTimeout 110 с. Старый default 3 с не прошёл бы эту проверку. SHA теста стал `34b3d4606b2f1f5f8d7ee7f11813132f0fbda4e61d3c7b315ca1e0097a6c7cf1`. Helper/live зафиксированы до начала общего цикла и в ходе него не менялись. A→C актуальной матрицы запрошено; прежний отзыв к 56 тестам не переносится автоматически.
+
+Повтор общего цикла выполнен **после новых поведенческих изменений helper/live**, по замечанию B о неполной применимости предыдущего полного цикла. Это не повтор ради новой сессии или документов. C — единственный исполнитель общего цикла; восемь команд выполнены последовательно, лимит 900 с не увеличивался. Время ниже — `real` из `/usr/bin/time -p`:
+
+| Команда | Exit / результат | Real |
+|---|---|---:|
+| `sh scripts/with-node.sh npm exec --offline --no -- vitest run tests/claude` | **0 / 826 из 826**, включая 78 проверок practical-live | **22,00 с** |
+| `sh scripts/with-node.sh npm run typecheck` | **0** | **3,27 с** |
+| `sh scripts/with-node.sh npm run lint` | **0** | **1,49 с** |
+| `sh scripts/with-node.sh npm run check:boundaries` | **0 / 32 модуля, 60 зависимостей** | **0,58 с** |
+| `sh scripts/with-node.sh npm test` | **0 / 908 из 908** | **119,04 с** |
+| `sh scripts/with-node.sh npm run test:node` | **0 / 78 из 78** | **117,44 с** |
+| `sh scripts/with-node.sh npm run build` | **0** | **0,86 с** |
+| `git diff --check` | **0** | **0,01 с** |
+
+SHA после всех проверок совпали с началом цикла:
+
+| Артефакт | SHA-256 |
+|---|---|
+| `tests/claude/practical-live.test.ts` | `34b3d4606b2f1f5f8d7ee7f11813132f0fbda4e61d3c7b315ca1e0097a6c7cf1` |
+| `tests/helpers/claude/practical-live.ts` | `fdec826e7c720612012293b34c9bad597ad823907095ea170858638e1ad7b864` |
+| `tests/live/claude-practical.live.ts` | `51c4899e3b7f52cfaab17c3f30c10cc1c8c3a60edf2c1e9100178be2cd6b0fbb` |
+| `vitest.live.config.ts` (не менялся) | `8ea3852f5a6898a91f39555eab9d873c512e55b9a8fb12fb23c1a8df405bbee1` |
+
+##### Независимый dry-run B: происхождение и границы доказательства
+
+B выполнил копию **целого live-файла** с собственным synthetic CLI. C независимо прочитал копию, скрипт её формирования, launcher и безопасные evidence успешного пути/timeout. `diff -u` между текущим live и копией показал только четыре executable-константы и замену относительных импортов на абсолютные; ожидаемый exit 1 diff означает эти различия, не отказ прогона. Источники расположены во временном `/tmp/b-scratch/dry`, в репозиторий не добавлялись. Двойник выдаёт искусственные version/help/auth/init/tool/result и создаёт собственный искусственный transcript; это не проверка настоящей CLI, штатной авторизации или модели.
+
+Точная команда B для выбранного режима, прочитанная C в `run-dry.sh` (из корня worktree):
+
+```sh
+env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN LIVE=1 PRACTICAL_LIVE=1 CLAUDE_BIN=/tmp/b-scratch/dry/bin/claude CLAUDE_CONFIG_DIR=/tmp/b-scratch/dry/cfg sh scripts/with-node.sh npm exec --offline --no -- vitest run --root /tmp/b-scratch/dry --config /tmp/b-scratch/dry/vitest.config.ts
+```
+
+Режим задавался собственным файлом `/tmp/b-scratch/dry/mode`; launcher вызывался с `none`, `write`, `mutate`, `version`, `deny`, `denyread`, `notranscript` или `hang`. Env этого double не является предложением сменить способ авторизации настоящего Claude. C команду dry-run не повторял.
+
+| Synthetic-режим B на текущем live/helper | Vitest exit / наблюдение | Прямых запусков двойника |
+|---|---|---:|
+| none | **0; 5/5**, Duration 829 мс; acceptance passed, transcriptLayout confirmed, notRun пуст; P2b/0C unconfirmed | 20 = 15 диагностик + 5 model argv |
+| write | **1**; toolScope failed, дальнейшие сценарии не выполняются | 4 |
+| mutate | **1**; controlUnchanged failed | 4 |
+| version 2.1.300 | **1**; practical_admission_unsupported | 3 диагностики, 0 моделей |
+| deny Write | **0; 5/5**; explicitWriteDenial passed | 20 |
+| denyread | **1**; read failed, acceptance requiredFailed содержит p-read.read, остальные четыре notRun | 4 |
+| notranscript | **1**; p-persist required_unconfirmed, transcriptPresent unconfirmed; layout unconfirmed, p-read.transcriptAbsentAfter также unconfirmed в сводке, resume не запускается | 8 |
+| hang | **1**; Duration 90,33 с, тест 90,14 с; resultReason timeout, cleanup passed, root removed | 4 |
+
+Таблица — результаты, сообщённые независимым исполнителем B; C отдельно сверил сохранённые successful/timeout JSON. Неуспешные режимы — ожидаемые отрицательные synthetic-проверки. Режим ignoreterm исключён из выводов: ранний Stop может прийти до установки обработчика, поэтому он не проверяет SIGTERM→SIGKILL. Реальную эскалацию покрывают существующие ProcessRunner-тесты собственных Node-процессов. Более ранние прогоны старых SHA остаются историей и не используются вместо этой таблицы.
+
+C статически зафиксировал следующие SHA временных артефактов; двойник B менялся при добавлении режимов, поэтому эти SHA описывают файлы **на момент чтения C**, а не выдуманный снимок каждого прежнего запуска:
+
+| Временный артефакт | SHA-256 |
+|---|---|
+| `bin/claude.exe` | `c5108a5bc46c64ad64a9b659174346045f8b50f0327e0c351aed12a4dbe2e959` |
+| `bin/impl.cjs` | `6fee06457e081d530279643b5c2c395fda4a70c3f7bc1b3c8bb0fe41487cd8fb` |
+| `live-copy.live.ts` | `449a73b411a3523aa04f5c7df36dc52395582989a8077fed9a0a14d47e5f5ff2` |
+| `make-copy.mjs` | `808d86bafd570022dc0d4991f0488c1365f369faf40b381006c91965b9d9b515` |
+| `run-dry.sh` | `66db66499a1869621bb4e94b3479ef9486793acd19abba625a117e7a7012e11d` |
+| `vitest.config.ts` двойника | `46f769ccf6e2092ac370a9f7af8f4101e5a73c1ea2cf2fa314788bb748db1378` |
+| `vs-practical-evidence-oRs68A/results.json`, успешный путь | `ad62b4766fb9686cc789f4423ec8bfaadebc0f43809b07a0e4a6cc3e174077ae` |
+| `vs-practical-evidence-xChHy1/results.json`, timeout | `d4c2e8af0305c431c267390aad39be945bb15d5aa31daeff0a7c9dc2c6496c59` |
+
+Оба evidence находятся под `/private/var/folders/b9/2rsrd3m96dq19pt0gnhl5flr0000gn/T/`. OpenSSL и чтение выбранных безопасных полей — exit 0. Полнота временного архива для всех отрицательных режимов не заявляется. Эти данные не заменяют реальные fixtures и не меняют строку «не выполнялся» ни для одного из пяти настоящих сценариев.
+
+##### Состояние передачи после финального цикла
+
+Изменённый состав по-прежнему ровно шесть файлов: live A, helper A, тест C, отчёт, live-план и implementation-план. B→A и C→A закрыты по актуальным helper/live SHA; повторное A→C для теста `34b3d460…6c7cf1` остаётся последним ожидаемым отзывом. После документальных правок успешные наборы больше не повторяются. GUI не запускался, настоящих Claude/Codex-вызовов **0**.
+
+Точная будущая команда, fixed executable/SHA, argv/env/cwd, 5+15 прямых запусков и вспомогательные процессы, бюджеты, расходы и безопасный состав evidence находятся в актуальном начале [live-плана](STAGE-0C-PRACTICAL-LIVE-PLAN.md). Там явно указано: если модель не использует обязательный Glob, оставшиеся четыре сценария не выполняются; повтор автоматически не разрешается. Таймеры 100/5/5/110 с не заменяют независимый supervisor, TOCTOU и detached-потомки не скрываются. Только A предъявляет один конкретный запрос разрешения после фиксации оставшегося отзыва; до настоящего запуска требуется отдельное решение пользователя именно на CLI/модельные вызовы.
+
+| Предмет | Финальное состояние C перед последним отзывом |
+|---|---|
+| Код и стенд | Все восемь проектных проверок прошли на фиксированных SHA; актуальные B→A/C→A закрыты; ожидается A→C новых тестов |
+| Реальная работа Claude practical | **Не проверена**: p-read, p-persist, p-resume, p-extensions, p-stop не выполнялись |
+| Приёмка P2b | **Открыта**; успех synthetic-набора и готовность стенда не заменяют модельную приёмку |
+| Весь 0C | **Открыт**; следующие пакеты не начаты |
+
+##### Завершение инженерной подготовки и актуальные отзывы — 2026-10-17
+
+Получено **A→C без открытых замечаний** для `tests/claude/practical-live.test.ts`, SHA `34b3d4606b2f1f5f8d7ee7f11813132f0fbda4e61d3c7b315ca1e0097a6c7cf1`. A независимо перечитал prerequisite/not_started, проглоченный runner-отказ, rejected AgentRun.done, закрытые denial и приоритет отказа Read/Glob/Grep, шесть вариантов inventory, обязательные checks/layout/notRun в сводке, запрет поздней мутации evidence и cleanup 4 с внутри 5 с. Это статическое ревью; A не заявляет собственного прогона этих 78 тестов.
+
+**B→A и C→A** без открытых замечаний относятся к live SHA `51c4899e3b7f52cfaab17c3f30c10cc1c8c3a60edf2c1e9100178be2cd6b0fbb` и helper SHA `fdec826e7c720612012293b34c9bad597ad823907095ea170858638e1ad7b864`. C повторно сверил все три SHA и неизменный `vitest.live.config.ts`: они совпали с последним полным циклом **826/826, 908/908, 78/78; остальные пять команд exit 0**. Повторного цикла после получения отзыва нет: код не изменился, дополнены только три документа. Исходные промежуточные статусы ожидания выше оставлены как история.
+
+B передал точные пути остальных synthetic-evidence; C прочитал их SHA, не повторяя dry-run. Все перечисленные `results.json` находятся под `/private/var/folders/b9/2rsrd3m96dq19pt0gnhl5flr0000gn/T/`:
+
+| Synthetic-режим / каталог evidence | SHA-256 results.json |
+|---|---|
+| write / `vs-practical-evidence-THsdGa` | `0bd21f01615f6915d1a24cf220d6a576fad2ded892940399857c399af7e30d2c` |
+| mutate / `vs-practical-evidence-9JjUbJ` | `c601b90023c1cf6133d66ef93bd3c04c68cce04f157c924054e97465486e0143` |
+| version / `vs-practical-evidence-jAZCwi` | `2f51b83bafa53f5ff82db4add5df69fa10d06635756ea7909a283b7802e39301` |
+| deny / `vs-practical-evidence-u1uV3l` | `51ffdda199480302757c9ffa1f7f3984c44b6814b58af76ac6d33e3aceae638d` |
+| denyread / `vs-practical-evidence-F0Arsb` | `8360c78679d0f49d822476b82b984c40429d919c5c0996c936c8ad63813076dd` |
+| notranscript / `vs-practical-evidence-4sPX0P` | `1a5fe9d7abc3a3a725eb2da19462e8f09c55056e6ad5f314f109e977fb9e9914` |
+
+Успешный и timeout evidence уже привязаны к SHA в предыдущем разделе. B также уточнил отдельную synthetic parser-пробу: `/tmp/b-scratch/parse-check.mjs`, SHA `18e1ab8bdaefac4fcdfbc072cdc0227bd5d1971120dd9b6f05be1510c68704cd`, команда `sh scripts/with-node.sh node /tmp/b-scratch/parse-check.mjs "$PWD"` из worktree; сообщённый B результат — error=null, result=success, tool_started Read, успешный tool_finished, denied Write и unknown_system для system status. C сверил только SHA скрипта, не запускал его. Это всё ещё synthetic-происхождение, не реальная форма потока Claude и не свежесть авторизации.
+
+**Инженерная подготовка завершена.** Проверенный набор и предмет отдельного разрешения доступны в актуальном начале [live-плана](STAGE-0C-PRACTICAL-LIVE-PLAN.md): точная команда только practical live-файла, executable/SHA, 5+15 прямых CLI-запусков, вся вспомогательная топология, argv/env/cwd, бюджеты, остановка/cleanup, возможные расходы и записи, безопасный evidence и критерии passed/failed/unconfirmed. A — единственный исполнитель будущего реального набора и единственный отправитель запроса разрешения. Отдельное решение требуется для настоящих CLI/модельных вызовов; чтение, правки, doubles и проектные проверки уже были разрешены.
+
+| Предмет | Актуальный результат |
+|---|---|
+| Готовность кода и стенда | **Подтверждена в описанных границах**: проверки и актуальные A→C/B→A/C→A завершены; набор готов к отдельному разрешению |
+| Реальная работа Claude practical | **Не подтверждена**: p-read, p-persist, p-resume, p-extensions и p-stop не выполнялись; реальных CLI-вызовов 0 |
+| Приёмка P2b | **Открыта**; модельные результаты и ненаблюдаемые свойства не подменяются готовностью стенда |
+| Весь 0C | **Открыт**; P3, Codex adapter, SessionEngine, UI и продуктовый Swarm не начаты |
