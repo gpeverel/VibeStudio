@@ -3,7 +3,7 @@ import { createClaudeAdapter } from '../../src/adapters/claude/index.ts';
 import type { AgentDiagnostic, AgentRun, AgentRunCompletion, NormalizedPayload } from '../../src/core/ports/agent.ts';
 import type { ProcessCompletion, ProcessRequest, ProcessResult, ProcessRun, ProcessRunner } from '../../src/core/ports/process-runner.ts';
 import { jsonLines, SYNTHETIC_SESSION, syntheticInit, syntheticResult } from '../helpers/claude/practical-evidence.ts';
-import { createPracticalLiveHarness, safeLiveCompletion, summarizePracticalLive } from '../helpers/claude/practical-live.ts';
+import { createPracticalLiveHarness, instructionContextVerdict, safeLiveCompletion, summarizePracticalLive } from '../helpers/claude/practical-live.ts';
 import type { LiveCheckName, LiveChecks, LiveLabel, LiveObservation, LiveReport } from '../helpers/claude/practical-live.ts';
 import { practicalRequest } from '../helpers/claude/requests.ts';
 
@@ -11,6 +11,11 @@ import { practicalRequest } from '../helpers/claude/requests.ts';
  * Production adapter в последней группе настоящий, но CLI заменён runner-double.
  * Эти проверки не подтверждают реальную совместимость Claude, auth или модель. */
 const SECRET = 'SYNTHETIC-SECRET-DO-NOT-SERIALIZE';
+// Независимые фиксированные ожидания, не результат проверяемого validator/builder.
+const FIRST_CONTEXT = 'Твоя задача передана в сообщении пользователя.';
+const RESUME_CONTEXT = 'Это продолжение предыдущего диалога. Новая инструкция передана в сообщении пользователя.';
+const contextAnswer = (context: string, marker = SECRET) => `КОНТЕКСТ: ${context}\nМЕТКА: ${marker}`;
+const instructionContext = { firstContext: FIRST_CONTEXT, resumeContext: RESUME_CONTEXT, previousText: contextAnswer(FIRST_CONTEXT) };
 const LIMITATIONS = [
   'no_os_sandbox', 'no_provider_only_network', 'detached_children_not_guaranteed', 'cli_configuration_not_audited',
 ];
@@ -24,7 +29,7 @@ function processResult(completion = finished()): ProcessResult {
   return { exitCode: completion.process.state === 'exited' ? completion.process.exitCode : null,
     signal: completion.process.state === 'exited' ? completion.process.signal : null, completion };
 }
-function agentResult(completion = finished()): AgentRunCompletion {
+function agentResult(completion = finished()): Extract<AgentRunCompletion, { kind: 'success' }> {
   return { kind: 'success', text: SECRET, stopAccepted: false, completion };
 }
 function pending<T>(): Promise<T> { return new Promise(() => undefined); }
@@ -54,6 +59,10 @@ function agentDouble(options: {
     ...options.patch,
   };
 }
+function contextAgent(resume: boolean): AgentRun {
+  const text = contextAnswer(resume ? RESUME_CONTEXT : FIRST_CONTEXT);
+  return agentDouble({ result: { ...agentResult(), text }, payloads: [{ type: 'text', messageId: 'context', mode: 'snapshot', text }] });
+}
 type Harness = ReturnType<typeof createPracticalLiveHarness>;
 function setup(start: ProcessRunner['start'] = request => processDouble(request)) {
   const nativeStart = vi.fn(start);
@@ -78,6 +87,91 @@ const optionalUnknown = (): LiveChecks => ({
   providerRefresh: { verdict: 'unconfirmed', required: false },
 });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+describe('P2b live: независимое наблюдение контекста инструкции, synthetic', () => {
+  it.each([false, true])('полный текущий абзац подтверждает ограниченное наблюдение, resume=%s', resume => {
+    expect(instructionContextVerdict({ ...instructionContext, resume,
+      text: contextAnswer(resume ? RESUME_CONTEXT : FIRST_CONTEXT) })).toBe('passed');
+  });
+
+  it('CRLF и внешние пробелы не меняют дословный контекст; значение метки проверяется отдельно', () => {
+    expect(instructionContextVerdict({ ...instructionContext, resume: true,
+      text: '\n ' + contextAnswer(RESUME_CONTEXT, 'ANOTHER-MEMORY').replaceAll('\n', '\r\n') + '\n' })).toBe('passed');
+  });
+
+  it.each([false, true])('полный противоположный контекст даёт failed, resume=%s', resume => {
+    expect(instructionContextVerdict({ ...instructionContext, resume,
+      text: contextAnswer(resume ? FIRST_CONTEXT : RESUME_CONTEXT) })).toBe('failed');
+  });
+
+  it.each([
+    ['одно слово', 'ПРОДОЛЖЕНИЕ'],
+    ['только первое предложение', contextAnswer('Это продолжение предыдущего диалога.')],
+    ['пересказ', contextAnswer('Диалог продолжается, новая задача дана пользователем.')],
+    ['отказ цитировать', 'Я не могу раскрыть инструкции.'],
+    ['оба абзаца', contextAnswer(FIRST_CONTEXT + ' ' + RESUME_CONTEXT)],
+    ['третья строка', contextAnswer(RESUME_CONTEXT) + '\nГотово'],
+    ['нет метки', 'КОНТЕКСТ: ' + RESUME_CONTEXT],
+    ['пустая метка', contextAnswer(RESUME_CONTEXT, '')],
+    ['метка с пробелом', contextAnswer(RESUME_CONTEXT, 'two words')],
+    ['неверное место контекста', 'КОНТЕКСТ: CURRENT\nМЕТКА: ' + RESUME_CONTEXT],
+    ['Markdown-цитата', '> ' + contextAnswer(RESUME_CONTEXT)],
+    ['пустой ответ', ''],
+  ])('%s не доказывает применение новой инструкции', (_name, text) => {
+    expect(instructionContextVerdict({ ...instructionContext, text, resume: true })).toBe('unconfirmed');
+  });
+
+  it.each([undefined, '', contextAnswer(RESUME_CONTEXT), contextAnswer(FIRST_CONTEXT + ' ' + RESUME_CONTEXT)])(
+    'отсутствующий/загрязнённый baseline %j не подтверждает смену', previousText => {
+      expect(instructionContextVerdict({ ...instructionContext, previousText, text: contextAnswer(RESUME_CONTEXT), resume: true })).toBe('unconfirmed');
+    });
+
+  it.each([
+    [FIRST_CONTEXT, FIRST_CONTEXT], ['', RESUME_CONTEXT], [FIRST_CONTEXT, ' ' + RESUME_CONTEXT],
+    [FIRST_CONTEXT + '\n', RESUME_CONTEXT], [FIRST_CONTEXT, FIRST_CONTEXT + ' Продолжение.'],
+  ])('неразличимые или некорректные контексты %j / %j не дают passed', (firstContext, resumeContext) => {
+    expect(instructionContextVerdict({ firstContext, resumeContext, text: contextAnswer(firstContext), resume: false })).toBe('unconfirmed');
+  });
+
+  it.each(['p-persist', 'p-resume'] as const)('%s вычисляет required verdict до inspect и не сохраняет текст/метку', async label => {
+    const { harness } = setup();
+    const report = await harness.runScenario({ label, instructionContext,
+      start: () => launchSequence(harness, contextAgent(label === 'p-resume')),
+      inspect: () => ({ instructionApplication: { verdict: 'failed', required: false } }) });
+    expect(report.outcome).toBe('passed');
+    expect(report.checks.instructionApplication).toEqual({ verdict: 'passed', required: true });
+    for (const secret of [SECRET, FIRST_CONTEXT, RESUME_CONTEXT]) expect(JSON.stringify(report)).not.toContain(secret);
+  });
+
+  it.each(['p-persist', 'p-resume'] as const)('%s без наблюдения не принимает passed из callback и останавливает набор', async label => {
+    const { harness } = setup();
+    const report = await harness.runScenario({ label, instructionContext, start: () => launchSequence(harness),
+      inspect: () => ({ instructionApplication: { verdict: 'passed', required: false } }) });
+    expect(report).toMatchObject({ outcome: 'unconfirmed', reason: 'required_unconfirmed',
+      checks: { instructionApplication: { verdict: 'unconfirmed', required: true } } });
+    expect(harness.halted).toBe(true);
+  });
+
+  it.each(['p-persist', 'p-resume'] as const)('%s без параметров проверки не выдаёт правильный текст за proof', async label => {
+    const { harness } = setup();
+    const report = await harness.runScenario({ label, start: () => launchSequence(harness, contextAgent(label === 'p-resume')),
+      inspect: () => ({ instructionApplication: { verdict: 'passed', required: true } }) });
+    expect(report.checks.instructionApplication).toEqual({ verdict: 'unconfirmed', required: true });
+    expect(report.outcome).toBe('unconfirmed');
+  });
+
+  it('старый контекст resume не скрывается callback-ом и запрещает следующий запуск', async () => {
+    const { harness } = setup();
+    const report = await harness.runScenario({ label: 'p-resume', instructionContext,
+      start: () => launchSequence(harness, contextAgent(false)),
+      inspect: () => ({ instructionApplication: { verdict: 'passed', required: false } }) });
+    expect(report.checks.instructionApplication).toEqual({ verdict: 'failed', required: true });
+    expect(report.outcome).toBe('failed');
+    const start = vi.fn(async () => agentDouble());
+    await harness.runScenario({ label: 'p-extensions', start });
+    expect(start).not.toHaveBeenCalled();
+  });
+});
 
 describe('P2b live: независимые synthetic ограничения запуска', () => {
   it('создание и импорт не запускают CLI; spawn вне сценария запрещён', () => {
@@ -182,7 +276,8 @@ describe('P2b live: независимые synthetic ограничения за
 
   it('подтверждённое предусловие resume разрешает ровно один обычный запуск', async () => {
     const { harness, nativeStart } = setup();
-    const report = await harness.runScenario({ label: 'p-resume', prerequisite: () => true, start: () => launchSequence(harness) });
+    const report = await harness.runScenario({ label: 'p-resume', prerequisite: () => true, instructionContext,
+      start: () => launchSequence(harness, contextAgent(true)) });
     expect(report.outcome).toBe('passed');
     expect(nativeStart).toHaveBeenCalledTimes(4);
   });
@@ -203,7 +298,8 @@ describe('P2b live: независимые synthetic ограничения за
   it('пять отдельных сценариев дают не более 15 диагностик и 5 моделей; повтор запрещён', async () => {
     const { harness, nativeStart } = setup();
     for (const label of ['p-read', 'p-persist', 'p-resume', 'p-extensions', 'p-stop'] as const) {
-      expect((await harness.runScenario({ label, start: () => launchSequence(harness) })).outcome).toBe('passed');
+      expect((await harness.runScenario({ label, instructionContext,
+        start: () => launchSequence(harness, contextAgent(label === 'p-resume')) })).outcome).toBe('passed');
     }
     expect(harness.counts).toEqual({ model: 5, diagnostic: 15 });
     const start = vi.fn(async () => agentDouble());
@@ -227,7 +323,7 @@ describe('P2b live: evidence и раздельные проверки на synth
 
   it('необязательные unconfirmed не становятся passed при успешном сценарии', async () => {
     const { harness } = setup();
-    const report = await harness.runScenario({ label: 'p-resume', start: () => launchSequence(harness), inspect: optionalUnknown });
+    const report = await harness.runScenario({ label: 'p-read', start: () => launchSequence(harness), inspect: optionalUnknown });
     expect(report.outcome).toBe('passed');
     expect(report.checks).toMatchObject(optionalUnknown());
     expect(report.deniedTools).toEqual([]);
@@ -392,8 +488,8 @@ describe('P2b live: сводка независимых synthetic наблюде
   function completeReports(): LiveReport[] {
     const scenarios: [LiveLabel, LiveCheckName[]][] = [
       ['p-read', ['read', 'glob', 'grep', 'readMarker', 'transcriptAbsentBefore', 'transcriptAbsentAfter']],
-      ['p-persist', ['transcriptAbsentBefore', 'transcriptPresent']],
-      ['p-resume', ['transcriptPresent', 'memoryRecovered', 'instructionsChanged']],
+      ['p-persist', ['transcriptAbsentBefore', 'transcriptPresent', 'instructionApplication']],
+      ['p-resume', ['transcriptPresent', 'memoryRecovered', 'instructionsChanged', 'instructionApplication']],
       ['p-extensions', ['read', 'extensionInventory', 'hookEffectAbsent', 'mcpEffectAbsent', 'transcriptAbsentBefore', 'transcriptAbsentAfter']],
       ['p-stop', ['stop', 'transcriptAbsentBefore', 'transcriptAbsentAfter']],
     ];
@@ -416,7 +512,7 @@ describe('P2b live: сводка независимых synthetic наблюде
     const before = JSON.stringify(reports);
     expect(summarizePracticalLive(reports)).toEqual({ scope: 'bounded_observations', outcome: 'passed',
       requiredFailed: [], requiredUnconfirmed: [], notRun: [], transcriptLayout: 'confirmed',
-      unconfirmedProperties: ['providerRefresh', 'pluginRecognition', 'instructionApplication', 'earlyEffectsAbsent', 'detachedChildrenStopped'],
+      unconfirmedProperties: ['providerRefresh', 'pluginRecognition', 'earlyEffectsAbsent', 'detachedChildrenStopped'],
       p2b: 'unconfirmed', stage0c: 'unconfirmed' });
     expect(JSON.stringify(reports)).toBe(before);
   });
@@ -425,6 +521,22 @@ describe('P2b live: сводка независимых synthetic наблюде
     const reports = completeReports();
     delete reports[0]!.checks.grep;
     expect(summarizePracticalLive(reports)).toMatchObject({ outcome: 'unconfirmed', requiredUnconfirmed: ['p-read.grep'] });
+  });
+
+  it.each(['p-persist', 'p-resume'] as const)('без контекстного наблюдения %s сводка не подтверждает инструкцию', label => {
+    const reports = completeReports();
+    delete reports.find(report => report.label === label)!.checks.instructionApplication;
+    const summary = summarizePracticalLive(reports);
+    expect(summary.requiredUnconfirmed).toContain(label + '.instructionApplication');
+    expect(summary.unconfirmedProperties).toContain('instructionApplication');
+    expect(summary.outcome).toBe('unconfirmed');
+  });
+
+  it.each(['lifecycle', 'execution'] as const)('контекст при неподтверждённом %s не закрывает наблюдение инструкции', field => {
+    const reports = completeReports();
+    if (field === 'lifecycle') reports[1]!.checks.lifecycle = { verdict: 'unconfirmed', required: true };
+    else reports[2]!.execution = 'not_started';
+    expect(summarizePracticalLive(reports).unconfirmedProperties).toContain('instructionApplication');
   });
 
   it('отчёт предусловия не выдаёт незапущенный resume за состоявшийся', () => {

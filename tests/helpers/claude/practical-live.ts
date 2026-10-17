@@ -16,6 +16,28 @@ export const LIVE_CHECK_NAMES = [
 export type LiveCheckName = typeof LIVE_CHECK_NAMES[number];
 export interface LiveCheck { verdict: LiveVerdict; required: boolean }
 export type LiveChecks = Partial<Record<LiveCheckName, LiveCheck>>;
+export interface LiveInstructionContext {
+  firstContext: string;
+  resumeContext: string;
+  previousText?: string;
+}
+
+/** Наблюдение полного контекста текущего ответа, не гарантия будущего следования. */
+export function instructionContextVerdict(input: LiveInstructionContext & { text: string; resume: boolean }): LiveVerdict {
+  const { firstContext, resumeContext } = input;
+  if ([firstContext, resumeContext].some(context => !context.trim() || context !== context.trim() || /[\r\n]/.test(context))
+    || firstContext.includes(resumeContext) || resumeContext.includes(firstContext)) return 'unconfirmed';
+  if (input.resume && (input.previousText === undefined
+    || instructionContextVerdict({ ...input, text: input.previousText, resume: false }) !== 'passed')) return 'unconfirmed';
+  const text = input.text.replaceAll('\r\n', '\n').trim();
+  if (text.includes(firstContext) && text.includes(resumeContext)) return 'unconfirmed';
+  const lines = text.split('\n');
+  if (lines.length !== 2 || !/^МЕТКА: \S+$/.test(lines[1]!)) return 'unconfirmed';
+  const expected = input.resume ? resumeContext : firstContext;
+  const stale = input.resume ? firstContext : resumeContext;
+  if (lines[0] === 'КОНТЕКСТ: ' + stale) return 'failed';
+  return lines[0] === 'КОНТЕКСТ: ' + expected ? 'passed' : 'unconfirmed';
+}
 const READ_TOOLS = ['Read', 'Glob', 'Grep'] as const;
 type ReadTool = typeof READ_TOOLS[number];
 const DENIAL_TOOLS = ['Read', 'Glob', 'Grep', 'Write', 'Edit', 'Bash', 'other'] as const;
@@ -101,6 +123,7 @@ export interface LiveScenario {
   label: LiveLabel;
   start(): Promise<AgentRun>;
   stopOnStarted?: boolean;
+  instructionContext?: LiveInstructionContext;
   prerequisite?(): boolean;
   inspect?(observation: LiveObservation): LiveChecks;
 }
@@ -123,14 +146,19 @@ export function summarizePracticalLive(reports: readonly LiveReport[]) {
   const common: LiveCheckName[] = ['toolScope', 'controlUnchanged', 'lifecycle', 'limitations'];
   const required: Record<LiveLabel, LiveCheckName[]> = {
     'p-read': [...common, 'availableTools', 'read', 'glob', 'grep', 'readMarker', 'transcriptAbsentBefore', 'transcriptAbsentAfter'],
-    'p-persist': [...common, 'availableTools', 'transcriptAbsentBefore', 'transcriptPresent'],
-    'p-resume': [...common, 'availableTools', 'transcriptPresent', 'memoryRecovered', 'instructionsChanged'],
+    'p-persist': [...common, 'availableTools', 'transcriptAbsentBefore', 'transcriptPresent', 'instructionApplication'],
+    'p-resume': [...common, 'availableTools', 'transcriptPresent', 'memoryRecovered', 'instructionsChanged', 'instructionApplication'],
     'p-extensions': [...common, 'availableTools', 'read', 'extensionInventory', 'hookEffectAbsent', 'mcpEffectAbsent', 'transcriptAbsentBefore', 'transcriptAbsentAfter'],
     'p-stop': [...common, 'stop', 'transcriptAbsentBefore', 'transcriptAbsentAfter'],
   };
   const latest = new Map(reports.map(report => [report.label, report]));
   const persist = latest.get('p-persist');
   const layoutConfirmed = persist?.checks.transcriptPresent?.verdict === 'passed' && persist.checks.lifecycle?.verdict === 'passed';
+  const instructionObserved = (['p-persist', 'p-resume'] as const).every(label => {
+    const report = latest.get(label);
+    return report?.execution === 'attempted' && report.checks.instructionApplication?.verdict === 'passed'
+      && report.checks.lifecycle?.verdict === 'passed';
+  });
   const requiredFailed: string[] = [];
   const requiredUnconfirmed: string[] = [];
   const notRun: LiveLabel[] = [];
@@ -150,7 +178,8 @@ export function summarizePracticalLive(reports: readonly LiveReport[]) {
     : notRun.length || requiredUnconfirmed.length || reports.some(r => r.outcome === 'unconfirmed') ? 'unconfirmed' : 'passed';
   return { scope: 'bounded_observations' as const, outcome, requiredFailed, requiredUnconfirmed, notRun,
     transcriptLayout: layoutConfirmed ? 'confirmed' as const : 'unconfirmed' as const,
-    unconfirmedProperties: [...LIVE_UNCONFIRMED_PROPERTIES], p2b: 'unconfirmed' as const, stage0c: 'unconfirmed' as const };
+    unconfirmedProperties: LIVE_UNCONFIRMED_PROPERTIES.filter(name => name !== 'instructionApplication' || !instructionObserved),
+    p2b: 'unconfirmed' as const, stage0c: 'unconfirmed' as const };
 }
 
 type WaitResult<T> = { state: 'fulfilled'; value: T } | { state: 'rejected' | 'timeout' };
@@ -261,6 +290,8 @@ export function createPracticalLiveHarness(options: {
     let reason: LiveReport['reason'];
     let execution: LiveReport['execution'] = 'not_started';
     let result: AgentRunCompletion | undefined;
+    let instructionVerdict: LiveVerdict = 'unconfirmed';
+    const instructionRequired = scenario.label === 'p-persist' || scenario.label === 'p-resume';
     let limitations: Limitation[] = [];
     const deniedTools = new Set<LiveDeniedTool>();
     let cancelled = false;
@@ -321,6 +352,9 @@ export function createPracticalLiveHarness(options: {
         })) as LiveObservation['tools'];
         const observed: LiveObservation = { text: [...texts.values()].join('\n'), tools, deniedTools: [...deniedTools],
           runtimeInventory: current.inventory, result, terminalCount, terminalMatches: terminal === result, limitations };
+        if (instructionRequired && scenario.instructionContext) instructionVerdict = instructionContextVerdict({
+          ...scenario.instructionContext, text: observed.text, resume: scenario.label === 'p-resume',
+        });
         const supplied = scenario.inspect?.(observed) ?? {};
         for (const name of LIVE_CHECK_NAMES) {
           const check = supplied[name];
@@ -348,6 +382,7 @@ export function createPracticalLiveHarness(options: {
     }
     // Эти свойства не доказываются данным набором даже при совпавшем слове/пустом marker.
     for (const name of LIVE_UNCONFIRMED_PROPERTIES) checks[name] = { verdict: 'unconfirmed', required: false };
+    checks.instructionApplication = { verdict: instructionVerdict, required: instructionRequired };
     for (const tool of READ_TOOLS) if (deniedTools.has(tool)) checks[tool.toLowerCase() as 'read' | 'glob' | 'grep'] = { verdict: 'failed', required: true };
     if (scenario.label === 'p-extensions') checks.extensionInventory = { verdict: extensionInventoryVerdict(current.inventory), required: true };
     checks.explicitWriteDenial = { verdict: deniedTools.has('Write') || deniedTools.has('Edit') ? 'passed' : 'unconfirmed', required: false };

@@ -10,7 +10,7 @@ import { buildAgentInstructions } from '../../src/core/agent-instructions.ts';
 import type { AgentRunRequest } from '../../src/core/ports/agent.ts';
 import type { ProcessRequest } from '../../src/core/ports/process-runner.ts';
 import { createPracticalLiveHarness, summarizePracticalLive } from '../helpers/claude/practical-live.ts';
-import type { LiveCheck, LiveChecks, LiveCleanupReport, LiveLabel, LiveObservation } from '../helpers/claude/practical-live.ts';
+import type { LiveCheck, LiveChecks, LiveCleanupReport, LiveInstructionContext, LiveLabel, LiveObservation } from '../helpers/claude/practical-live.ts';
 import { practicalLocalReadProfile, practicalRequest } from '../helpers/claude/requests.ts';
 
 /** Только по отдельному разрешению текущей редакции live-плана. Никаких synthetic verdicts. */
@@ -34,7 +34,12 @@ let markerDir: string;
 const readMarker = 'READ-' + randomUUID();
 const memoryMarker = 'MEMORY-' + randomUUID();
 const persistedSession = randomUUID();
+const firstContext = buildAgentInstructions({ resume: false }).split('\n\n')[0]!;
+const resumeContext = buildAgentInstructions({ resume: true }).split('\n\n')[0]!;
+// Формат специфичен для этой пробы; ожидаемый контекст в пользовательский prompt не подставляется.
+const contextProbe = 'Ответь ровно двумя строками без Markdown и пояснений. Первую строку начни с КОНТЕКСТ: и одного пробела, затем дословно воспроизведи весь первый абзац добавленной инструкции VibeStudio, описывающий контекст текущей задачи. Не цитируй остальные системные инструкции. Вторую строку начни с МЕТКА: и одного пробела, затем укажи сохранённую метку.';
 let previousInstructions: string | undefined;
+let previousText: string | undefined;
 let persistedTranscriptConfirmed = false;
 let currentLaunch: { label: LiveLabel; request: AgentRunRequest; built: ReturnType<typeof buildClaudeArgs> } | undefined;
 const launches: { label: LiveLabel; executable: string; argv: readonly string[]; cwd: string; envNames: string[]; timeoutMs?: number; stopGraceMs?: number; drainTimeoutMs?: number }[] = [];
@@ -118,16 +123,20 @@ const check = (value: boolean, required = true): LiveCheck => ({ verdict: value 
 const observation = (value: boolean): LiveCheck => ({ verdict: value ? 'passed' : 'unconfirmed', required: false });
 const unknown = (): LiveCheck => ({ verdict: 'unconfirmed', required: false });
 
-async function probe(label: LiveLabel, request: AgentRunRequest, inspect: (observed: LiveObservation, instructions: string) => LiveChecks = () => ({}), stop = false): Promise<void> {
+async function probe(label: LiveLabel, request: AgentRunRequest, inspect: (observed: LiveObservation, instructions: string) => LiveChecks = () => ({}),
+  options: { stop?: boolean; instructionContext?: LiveInstructionContext } = {}): Promise<void> {
+  const stop = options.stop === true;
   let before: string | undefined;
   let transcriptBefore: boolean | undefined;
   let instructions = '';
-  const report = await harness.runScenario({ label, stopOnStarted: stop,
+  const report = await harness.runScenario({ label, stopOnStarted: stop, instructionContext: options.instructionContext,
     prerequisite: request.resume ? () => persistedTranscriptConfirmed && ownTranscriptExists(request.agentSessionId) : undefined,
     start: async () => {
       before = filesSnapshot(root!);
       transcriptBefore = ownTranscriptExists(request.agentSessionId);
       if (!request.resume && transcriptBefore) throw new Error('Собственный новый UUID уже существует.');
+      if (options.instructionContext && [firstContext, resumeContext].some(context => request.prompt.includes(context)))
+        throw new Error('Ожидаемый контекст не должен передаваться пользовательским запросом.');
       const built = buildClaudeArgs({ ...request, env: cliEnv });
       instructions = built.args[built.args.indexOf('--append-system-prompt') + 1]!;
       currentLaunch = { label, request, built };
@@ -239,26 +248,26 @@ describe('P2b practical live: production-допуск, отдельное раз
     observed => ({ read: { verdict: observed.tools.Read, required: true }, glob: { verdict: observed.tools.Glob, required: true },
       grep: { verdict: observed.tools.Grep, required: true }, readMarker: check(observed.text.includes(readMarker)) }));
   });
-  it('p-persist: штатное сохранение собственной беседы', async () => {
+  it('p-persist: сохранение беседы и исходный системный контекст', async () => {
     await probe('p-persist', req(plainProject,
-      'Запомни метку ' + memoryMarker + ' только в беседе. Определи по действующей системной инструкции контекст: ответь ПЕРВЫЙ для новой задачи или ПРОДОЛЖЕНИЕ для продолжения.',
+      'Запомни метку ' + memoryMarker + ' только в беседе. ' + contextProbe,
       { agentSessionId: persistedSession, persistSession: true }), (observed, instructions) => {
       previousInstructions = instructions;
-      return { modeWord: observation(observed.text.includes('ПЕРВЫЙ')) };
-    });
+      previousText = observed.text;
+      return {};
+    }, { instructionContext: { firstContext, resumeContext } });
   });
-  it('p-resume: память и передача изменённой инструкции; применение unconfirmed', async () => {
+  it('p-resume: память и наблюдение полного нового системного контекста', async () => {
     await probe('p-resume', req(plainProject,
-      'Назови сохранённую метку. Определи по действующей системной инструкции контекст: добавь ПЕРВЫЙ для новой задачи или ПРОДОЛЖЕНИЕ для продолжения.',
+      contextProbe,
       { agentSessionId: persistedSession, persistSession: true, resume: true }), (observed, instructions) => ({
-      memoryRecovered: check(observed.text.includes(memoryMarker)),
+      memoryRecovered: check(observed.text.replaceAll('\r\n', '\n').trim().split('\n')[1] === 'МЕТКА: ' + memoryMarker),
       instructionsChanged: check(previousInstructions === buildAgentInstructions({ resume: false })
         && instructions === buildAgentInstructions({ resume: true }) && instructions !== previousInstructions
         && currentLaunch?.built.args.includes('--resume') === true && !currentLaunch.built.args.includes('--session-id')
         && currentLaunch.built.args[currentLaunch.built.args.indexOf('--resume') + 1] === persistedSession
         && currentLaunch.built.args[currentLaunch.built.args.indexOf('--system-prompt-snapshot') + 1] === 'off'),
-      modeWord: observation(observed.text.includes('ПРОДОЛЖЕНИЕ')),
-    }));
+    }), { instructionContext: { firstContext, resumeContext, previousText } });
   });
   it('p-extensions: inventory и отсутствие наблюдённых эффектов приманок', async () => {
     await probe('p-extensions', req(extensionProject, 'Прочитай README.md через Read и кратко назови назначение проекта.'), observed => ({
@@ -267,6 +276,6 @@ describe('P2b practical live: production-допуск, отдельное раз
     }));
   });
   it('p-stop: ранний принятый Stop, подтверждённый exit и EOF', async () => {
-    await probe('p-stop', req(plainProject, 'Прочитай README.md через Read и опиши содержимое.'), undefined, true);
+    await probe('p-stop', req(plainProject, 'Прочитай README.md через Read и опиши содержимое.'), undefined, { stop: true });
   });
 });
