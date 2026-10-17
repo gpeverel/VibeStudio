@@ -37,3 +37,11 @@ LIVE=1 AUTH_STATUS_PROBE=1 CLAUDE_BIN=/opt/homebrew/bin/claude sh scripts/with-n
 Результат: `unauthenticated/completed`, `loggedIn:false`, `authMethod:none`, `apiProvider:firstParty`. CLI exit 1 без сигнала, stdout/stderr ended, wait settled, issues пусты; cleanup confirmed, stop not_needed. Учтено 217 байт stdout и 0 stderr, содержимое не сохранено. SIGKILL собственной группы со статусом not_found не подтверждает остановку detached-потомков.
 
 Отсутствие подтверждённой авторизации наблюдалось и без двух режимных флагов. Это **не причинный A/B с p01**: различаются время и родительский запуск, тождественность PATH не доказана. Причина неизвестна; fixture не обосновывает снятие production-ограничений, диагноз аккаунта/Keychain/sandbox или повторный login. Provider refresh, реальная модельная работа, P2b и весь 0C не подтверждены. Исходное разрешение на одну команду израсходовано, новые вызовы не выполнялись.
+
+## 2026-10-17-auth02
+
+После нового явного сообщения «Разрешаю одну auth-пробу» A однократно повторил ту же команду auth01 без изменения entry/helper/argv. Это отдельно разрешённый повтор, не автоматический retry. Начало — `2026-10-17T15:56:28.503Z` (18:56:28.503 MSK); команда exit 1, `/usr/bin/time -p` real **0,44 с**. Прямых CLI-попыток 1, моделей 0; после этого вызова продолжения не было.
+
+`2026-10-17-auth02.json` — побайтовая копия собственного `/var/folders/b9/2rsrd3m96dq19pt0gnhl5flr0000gn/T/vs-auth-status-evidence-EQtLjL/results.json`, 1573 байта, mode исходника/копии 0600, SHA-256 **`0b430d3c98b9afcb3e17265ff1c753be473f3de40b28cd2a3be88188fce77c00`**. C проверил cmp/SHA, B независимо прочитал исходник и подтвердил результат. SHA entry/helper/executable те же, что в auth01.
+
+Результат снова `unauthenticated/completed`, loggedIn false, authMethod none, apiProvider firstParty; CLI exit 1 без сигнала, оба EOF ended, wait settled, issues пусты, cleanup confirmed, stop not_needed. В закрытом JSON auth01/auth02 отличается только startedAt; C подтвердил diff, B — совпадение содержимого после исключения строки времени. Это не сравнение сырых ответов, они не сохранялись. Причина расхождения с обычным рабочим запуском пользователя остаётся неизвестной; разрешение израсходовано, модель/P2b/0C не подтверждены.
