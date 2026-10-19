@@ -2,6 +2,20 @@
 
 Это безопасные отчёты practical-стенда и отдельно согласованной немодельной auth-диагностики, не synthetic doubles и не сырые JSONL для parser replay. Старые `../real/01–04` сохранены отдельно. Отчёты не содержат raw stdout/stderr, ответов модели, значений env, credentials или чужих transcripts.
 
+## 2026-10-19-p02
+
+Единственный practical-набор по разрешению «Разрешаю один набор» выполнил Claude Code-сеанс VibeForge; команда та же, что в p01:
+
+```sh
+LIVE=1 PRACTICAL_LIVE=1 CLAUDE_BIN=/opt/homebrew/bin/claude sh scripts/with-node.sh npm exec --offline --no -- vitest run --config vitest.live.config.ts tests/live/claude-practical.live.ts
+```
+
+Начало — 2026-10-19 08:28:39 MSK, конец 08:29:16 MSK, команда **exit 0**, Vitest `5 passed`, Duration 36,84 с, `time -p` real 37,68 с.
+
+`2026-10-19-p02.json` — побайтовая копия собственного `vs-practical-evidence-uXi4qr/results.json`, 101520 байт, SHA-256 `436d129bed4abf538560bed83a0a68075b93110c86e4abe42ffe5fa023bcdd88`; `cmp` и SHA проверены, mode исходника/копии 0600 (Git не сохраняет его при переносе checkout). Проект стенда в файле — путь собственного временного каталога, удалён подтверждённым cleanup. Проверенная редакция: live `4f0ef467…48ced`, helper `f0e31033…134c`, матрица `1d3fb89f…de82`, executable SHA `0116ee2e…7f70`, CLI 2.1.295.
+
+Результат: 20 запусков (5 модельных + 15 диагностик, все диагностики exit 0), пять сценариев **passed**, `requiredFailed`/`requiredUnconfirmed`/`notRun` пусты, `transcriptLayout=confirmed`, cleanup passed, `rootCleanup=removed`. p-stop: `interrupted`, `stopAccepted=true`, процесс завершён сигналом SIGTERM, EOF подтверждены. Остаются unconfirmed providerRefresh, pluginRecognition, earlyEffectsAbsent, detachedChildrenStopped и явный denial Write/Edit. Это первое реальное подтверждение модельной работы practical-профиля; поля `p2b`/`stage0c` в самом файле всегда `unconfirmed` (helper не закрывает себя), решение о закрытии P2b принято сверкой критериев в [отчёте](../../../../docs/STAGE-0C-REPORT.md). **Файл не подтверждает ОС-изоляцию, остановку detached-потомков, provider refresh и не закрывает весь 0C.**
+
 ## 2026-10-17-p01
 
 Исполнитель A однократно выполнил согласованную команду из worktree после поручения пользователя завершить P2b:
