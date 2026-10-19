@@ -1,0 +1,444 @@
+{
+  "schemaVersion": 1,
+  "executable": {
+    "path": "/opt/homebrew/bin/claude",
+    "resolved": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+    "sha256": "0116ee2e0a513900b633d9951367f18747686478e2b462805b8c31609f047f70",
+    "size": 239695888
+  },
+  "project": "/private/var/folders/b9/2rsrd3m96dq19pt0gnhl5flr0000gn/T/vs-practical-live-8PEtAq",
+  "launches": [
+    {
+      "label": "p-read",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--version"
+      ],
+      "cwd": "os.tmpdir()",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 5000,
+      "stopGraceMs": 100,
+      "drainTimeoutMs": 500
+    },
+    {
+      "label": "p-read",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--help"
+      ],
+      "cwd": "os.tmpdir()",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 5000,
+      "stopGraceMs": 100,
+      "drainTimeoutMs": 500
+    },
+    {
+      "label": "p-read",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "auth",
+        "status"
+      ],
+      "cwd": "os.tmpdir()",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 5000,
+      "stopGraceMs": 100,
+      "drainTimeoutMs": 500
+    }
+  ],
+  "reports": [
+    {
+      "label": "p-read",
+      "execution": "attempted",
+      "outcome": "failed",
+      "reason": "check_failed",
+      "checks": {
+        "availableTools": {
+          "verdict": "unconfirmed",
+          "required": true
+        },
+        "read": {
+          "verdict": "unconfirmed",
+          "required": true
+        },
+        "glob": {
+          "verdict": "unconfirmed",
+          "required": true
+        },
+        "grep": {
+          "verdict": "unconfirmed",
+          "required": true
+        },
+        "readMarker": {
+          "verdict": "failed",
+          "required": true
+        },
+        "controlUnchanged": {
+          "verdict": "passed",
+          "required": true
+        },
+        "transcriptAbsentBefore": {
+          "verdict": "passed",
+          "required": true
+        },
+        "transcriptAbsentAfter": {
+          "verdict": "passed",
+          "required": true
+        },
+        "explicitWriteDenial": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "pluginRecognition": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "instructionApplication": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "providerRefresh": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "toolScope": {
+          "verdict": "passed",
+          "required": true
+        },
+        "limitations": {
+          "verdict": "failed",
+          "required": true
+        },
+        "lifecycle": {
+          "verdict": "failed",
+          "required": true
+        },
+        "earlyEffectsAbsent": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "detachedChildrenStopped": {
+          "verdict": "unconfirmed",
+          "required": false
+        }
+      },
+      "version": "2.1.295",
+      "limitations": [],
+      "deniedTools": [],
+      "resultKind": "error",
+      "stopAccepted": false,
+      "resultReason": "not_authenticated",
+      "completion": {
+        "process": {
+          "state": "not_started"
+        },
+        "stdout": "not_started",
+        "stderr": "not_started",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [],
+        "issues": []
+      },
+      "cleanup": {
+        "verdict": "passed",
+        "safeToRemove": true,
+        "stopFailures": 0,
+        "processes": [
+          {
+            "label": "p-read",
+            "phase": "version",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-read",
+            "phase": "help",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-read",
+            "phase": "auth",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 1,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          }
+        ]
+      },
+      "modelLaunches": 0,
+      "diagnosticLaunches": 3
+    }
+  ],
+  "acceptance": {
+    "scope": "bounded_observations",
+    "outcome": "failed",
+    "requiredFailed": [
+      "p-read.lifecycle",
+      "p-read.limitations",
+      "p-read.readMarker"
+    ],
+    "requiredUnconfirmed": [
+      "p-read.availableTools",
+      "p-read.read",
+      "p-read.glob",
+      "p-read.grep",
+      "p-read.transcriptAbsentAfter"
+    ],
+    "notRun": [
+      "p-persist",
+      "p-resume",
+      "p-extensions",
+      "p-stop"
+    ],
+    "transcriptLayout": "unconfirmed",
+    "unconfirmedProperties": [
+      "providerRefresh",
+      "pluginRecognition",
+      "instructionApplication",
+      "earlyEffectsAbsent",
+      "detachedChildrenStopped"
+    ],
+    "p2b": "unconfirmed",
+    "stage0c": "unconfirmed"
+  },
+  "processes": [
+    {
+      "label": "p-read",
+      "phase": "version",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-read",
+      "phase": "help",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-read",
+      "phase": "auth",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 1,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    }
+  ],
+  "cleanup": {
+    "verdict": "passed",
+    "safeToRemove": true,
+    "stopFailures": 0,
+    "processes": [
+      {
+        "label": "p-read",
+        "phase": "version",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-read",
+        "phase": "help",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-read",
+        "phase": "auth",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 1,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      }
+    ]
+  },
+  "rootCleanup": "removed",
+  "limits": {
+    "scenarioMs": 100000,
+    "cleanupMs": 5000,
+    "stopMs": 5000,
+    "testMs": 110000,
+    "independentSupervisor": false
+  }
+}

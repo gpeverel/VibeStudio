@@ -1,0 +1,3705 @@
+{
+  "schemaVersion": 1,
+  "executable": {
+    "path": "/opt/homebrew/bin/claude",
+    "resolved": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+    "sha256": "0116ee2e0a513900b633d9951367f18747686478e2b462805b8c31609f047f70",
+    "size": 239695888
+  },
+  "project": "/private/var/folders/b9/2rsrd3m96dq19pt0gnhl5flr0000gn/T/vs-practical-live-Iwz9KF",
+  "launches": [
+    {
+      "label": "p-read",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--version"
+      ],
+      "cwd": "os.tmpdir()",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 5000,
+      "stopGraceMs": 100,
+      "drainTimeoutMs": 500
+    },
+    {
+      "label": "p-read",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--help"
+      ],
+      "cwd": "os.tmpdir()",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 5000,
+      "stopGraceMs": 100,
+      "drainTimeoutMs": 500
+    },
+    {
+      "label": "p-read",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "auth",
+        "status"
+      ],
+      "cwd": "os.tmpdir()",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 5000,
+      "stopGraceMs": 100,
+      "drainTimeoutMs": 500
+    },
+    {
+      "label": "p-read",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--print",
+        "--verbose",
+        "--input-format",
+        "text",
+        "--output-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--restricted",
+        "--safe-mode",
+        "--setting-sources",
+        "",
+        "--strict-mcp-config",
+        "--mcp-config",
+        "{\"mcpServers\":{}}",
+        "--tools",
+        "Read,Glob,Grep",
+        "--permission-mode",
+        "dontAsk",
+        "--permission-prompts",
+        "none",
+        "--disable-slash-commands",
+        "--no-chrome",
+        "--disallowedTools",
+        "Bash,PowerShell,Edit,Write,NotebookEdit,Agent,Task,Skill,WebFetch,WebSearch",
+        "--system-prompt-snapshot",
+        "off",
+        "--append-system-prompt",
+        "Твоя задача передана в сообщении пользователя.\n\n- ЯЗЫК ОБЩЕНИЯ: Пиши ВСЕ сообщения, пояснения, рассуждения вслух и — обязательно — финальный отчёт/итог на РУССКОМ языке. Задача, код, пути к файлам и команды могут быть на английском, но любой текст, который увидит пользователь (в том числе итоговое резюме), должен быть на русском. Технические идентификаторы (имена файлов, функций, команды) не переводи.\n- Используй только инструменты и доступ, предоставленные текущим запуском. Если задача требует недоступного действия, сообщи об ограничении текстом.\n- Если нужно уточнение пользователя, задай вопрос текстом. Ответ пользователя поступит отдельным следующим ходом.",
+        "--session-id",
+        "6f514328-7b82-4233-8642-21af8ff64fd5",
+        "--allowedTools",
+        "Read,Glob,Grep",
+        "--no-session-persistence"
+      ],
+      "cwd": "project",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 90000,
+      "stopGraceMs": 2000,
+      "drainTimeoutMs": 2000
+    },
+    {
+      "label": "p-persist",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--version"
+      ],
+      "cwd": "os.tmpdir()",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 5000,
+      "stopGraceMs": 100,
+      "drainTimeoutMs": 500
+    },
+    {
+      "label": "p-persist",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--help"
+      ],
+      "cwd": "os.tmpdir()",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 5000,
+      "stopGraceMs": 100,
+      "drainTimeoutMs": 500
+    },
+    {
+      "label": "p-persist",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "auth",
+        "status"
+      ],
+      "cwd": "os.tmpdir()",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 5000,
+      "stopGraceMs": 100,
+      "drainTimeoutMs": 500
+    },
+    {
+      "label": "p-persist",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--print",
+        "--verbose",
+        "--input-format",
+        "text",
+        "--output-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--restricted",
+        "--safe-mode",
+        "--setting-sources",
+        "",
+        "--strict-mcp-config",
+        "--mcp-config",
+        "{\"mcpServers\":{}}",
+        "--tools",
+        "Read,Glob,Grep",
+        "--permission-mode",
+        "dontAsk",
+        "--permission-prompts",
+        "none",
+        "--disable-slash-commands",
+        "--no-chrome",
+        "--disallowedTools",
+        "Bash,PowerShell,Edit,Write,NotebookEdit,Agent,Task,Skill,WebFetch,WebSearch",
+        "--system-prompt-snapshot",
+        "off",
+        "--append-system-prompt",
+        "Твоя задача передана в сообщении пользователя.\n\n- ЯЗЫК ОБЩЕНИЯ: Пиши ВСЕ сообщения, пояснения, рассуждения вслух и — обязательно — финальный отчёт/итог на РУССКОМ языке. Задача, код, пути к файлам и команды могут быть на английском, но любой текст, который увидит пользователь (в том числе итоговое резюме), должен быть на русском. Технические идентификаторы (имена файлов, функций, команды) не переводи.\n- Используй только инструменты и доступ, предоставленные текущим запуском. Если задача требует недоступного действия, сообщи об ограничении текстом.\n- Если нужно уточнение пользователя, задай вопрос текстом. Ответ пользователя поступит отдельным следующим ходом.",
+        "--session-id",
+        "e32ab176-d301-43e9-8477-ed56b584bfc2",
+        "--allowedTools",
+        "Read,Glob,Grep"
+      ],
+      "cwd": "project",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 90000,
+      "stopGraceMs": 2000,
+      "drainTimeoutMs": 2000
+    },
+    {
+      "label": "p-resume",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--version"
+      ],
+      "cwd": "os.tmpdir()",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 5000,
+      "stopGraceMs": 100,
+      "drainTimeoutMs": 500
+    },
+    {
+      "label": "p-resume",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--help"
+      ],
+      "cwd": "os.tmpdir()",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 5000,
+      "stopGraceMs": 100,
+      "drainTimeoutMs": 500
+    },
+    {
+      "label": "p-resume",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "auth",
+        "status"
+      ],
+      "cwd": "os.tmpdir()",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 5000,
+      "stopGraceMs": 100,
+      "drainTimeoutMs": 500
+    },
+    {
+      "label": "p-resume",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--print",
+        "--verbose",
+        "--input-format",
+        "text",
+        "--output-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--restricted",
+        "--safe-mode",
+        "--setting-sources",
+        "",
+        "--strict-mcp-config",
+        "--mcp-config",
+        "{\"mcpServers\":{}}",
+        "--tools",
+        "Read,Glob,Grep",
+        "--permission-mode",
+        "dontAsk",
+        "--permission-prompts",
+        "none",
+        "--disable-slash-commands",
+        "--no-chrome",
+        "--disallowedTools",
+        "Bash,PowerShell,Edit,Write,NotebookEdit,Agent,Task,Skill,WebFetch,WebSearch",
+        "--system-prompt-snapshot",
+        "off",
+        "--append-system-prompt",
+        "Это продолжение предыдущего диалога. Новая инструкция передана в сообщении пользователя.\n\n- ЯЗЫК ОБЩЕНИЯ: Пиши ВСЕ сообщения, пояснения, рассуждения вслух и — обязательно — финальный отчёт/итог на РУССКОМ языке. Задача, код, пути к файлам и команды могут быть на английском, но любой текст, который увидит пользователь (в том числе итоговое резюме), должен быть на русском. Технические идентификаторы (имена файлов, функций, команды) не переводи.\n- Используй только инструменты и доступ, предоставленные текущим запуском. Если задача требует недоступного действия, сообщи об ограничении текстом.\n- Если нужно уточнение пользователя, задай вопрос текстом. Ответ пользователя поступит отдельным следующим ходом.",
+        "--resume",
+        "e32ab176-d301-43e9-8477-ed56b584bfc2",
+        "--allowedTools",
+        "Read,Glob,Grep"
+      ],
+      "cwd": "project",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 90000,
+      "stopGraceMs": 2000,
+      "drainTimeoutMs": 2000
+    },
+    {
+      "label": "p-extensions",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--version"
+      ],
+      "cwd": "os.tmpdir()",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 5000,
+      "stopGraceMs": 100,
+      "drainTimeoutMs": 500
+    },
+    {
+      "label": "p-extensions",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--help"
+      ],
+      "cwd": "os.tmpdir()",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 5000,
+      "stopGraceMs": 100,
+      "drainTimeoutMs": 500
+    },
+    {
+      "label": "p-extensions",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "auth",
+        "status"
+      ],
+      "cwd": "os.tmpdir()",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 5000,
+      "stopGraceMs": 100,
+      "drainTimeoutMs": 500
+    },
+    {
+      "label": "p-extensions",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--print",
+        "--verbose",
+        "--input-format",
+        "text",
+        "--output-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--restricted",
+        "--safe-mode",
+        "--setting-sources",
+        "",
+        "--strict-mcp-config",
+        "--mcp-config",
+        "{\"mcpServers\":{}}",
+        "--tools",
+        "Read,Glob,Grep",
+        "--permission-mode",
+        "dontAsk",
+        "--permission-prompts",
+        "none",
+        "--disable-slash-commands",
+        "--no-chrome",
+        "--disallowedTools",
+        "Bash,PowerShell,Edit,Write,NotebookEdit,Agent,Task,Skill,WebFetch,WebSearch",
+        "--system-prompt-snapshot",
+        "off",
+        "--append-system-prompt",
+        "Твоя задача передана в сообщении пользователя.\n\n- ЯЗЫК ОБЩЕНИЯ: Пиши ВСЕ сообщения, пояснения, рассуждения вслух и — обязательно — финальный отчёт/итог на РУССКОМ языке. Задача, код, пути к файлам и команды могут быть на английском, но любой текст, который увидит пользователь (в том числе итоговое резюме), должен быть на русском. Технические идентификаторы (имена файлов, функций, команды) не переводи.\n- Используй только инструменты и доступ, предоставленные текущим запуском. Если задача требует недоступного действия, сообщи об ограничении текстом.\n- Если нужно уточнение пользователя, задай вопрос текстом. Ответ пользователя поступит отдельным следующим ходом.",
+        "--session-id",
+        "e6577921-a47b-4ffa-85a5-d001392ce968",
+        "--allowedTools",
+        "Read,Glob,Grep",
+        "--no-session-persistence"
+      ],
+      "cwd": "extensions",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 90000,
+      "stopGraceMs": 2000,
+      "drainTimeoutMs": 2000
+    },
+    {
+      "label": "p-stop",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--version"
+      ],
+      "cwd": "os.tmpdir()",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 5000,
+      "stopGraceMs": 100,
+      "drainTimeoutMs": 500
+    },
+    {
+      "label": "p-stop",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--help"
+      ],
+      "cwd": "os.tmpdir()",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 5000,
+      "stopGraceMs": 100,
+      "drainTimeoutMs": 500
+    },
+    {
+      "label": "p-stop",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--safe-mode",
+        "--restricted",
+        "auth",
+        "status"
+      ],
+      "cwd": "os.tmpdir()",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 5000,
+      "stopGraceMs": 100,
+      "drainTimeoutMs": 500
+    },
+    {
+      "label": "p-stop",
+      "executable": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+      "argv": [
+        "--print",
+        "--verbose",
+        "--input-format",
+        "text",
+        "--output-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--restricted",
+        "--safe-mode",
+        "--setting-sources",
+        "",
+        "--strict-mcp-config",
+        "--mcp-config",
+        "{\"mcpServers\":{}}",
+        "--tools",
+        "Read,Glob,Grep",
+        "--permission-mode",
+        "dontAsk",
+        "--permission-prompts",
+        "none",
+        "--disable-slash-commands",
+        "--no-chrome",
+        "--disallowedTools",
+        "Bash,PowerShell,Edit,Write,NotebookEdit,Agent,Task,Skill,WebFetch,WebSearch",
+        "--system-prompt-snapshot",
+        "off",
+        "--append-system-prompt",
+        "Твоя задача передана в сообщении пользователя.\n\n- ЯЗЫК ОБЩЕНИЯ: Пиши ВСЕ сообщения, пояснения, рассуждения вслух и — обязательно — финальный отчёт/итог на РУССКОМ языке. Задача, код, пути к файлам и команды могут быть на английском, но любой текст, который увидит пользователь (в том числе итоговое резюме), должен быть на русском. Технические идентификаторы (имена файлов, функций, команды) не переводи.\n- Используй только инструменты и доступ, предоставленные текущим запуском. Если задача требует недоступного действия, сообщи об ограничении текстом.\n- Если нужно уточнение пользователя, задай вопрос текстом. Ответ пользователя поступит отдельным следующим ходом.",
+        "--session-id",
+        "28b419a9-12a3-450c-9c29-098af1bbf13b",
+        "--allowedTools",
+        "Read,Glob,Grep",
+        "--no-session-persistence"
+      ],
+      "cwd": "project",
+      "envNames": [
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "DISABLE_AUTOUPDATER",
+        "HOME",
+        "LOGNAME",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "timeoutMs": 90000,
+      "stopGraceMs": 2000,
+      "drainTimeoutMs": 2000
+    }
+  ],
+  "reports": [
+    {
+      "label": "p-read",
+      "execution": "attempted",
+      "outcome": "passed",
+      "checks": {
+        "availableTools": {
+          "verdict": "passed",
+          "required": true
+        },
+        "read": {
+          "verdict": "passed",
+          "required": true
+        },
+        "glob": {
+          "verdict": "passed",
+          "required": true
+        },
+        "grep": {
+          "verdict": "passed",
+          "required": true
+        },
+        "readMarker": {
+          "verdict": "passed",
+          "required": true
+        },
+        "controlUnchanged": {
+          "verdict": "passed",
+          "required": true
+        },
+        "transcriptAbsentBefore": {
+          "verdict": "passed",
+          "required": true
+        },
+        "transcriptAbsentAfter": {
+          "verdict": "passed",
+          "required": true
+        },
+        "explicitWriteDenial": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "pluginRecognition": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "instructionApplication": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "providerRefresh": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "toolScope": {
+          "verdict": "passed",
+          "required": true
+        },
+        "limitations": {
+          "verdict": "passed",
+          "required": true
+        },
+        "lifecycle": {
+          "verdict": "passed",
+          "required": true
+        },
+        "earlyEffectsAbsent": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "detachedChildrenStopped": {
+          "verdict": "unconfirmed",
+          "required": false
+        }
+      },
+      "version": "2.1.295",
+      "limitations": [
+        "no_os_sandbox",
+        "no_provider_only_network",
+        "detached_children_not_guaranteed",
+        "cli_configuration_not_audited"
+      ],
+      "deniedTools": [],
+      "runtimeInventory": {
+        "tools": {
+          "state": "known",
+          "value": [
+            "Glob",
+            "Grep",
+            "Read"
+          ],
+          "provenance": "cli-init"
+        },
+        "plugins": {
+          "state": "known",
+          "value": [
+            {
+              "id": "sha256:61d33d4d67e179275c270e26c8090a062dd494c5f0c8378e176e435cdb9191bf",
+              "origin": "builtin"
+            },
+            {
+              "id": "sha256:804ebd68c46e1c3c53c7f97bfe0c90c4185b429fd4c3e6a7223bc9a77e9db0d8",
+              "origin": "builtin"
+            }
+          ],
+          "provenance": "cli-init"
+        },
+        "mcpServers": {
+          "state": "known",
+          "value": [],
+          "provenance": "cli-init"
+        },
+        "skills": {
+          "state": "known",
+          "value": [],
+          "provenance": "cli-init"
+        },
+        "slashCommands": {
+          "state": "known",
+          "value": [],
+          "provenance": "cli-init"
+        },
+        "agents": {
+          "state": "known",
+          "value": [
+            "sha256:c857d09db23e6822e3600bc06ad8d58f92ed62bc8efd81c753f77048662cb97d",
+            "sha256:3b73900b8d29f963dece78edd4bd9529d855e50f2a3fcc39b3d66cd657630905",
+            "sha256:db45ca5bb40691a7dfc7dabddf46abc471d0127192862513c819a04498788c93",
+            "sha256:fa8ed0bdabdd6bcb1c0746f1d3e15212f7f3439d74339fbaaf16c60c0a80fb8e"
+          ],
+          "provenance": "cli-init"
+        },
+        "cliVersion": {
+          "state": "known",
+          "value": "2.1.295",
+          "provenance": "cli-init"
+        },
+        "permissionMode": {
+          "state": "known",
+          "value": "dontAsk",
+          "provenance": "cli-init"
+        }
+      },
+      "resultKind": "success",
+      "stopAccepted": false,
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      },
+      "cleanup": {
+        "verdict": "passed",
+        "safeToRemove": true,
+        "stopFailures": 0,
+        "processes": [
+          {
+            "label": "p-read",
+            "phase": "version",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-read",
+            "phase": "help",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-read",
+            "phase": "auth",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-read",
+            "phase": "model",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          }
+        ]
+      },
+      "modelLaunches": 1,
+      "diagnosticLaunches": 3
+    },
+    {
+      "label": "p-persist",
+      "execution": "attempted",
+      "outcome": "passed",
+      "checks": {
+        "availableTools": {
+          "verdict": "passed",
+          "required": true
+        },
+        "controlUnchanged": {
+          "verdict": "passed",
+          "required": true
+        },
+        "transcriptAbsentBefore": {
+          "verdict": "passed",
+          "required": true
+        },
+        "transcriptPresent": {
+          "verdict": "passed",
+          "required": true
+        },
+        "explicitWriteDenial": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "pluginRecognition": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "instructionApplication": {
+          "verdict": "passed",
+          "required": true
+        },
+        "providerRefresh": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "toolScope": {
+          "verdict": "passed",
+          "required": true
+        },
+        "limitations": {
+          "verdict": "passed",
+          "required": true
+        },
+        "lifecycle": {
+          "verdict": "passed",
+          "required": true
+        },
+        "earlyEffectsAbsent": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "detachedChildrenStopped": {
+          "verdict": "unconfirmed",
+          "required": false
+        }
+      },
+      "version": "2.1.295",
+      "limitations": [
+        "no_os_sandbox",
+        "no_provider_only_network",
+        "detached_children_not_guaranteed",
+        "cli_configuration_not_audited"
+      ],
+      "deniedTools": [],
+      "runtimeInventory": {
+        "tools": {
+          "state": "known",
+          "value": [
+            "Glob",
+            "Grep",
+            "Read"
+          ],
+          "provenance": "cli-init"
+        },
+        "plugins": {
+          "state": "known",
+          "value": [
+            {
+              "id": "sha256:61d33d4d67e179275c270e26c8090a062dd494c5f0c8378e176e435cdb9191bf",
+              "origin": "builtin"
+            },
+            {
+              "id": "sha256:804ebd68c46e1c3c53c7f97bfe0c90c4185b429fd4c3e6a7223bc9a77e9db0d8",
+              "origin": "builtin"
+            }
+          ],
+          "provenance": "cli-init"
+        },
+        "mcpServers": {
+          "state": "known",
+          "value": [],
+          "provenance": "cli-init"
+        },
+        "skills": {
+          "state": "known",
+          "value": [],
+          "provenance": "cli-init"
+        },
+        "slashCommands": {
+          "state": "known",
+          "value": [],
+          "provenance": "cli-init"
+        },
+        "agents": {
+          "state": "known",
+          "value": [
+            "sha256:c857d09db23e6822e3600bc06ad8d58f92ed62bc8efd81c753f77048662cb97d",
+            "sha256:3b73900b8d29f963dece78edd4bd9529d855e50f2a3fcc39b3d66cd657630905",
+            "sha256:db45ca5bb40691a7dfc7dabddf46abc471d0127192862513c819a04498788c93",
+            "sha256:fa8ed0bdabdd6bcb1c0746f1d3e15212f7f3439d74339fbaaf16c60c0a80fb8e"
+          ],
+          "provenance": "cli-init"
+        },
+        "cliVersion": {
+          "state": "known",
+          "value": "2.1.295",
+          "provenance": "cli-init"
+        },
+        "permissionMode": {
+          "state": "known",
+          "value": "dontAsk",
+          "provenance": "cli-init"
+        }
+      },
+      "resultKind": "success",
+      "stopAccepted": false,
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      },
+      "cleanup": {
+        "verdict": "passed",
+        "safeToRemove": true,
+        "stopFailures": 0,
+        "processes": [
+          {
+            "label": "p-read",
+            "phase": "version",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-read",
+            "phase": "help",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-read",
+            "phase": "auth",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-read",
+            "phase": "model",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-persist",
+            "phase": "version",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-persist",
+            "phase": "help",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-persist",
+            "phase": "auth",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-persist",
+            "phase": "model",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          }
+        ]
+      },
+      "modelLaunches": 2,
+      "diagnosticLaunches": 6
+    },
+    {
+      "label": "p-resume",
+      "execution": "attempted",
+      "outcome": "passed",
+      "checks": {
+        "availableTools": {
+          "verdict": "passed",
+          "required": true
+        },
+        "controlUnchanged": {
+          "verdict": "passed",
+          "required": true
+        },
+        "transcriptPresent": {
+          "verdict": "passed",
+          "required": true
+        },
+        "memoryRecovered": {
+          "verdict": "passed",
+          "required": true
+        },
+        "instructionsChanged": {
+          "verdict": "passed",
+          "required": true
+        },
+        "explicitWriteDenial": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "pluginRecognition": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "instructionApplication": {
+          "verdict": "passed",
+          "required": true
+        },
+        "providerRefresh": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "toolScope": {
+          "verdict": "passed",
+          "required": true
+        },
+        "limitations": {
+          "verdict": "passed",
+          "required": true
+        },
+        "lifecycle": {
+          "verdict": "passed",
+          "required": true
+        },
+        "earlyEffectsAbsent": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "detachedChildrenStopped": {
+          "verdict": "unconfirmed",
+          "required": false
+        }
+      },
+      "version": "2.1.295",
+      "limitations": [
+        "no_os_sandbox",
+        "no_provider_only_network",
+        "detached_children_not_guaranteed",
+        "cli_configuration_not_audited"
+      ],
+      "deniedTools": [],
+      "runtimeInventory": {
+        "tools": {
+          "state": "known",
+          "value": [
+            "Glob",
+            "Grep",
+            "Read"
+          ],
+          "provenance": "cli-init"
+        },
+        "plugins": {
+          "state": "known",
+          "value": [
+            {
+              "id": "sha256:61d33d4d67e179275c270e26c8090a062dd494c5f0c8378e176e435cdb9191bf",
+              "origin": "builtin"
+            },
+            {
+              "id": "sha256:804ebd68c46e1c3c53c7f97bfe0c90c4185b429fd4c3e6a7223bc9a77e9db0d8",
+              "origin": "builtin"
+            }
+          ],
+          "provenance": "cli-init"
+        },
+        "mcpServers": {
+          "state": "known",
+          "value": [],
+          "provenance": "cli-init"
+        },
+        "skills": {
+          "state": "known",
+          "value": [],
+          "provenance": "cli-init"
+        },
+        "slashCommands": {
+          "state": "known",
+          "value": [],
+          "provenance": "cli-init"
+        },
+        "agents": {
+          "state": "known",
+          "value": [
+            "sha256:c857d09db23e6822e3600bc06ad8d58f92ed62bc8efd81c753f77048662cb97d",
+            "sha256:3b73900b8d29f963dece78edd4bd9529d855e50f2a3fcc39b3d66cd657630905",
+            "sha256:db45ca5bb40691a7dfc7dabddf46abc471d0127192862513c819a04498788c93",
+            "sha256:fa8ed0bdabdd6bcb1c0746f1d3e15212f7f3439d74339fbaaf16c60c0a80fb8e"
+          ],
+          "provenance": "cli-init"
+        },
+        "cliVersion": {
+          "state": "known",
+          "value": "2.1.295",
+          "provenance": "cli-init"
+        },
+        "permissionMode": {
+          "state": "known",
+          "value": "dontAsk",
+          "provenance": "cli-init"
+        }
+      },
+      "resultKind": "success",
+      "stopAccepted": false,
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      },
+      "cleanup": {
+        "verdict": "passed",
+        "safeToRemove": true,
+        "stopFailures": 0,
+        "processes": [
+          {
+            "label": "p-read",
+            "phase": "version",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-read",
+            "phase": "help",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-read",
+            "phase": "auth",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-read",
+            "phase": "model",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-persist",
+            "phase": "version",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-persist",
+            "phase": "help",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-persist",
+            "phase": "auth",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-persist",
+            "phase": "model",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-resume",
+            "phase": "version",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-resume",
+            "phase": "help",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-resume",
+            "phase": "auth",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-resume",
+            "phase": "model",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          }
+        ]
+      },
+      "modelLaunches": 3,
+      "diagnosticLaunches": 9
+    },
+    {
+      "label": "p-extensions",
+      "execution": "attempted",
+      "outcome": "passed",
+      "checks": {
+        "availableTools": {
+          "verdict": "passed",
+          "required": true
+        },
+        "read": {
+          "verdict": "passed",
+          "required": true
+        },
+        "controlUnchanged": {
+          "verdict": "passed",
+          "required": true
+        },
+        "transcriptAbsentBefore": {
+          "verdict": "passed",
+          "required": true
+        },
+        "transcriptAbsentAfter": {
+          "verdict": "passed",
+          "required": true
+        },
+        "explicitWriteDenial": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "hookEffectAbsent": {
+          "verdict": "passed",
+          "required": true
+        },
+        "mcpEffectAbsent": {
+          "verdict": "passed",
+          "required": true
+        },
+        "pluginRecognition": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "instructionApplication": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "providerRefresh": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "toolScope": {
+          "verdict": "passed",
+          "required": true
+        },
+        "limitations": {
+          "verdict": "passed",
+          "required": true
+        },
+        "lifecycle": {
+          "verdict": "passed",
+          "required": true
+        },
+        "earlyEffectsAbsent": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "detachedChildrenStopped": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "extensionInventory": {
+          "verdict": "passed",
+          "required": true
+        }
+      },
+      "version": "2.1.295",
+      "limitations": [
+        "no_os_sandbox",
+        "no_provider_only_network",
+        "detached_children_not_guaranteed",
+        "cli_configuration_not_audited"
+      ],
+      "deniedTools": [],
+      "runtimeInventory": {
+        "tools": {
+          "state": "known",
+          "value": [
+            "Glob",
+            "Grep",
+            "Read"
+          ],
+          "provenance": "cli-init"
+        },
+        "plugins": {
+          "state": "known",
+          "value": [
+            {
+              "id": "sha256:61d33d4d67e179275c270e26c8090a062dd494c5f0c8378e176e435cdb9191bf",
+              "origin": "builtin"
+            },
+            {
+              "id": "sha256:804ebd68c46e1c3c53c7f97bfe0c90c4185b429fd4c3e6a7223bc9a77e9db0d8",
+              "origin": "builtin"
+            }
+          ],
+          "provenance": "cli-init"
+        },
+        "mcpServers": {
+          "state": "known",
+          "value": [],
+          "provenance": "cli-init"
+        },
+        "skills": {
+          "state": "known",
+          "value": [],
+          "provenance": "cli-init"
+        },
+        "slashCommands": {
+          "state": "known",
+          "value": [],
+          "provenance": "cli-init"
+        },
+        "agents": {
+          "state": "known",
+          "value": [
+            "sha256:c857d09db23e6822e3600bc06ad8d58f92ed62bc8efd81c753f77048662cb97d",
+            "sha256:3b73900b8d29f963dece78edd4bd9529d855e50f2a3fcc39b3d66cd657630905",
+            "sha256:db45ca5bb40691a7dfc7dabddf46abc471d0127192862513c819a04498788c93",
+            "sha256:fa8ed0bdabdd6bcb1c0746f1d3e15212f7f3439d74339fbaaf16c60c0a80fb8e"
+          ],
+          "provenance": "cli-init"
+        },
+        "cliVersion": {
+          "state": "known",
+          "value": "2.1.295",
+          "provenance": "cli-init"
+        },
+        "permissionMode": {
+          "state": "known",
+          "value": "dontAsk",
+          "provenance": "cli-init"
+        }
+      },
+      "resultKind": "success",
+      "stopAccepted": false,
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      },
+      "cleanup": {
+        "verdict": "passed",
+        "safeToRemove": true,
+        "stopFailures": 0,
+        "processes": [
+          {
+            "label": "p-read",
+            "phase": "version",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-read",
+            "phase": "help",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-read",
+            "phase": "auth",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-read",
+            "phase": "model",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-persist",
+            "phase": "version",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-persist",
+            "phase": "help",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-persist",
+            "phase": "auth",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-persist",
+            "phase": "model",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-resume",
+            "phase": "version",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-resume",
+            "phase": "help",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-resume",
+            "phase": "auth",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-resume",
+            "phase": "model",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-extensions",
+            "phase": "version",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-extensions",
+            "phase": "help",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-extensions",
+            "phase": "auth",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-extensions",
+            "phase": "model",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          }
+        ]
+      },
+      "modelLaunches": 4,
+      "diagnosticLaunches": 12
+    },
+    {
+      "label": "p-stop",
+      "execution": "attempted",
+      "outcome": "passed",
+      "checks": {
+        "availableTools": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "controlUnchanged": {
+          "verdict": "passed",
+          "required": true
+        },
+        "transcriptAbsentBefore": {
+          "verdict": "passed",
+          "required": true
+        },
+        "transcriptAbsentAfter": {
+          "verdict": "passed",
+          "required": true
+        },
+        "explicitWriteDenial": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "pluginRecognition": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "instructionApplication": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "providerRefresh": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "toolScope": {
+          "verdict": "passed",
+          "required": true
+        },
+        "limitations": {
+          "verdict": "passed",
+          "required": true
+        },
+        "lifecycle": {
+          "verdict": "passed",
+          "required": true
+        },
+        "stop": {
+          "verdict": "passed",
+          "required": true
+        },
+        "earlyEffectsAbsent": {
+          "verdict": "unconfirmed",
+          "required": false
+        },
+        "detachedChildrenStopped": {
+          "verdict": "unconfirmed",
+          "required": false
+        }
+      },
+      "version": "2.1.295",
+      "limitations": [
+        "no_os_sandbox",
+        "no_provider_only_network",
+        "detached_children_not_guaranteed",
+        "cli_configuration_not_audited"
+      ],
+      "deniedTools": [],
+      "resultKind": "interrupted",
+      "stopAccepted": true,
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": null,
+          "signal": "SIGTERM"
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGTERM",
+            "target": "group",
+            "status": "sent"
+          },
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      },
+      "cleanup": {
+        "verdict": "passed",
+        "safeToRemove": true,
+        "stopFailures": 0,
+        "processes": [
+          {
+            "label": "p-read",
+            "phase": "version",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-read",
+            "phase": "help",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-read",
+            "phase": "auth",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-read",
+            "phase": "model",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-persist",
+            "phase": "version",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-persist",
+            "phase": "help",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-persist",
+            "phase": "auth",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-persist",
+            "phase": "model",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-resume",
+            "phase": "version",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-resume",
+            "phase": "help",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-resume",
+            "phase": "auth",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-resume",
+            "phase": "model",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-extensions",
+            "phase": "version",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-extensions",
+            "phase": "help",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-extensions",
+            "phase": "auth",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-extensions",
+            "phase": "model",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-stop",
+            "phase": "version",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-stop",
+            "phase": "help",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-stop",
+            "phase": "auth",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": 0,
+                "signal": null
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          },
+          {
+            "label": "p-stop",
+            "phase": "model",
+            "completion": {
+              "process": {
+                "state": "exited",
+                "exitCode": null,
+                "signal": "SIGTERM"
+              },
+              "stdout": "ended",
+              "stderr": "ended",
+              "wait": "settled",
+              "descendants": "not_guaranteed",
+              "signals": [
+                {
+                  "signal": "SIGTERM",
+                  "target": "group",
+                  "status": "sent"
+                },
+                {
+                  "signal": "SIGKILL",
+                  "target": "group",
+                  "status": "not_found"
+                }
+              ],
+              "issues": []
+            }
+          }
+        ]
+      },
+      "modelLaunches": 5,
+      "diagnosticLaunches": 15
+    }
+  ],
+  "acceptance": {
+    "scope": "bounded_observations",
+    "outcome": "passed",
+    "requiredFailed": [],
+    "requiredUnconfirmed": [],
+    "notRun": [],
+    "transcriptLayout": "confirmed",
+    "unconfirmedProperties": [
+      "providerRefresh",
+      "pluginRecognition",
+      "earlyEffectsAbsent",
+      "detachedChildrenStopped"
+    ],
+    "p2b": "unconfirmed",
+    "stage0c": "unconfirmed"
+  },
+  "processes": [
+    {
+      "label": "p-read",
+      "phase": "version",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-read",
+      "phase": "help",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-read",
+      "phase": "auth",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-read",
+      "phase": "model",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-persist",
+      "phase": "version",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-persist",
+      "phase": "help",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-persist",
+      "phase": "auth",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-persist",
+      "phase": "model",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-resume",
+      "phase": "version",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-resume",
+      "phase": "help",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-resume",
+      "phase": "auth",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-resume",
+      "phase": "model",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-extensions",
+      "phase": "version",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-extensions",
+      "phase": "help",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-extensions",
+      "phase": "auth",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-extensions",
+      "phase": "model",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-stop",
+      "phase": "version",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-stop",
+      "phase": "help",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-stop",
+      "phase": "auth",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    },
+    {
+      "label": "p-stop",
+      "phase": "model",
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": null,
+          "signal": "SIGTERM"
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "wait": "settled",
+        "descendants": "not_guaranteed",
+        "signals": [
+          {
+            "signal": "SIGTERM",
+            "target": "group",
+            "status": "sent"
+          },
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found"
+          }
+        ],
+        "issues": []
+      }
+    }
+  ],
+  "cleanup": {
+    "verdict": "passed",
+    "safeToRemove": true,
+    "stopFailures": 0,
+    "processes": [
+      {
+        "label": "p-read",
+        "phase": "version",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-read",
+        "phase": "help",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-read",
+        "phase": "auth",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-read",
+        "phase": "model",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-persist",
+        "phase": "version",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-persist",
+        "phase": "help",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-persist",
+        "phase": "auth",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-persist",
+        "phase": "model",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-resume",
+        "phase": "version",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-resume",
+        "phase": "help",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-resume",
+        "phase": "auth",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-resume",
+        "phase": "model",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-extensions",
+        "phase": "version",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-extensions",
+        "phase": "help",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-extensions",
+        "phase": "auth",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-extensions",
+        "phase": "model",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-stop",
+        "phase": "version",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-stop",
+        "phase": "help",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-stop",
+        "phase": "auth",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "p-stop",
+        "phase": "model",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": null,
+            "signal": "SIGTERM"
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGTERM",
+              "target": "group",
+              "status": "sent"
+            },
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      }
+    ]
+  },
+  "rootCleanup": "removed",
+  "limits": {
+    "scenarioMs": 100000,
+    "cleanupMs": 5000,
+    "stopMs": 5000,
+    "testMs": 110000,
+    "independentSupervisor": false
+  }
+}

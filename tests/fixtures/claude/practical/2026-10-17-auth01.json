@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "origin": "real-local-nonmodel-auth-status",
+  "startedAt": "2026-10-17T15:51:25.354Z",
+  "executable": {
+    "path": "/opt/homebrew/bin/claude",
+    "resolved": "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+    "sha256": "0116ee2e0a513900b633d9951367f18747686478e2b462805b8c31609f047f70",
+    "size": 239695888
+  },
+  "argv": [
+    "auth",
+    "status"
+  ],
+  "cwd": "os.tmpdir()",
+  "envNames": [
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+    "DISABLE_AUTOUPDATER",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "LOGNAME",
+    "PATH",
+    "TMPDIR",
+    "USER"
+  ],
+  "cliAttempts": 1,
+  "modelCalls": 0,
+  "limits": {
+    "deadlineMs": 8000,
+    "cleanupMs": 1000,
+    "timeoutMs": 5000,
+    "stopGraceMs": 100,
+    "drainTimeoutMs": 500,
+    "maxQueueBytes": 262144
+  },
+  "independentSupervisor": false,
+  "observation": {
+    "status": "unauthenticated",
+    "reason": "completed",
+    "auth": {
+      "loggedIn": false,
+      "authMethod": "none",
+      "apiProvider": "firstParty"
+    },
+    "stdoutBytes": 217,
+    "stderrBytes": 0,
+    "completion": {
+      "process": {
+        "state": "exited",
+        "exitCode": 1,
+        "signal": null
+      },
+      "stdout": "ended",
+      "stderr": "ended",
+      "wait": "settled",
+      "descendants": "not_guaranteed",
+      "signals": [
+        {
+          "signal": "SIGKILL",
+          "target": "group",
+          "status": "not_found"
+        }
+      ],
+      "issues": []
+    },
+    "cleanup": "confirmed",
+    "stop": "not_needed"
+  }
+}
