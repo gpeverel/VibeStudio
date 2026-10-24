@@ -1,5 +1,7 @@
 # Этап 0C: протокол Claude CLI, диагностика, профиль доступа — отчёт
 
+> **Актуальное продолжение P3, 2026-10-20:** см. заключительный раздел «P3: немодельный стенд R2 с прямым файловым контролем». D закрыт, GUI прошёл по журналу B; production-профиль и реальная M-приёмка остаются открытыми. Следующие разделы сохраняют историю прежних состояний.
+
 > Актуальный результат по отдельному поручению пользователя — заключительный раздел «P1: разделение strict и practical — 2026-10-13». Прежние прогоны, продуктовый пересмотр и выводы ниже сохранены исторически. Новые контракты проверены на doubles; production-проверки практической совместимости ещё нет. Старый строгий 0C не пройден; этап 0C не завершён. **Обновление 2026-10-19:** practical-профиль Claude принят пакетом P2b по одному реальному набору (5 из 5 сценариев passed, ограниченные наблюдения) — см. последний раздел отчёта; это не закрывает 0C.
 
 Дата: 2026-10-09; доработка B (live-runner, стенд, отчёт) и сверка с аудитом C/A: 2026-10-10. Окружение: Node `v24.15.0` (через `scripts/with-node.sh`), npm `12.2.0`, существующий lockfile; зависимости и lockfile не менялись. Работали три воркера: A (порты и адаптеры, конфигурация), B (тесты, fixtures, стенд, этот отчёт, итоговые прогоны), C (сборщик инструкций §12 и план живых проб).
@@ -2094,3 +2096,474 @@ Runtime inventory (`provenance=cli-init`) в p-read/p-persist/p-resume/p-extensi
 **Оговорки.** (1) Независимого ревью результата вторым исполнителем не было; сверку выполнил единственный агент по тому же evidence. (2) В прежних попытках (p01, auth01, auth02, 17 октября) auth в среде стенда был `loggedIn:false`; здесь во всех пяти сценариях он положителен. Причина различия не установлена и не приписывается ни sandbox, ни Keychain: контекст запуска — Claude Code-агент в VibeForge, его эффективный режим инструментов отдельно не измерялся, наблюдения разнесены по времени. (3) Разрешение «один набор» **израсходовано**; новый набор или повтор требуют нового решения пользователя. (4) Корень проекта стенда удалён; каталог с исходным evidence остаётся в системном временном каталоге до очистки ОС.
 
 Изменены только этот отчёт, live-план, статус P2b в implementation-плане, README fixtures и добавлен fixture `2026-10-19-p02.json`. Production, тесты, helpers, конфигурация и прежние evidence не менялись. Полные наборы тестов не запускались: код не менялся, их история остаётся в разделах выше.
+
+## P3: инженерный адаптер Codex, живая приёмка открыта — 2026-10-19
+
+**Результат:** добавлен отдельный контракт и адаптер установленного Codex CLI, проверяемый на синтетических потоках и собственных локальных двойниках процессов. Production-допуск не выдаёт ready: обязательный закрытый набор чтения без произвольного shell и требуемое управление расширениями не подтверждены. `detect.status=available` не означает допустимость prompt; production `start` возвращает `profile_unsupported` до его запуска. Положительные first/resume/lifecycle сценарии имеют явно внедрённый synthetic admission и не являются реальным продуктовым допуском.
+
+**P3 и весь 0C не закрыты.** Результат P2b от 2026-10-19 сохраняется в своей ограниченной области Claude. Реальных Codex-вызовов, включая `--version`, `--help` и auth diagnostics, в этой работе не выполнялось. Credentials не читались/не копировались. P4 и последующие пакеты не начаты; коммитов, push/deploy нет.
+
+**Актуализация после перекрёстного ревью:** замечания к diagnostic completion и поздним отказам Stop исправлены без ослабления assertions, включая совмещённую регрессию внутреннего kill после stream EIO и уже полученного diagnostic done. Текущий Codex-набор — **164/164**, полный Vitest — **1145/1145**, Node — **78/78**; typecheck/lint/boundaries/build проходят. Финальное повторное A→B завершено без блокирующих замечаний к проверенному инженерному срезу. Smoke не пройден (SIGABRT при регистрации приложения Electron в macOS). Результаты ниже различают исторические отказы и последний цикл.
+
+### Владение и файлы
+
+| Владелец | Изменения |
+|---|---|
+| A | `src/core/ports/agent.ts`: `AgentRunRequestBase`, generic `AgentDetection<TCapabilities>` и `AgentAdapter<TRequest,TCapabilities>` с прежними Claude-defaults. `shared/agent.ts`, прежние обязательные поля Claude, события и P2a completion не менялись |
+| B | `src/adapters/codex/contracts.ts`, `profile.ts`, `args.ts`, `detect.ts`, `parser.ts`, `index.ts`: отдельные возможности/запросы/допуск, argv/env, parser, lifecycle. Claude-адаптер и ProcessRunner не менялись |
+| C | `tests/codex/{access-profile,detect,stream-parser,adapter-lifecycle,diagnostic-lifecycle,port-contract}.test.ts`; `tests/helpers/codex/{stand,requests,process-double}.ts`, `fake-codex.mjs`; `tests/fixtures/codex/README.md`, три `synthetic-*.jsonl`, два `synthetic-*-help.txt`; `docs/P3-CODEX-LIVE-PLAN.md`, этот отчёт и статус P3 в `IMPLEMENTATION-PLAN.md` |
+
+Новые helpers принадлежат только Codex; прежние Claude fixtures/helpers/negative tests сохранены. Отдельный исполняемый model live-runner не добавлен: отсутствие допустимого профиля нельзя обойти synthetic-ready ради runnable-сценария. Подготовлен самостоятельный документ D/M; D можно целиком вынести на решение пользователя, M требует устранения указанного барьера.
+
+### Источники, версии и карта интерфейса
+
+Официальные страницы открыты 2026-10-19. Старые ссылки `developers.openai.com/codex/...` перенаправляют на `learn.chatgpt.com`. Это текущая документация, не спецификация установленной 0.162.0/0.163.0 и не evidence её исполнения.
+
+| Область | Установленное по источникам и принятое в адаптере | Что не подтверждено |
+|---|---|---|
+| Команды/ID | [Developer commands](https://learn.chatgpt.com/docs/developer-commands?surface=cli): `exec`, `exec resume`, JSONL, stdin `-`, resume по UUID/имени. Адаптер выбирает только явный UUID, не `--last`/имя; ID берётся из `thread.started`, приложение и ход имеют отдельные ID | Фактический набор флагов обоих установленных бинарников; сохранение/расположение их transcripts; реальные ошибки отсутствующей истории |
+| Протокол | [Non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode): `thread.started`, `turn.started/completed/failed`, `item.*`, `error`; элементы сообщений/команд/изменений/MCP. Usage берётся только из terminal: `input_tokens` и cached tokens сохраняются отдельно без суммирования; стоимость не выдумывается | Реальные fixtures, частота/порядок промежуточных событий конкретной версии, provider ошибки; включает ли `input_tokens` кэш, не установлено |
+| Auth | [Authentication](https://learn.chatgpt.com/docs/auth): CLI использует собственное хранилище файла/OS credential store; [команда login status](https://learn.chatgpt.com/docs/developer-commands?surface=cli) даёт exit 0 при наличии входа. Адаптер не выполняет login/logout и не открывает credentials | Действительность входа при запросе модели, refresh, соответствие env/config выбранному auth backend |
+| Конфигурация | [Config basics](https://learn.chatgpt.com/docs/config-file/config-basic): CLI overrides, trusted project layers, выбранный profile, user, cloud-managed defaults, system и builtin; enforced requirements отдельны. Один ignore-флаг не доказывает отключения всех источников | Effective-конфигурация установленной CLI и ранние эффекты, взаимодействие ignore-user-config со штатной авторизацией/провайдером |
+| Approvals/инструменты | Тот же [Config basics](https://learn.chatgpt.com/docs/config-file/config-basic) отделяет sandbox от approval policy; имеет `shell_tool`, а ограничение `unified_exec` зависит от managed requirements. Builder задаёт sandbox read-only и approval never без bypass | Закрытое чтение без произвольного shell; название sandbox этого не устанавливает, поэтому production недопущен |
+| Расширения | [Configuration Reference](https://learn.chatgpt.com/docs/config-file/config-reference) описывает hooks/inline hooks, MCP, apps, plugins/marketplaces и managed layers. `--ignore-user-config`/`--ignore-rules` не объявляются универсальным запретом расширений | Полный inventory, отключение проектных расширений, отсутствие ранних эффектов. Отсутствие события не означает known empty/disabled |
+| Инструкции | [Configuration Reference](https://learn.chatgpt.com/docs/config-file/config-reference): `developer_instructions`. Builder передаёт существующий `buildAgentInstructions({resume})` через отдельное TOML-значение `-c` на каждом ходе; пользовательский prompt — stdin | Принятие config ключа обеими установленными версиями и наблюдаемое использование правильной инструкции моделью |
+
+Дополнительные сведения B получены из официального репозитория `openai/codex`: [exec CLI](https://github.com/openai/codex/blob/main/codex-rs/exec/src/cli.rs), [exec events](https://github.com/openai/codex/blob/main/codex-rs/exec/src/exec_events.rs), [shared options](https://github.com/openai/codex/blob/main/codex-rs/utils/cli/src/shared_options.rs), [login](https://github.com/openai/codex/blob/main/codex-rs/cli/src/login.rs) и частично [config schema](https://github.com/openai/codex/blob/main/codex-rs/core/config.schema.json). Это чтение **не закреплённой SHA ветки main**, не исходников установленных релизов. По этому срезу status не использует `CODEX_API_KEY`, хотя exec поддерживает его; поэтому API-key env не подменяет проверку штатного входа. `cache_write_input_tokens` при наличии отображается отдельно; reasoning usage не складывается с output. Применимость этих деталей к установленному бинарнику остаётся открытой. AGENTS.md и прочие проектные инструкции не отключаются текущим argv; их взаимодействие с `developer_instructions` не проверялось моделью.
+
+Статически прочитаны package metadata двух установок: `/opt/homebrew/lib/node_modules/@openai/codex/package.json` — **0.162.0**; `/Users/nishimata/.nvm/versions/node/v24.15.0/lib/node_modules/@openai/codex/package.json` — **0.163.0**. `command -v codex` в среде C указывает на `.nvm/.../bin/codex`; ссылка ведёт к npm `bin/codex.js`. Прочитанный wrapper запускает native child и пересылает сигналы; PATH должен обеспечить Node. Ни metadata, ни чтение wrapper не подтверждают фактическую runtime-версию, sandbox, auth или Stop установленной CLI. Для будущего D выбран один явный `.nvm/.../bin/codex`; подмена другой установкой запрещена.
+
+### Контракт и границы реализации
+
+`CodexRunRequest` различает первый ход без thread и resume с `{adapter:'codex', threadId}`. Чужой adapter, отсутствующий ID, ID первого хода и несовпадение полученного thread ID отклоняются; автоматического fallback в новый диалог нет. После замечания A одного tag+UUID недостаточно: ID должен быть получен этим экземпляром адаптера для тех же sessionId/participantId/workspaceId/cwd либо подтверждён доверенным `verifyThread` композиции. Callback не является входом IPC/модели; persistent Store в P3 не реализуется. Имя/UUID приложения и Claude transcript не являются Codex resume. Проверка UUID — собственное сужение документированного интерфейса Codex, без требования UUIDv4 Claude.
+
+`CodexCapabilities` содержит только собственные признаки `execJson`, `stdinPrompt`, `resume`, `ephemeral`, `sandbox`, `configOverrides`, `ignoreUserConfig`, `ignoreRules`, `model`, `loginStatus`. Detect выполняет четыре диагностики: version, exec help, resume help, login status; отсутствие resume не объявляет авторизацию потерянной, но блокирует запрос resume. Флаги распознаются в объявлениях опций, а не в произвольном тексте. Ошибочный явный binary path не заменяется другим executable; установок/обновлений нет.
+
+Argv — массив, пользовательский prompt — stdin. Env — документированный allowlist в `args.ts`; HOME/CODEX_HOME не переписываются, произвольное окружение приложения/проекта и инъекции Node не наследуются. Источники конфигурации не читаются как секретный dump. `maxTurns` отклоняется как неподдерживаемый; ephemeral — только при подтверждённой capability и не для resume. Первый ход/resume получают одинаковые ограничения; если resume-help их не объявляет, resume недоступен. Help не доказывает исполнение политики.
+
+Перед оценкой допуска и непосредственно перед prompt сравниваются метаданные executable (dev/inode/size/mtime/ctime). Замена, исчезновение и изменение файла во время оценки блокируют запуск. Это проверка файла npm-shim, не его содержимого, Node/native child или авторизации; окно между последним stat и spawn остаётся. Профиль требует отключения пользовательских расширений именно слоя CODEX_HOME; системные/managed слои остаются неаудированными и не объявляются отключёнными. `--ignore-user-config` сам по себе не подтверждает отсутствие hooks.json, skills или plugins.
+
+Parser сохраняет UTF-8 между чанками, разделяет сообщения по item ID, не дублирует промежуточный/итоговый текст и usage, ограничивает строки/состояние/диагностику. Неизвестное сохраняется безопасной диагностикой; повреждённые обязательные события не превращаются в success. Входы/вывод инструментов и сырые CLI-ошибки в диагностике скрыты. Известный недопустимый tool item после synthetic-ready вызывает `runtime_inventory_mismatch`; это реакция после события, не превентивное доказательство ограничения CLI.
+
+Целевой контракт lifecycle — P2a: один неизменный `run_finished`, тот же объект в `done`, отдельно process/streams/signals/issues, принятый Stop требует interrupted и не стирает ошибки. Success требует terminal протокола, подтверждённый exit(0), EOF обоих потоков и отсутствие completion errors/deadline. До prompt completion описывает последнюю управляемую диагностику и ошибки предыдущих probes; not_started допустим только без единого запуска. Регрессии null/undefined, независимого frozen usage и исходных diagnostic Stop/deadline проходят. Дополнительный случай внутренней очистки описан в результатах ниже. Копия lifecycle в Codex — осознанный долг пакета, без рефакторинга Claude/ProcessRunner. Отделившиеся потомки не гарантируются.
+
+Тексты `src/core/agent-instructions.ts` не менялись. Перед проверкой инструкции прочитаны `VibeForgeInfo/prompts/README.md`, REPORT «Общий контекст, восстановление и слияния» и `docs/STAGE-0C-PROMPTS.md`. Адаптация B — другой канал доставки (`developer_instructions` вместо Claude system flag), не новый продуктовый текст; сохранены фрагменты `prompts/worker-first-task.md` (ввод «Твоя задача»), `prompts/session-followup.md` (ввод о продолжении диалога) и `prompts/shared-language.md` (русская языковая ветвь). Их происхождение и изменения описаны в [STAGE-0C-PROMPTS.md](STAGE-0C-PROMPTS.md#источники). Строковые тесты first/resume подтверждают передачу, не применение моделью. Методика будущего M использует отдельную различимую проверку полного первого абзаца и памяти случайной метки.
+
+### Независимая матрица C
+
+| Требование | Проверка | Граница свидетельства |
+|---|---|---|
+| Binary/interface/auth | Missing/relative/no-exec/directory/authoritative path; ограниченный PATH; auth error; неправильный version; флаг в описании; отдельная resume capability | Собственный fake executable, без настоящего входа |
+| Общие типы | Прежние default-параметры и обязательный Claude-ID; конкретный порт Codex; Claude-запрос не подходит `start`, resume требует Codex thread | Проверяется TypeScript через `npm run typecheck`; один Vitest типы не проверяет |
+| Идентичность executable | Available с исчезнувшим файлом/каталогом; атомарная замена, удаление и перезапись во время admission запрещают prompt | Собственные файлы стенда; не аттестация native child/npm-shim и не устранение окна stat→spawn |
+| Допуск/права | Чужой/ослабленный профиль, отсутствие доверия, incomplete/unknown admission; production unsupported при available; env и неподдерживаемые опции | Никаких фиктивных verified; positive только synthetic evaluator |
+| First/resume | Большой stdin, fixed argv, явный UUID, инструкции обоих ходов, реальный fake-процесс с последовательными first/resume и непрерывным seq; потеря/чужая история | Передача/маршрутизация, не реальная память модели |
+| JSONL/текст/usage | Нарезка по 1/2/3/7/13/31/127 байт, UTF-8, CRLF/EOF, unknown/повреждённые события, duplicate item, несколько сообщений, обязательный terminal | Ручные synthetic fixtures, не запись CLI |
+| Инструменты/секреты | Ошибки/стабильные toolCallId, сырые command/output/error не экспортируются, неожиданный command_execution останавливает ход | Постфактум реакция адаптера не является sandbox |
+| Лимиты | Строка/состояние/item count, диагностика unknown/stderr, очередь медленного потребителя, конечный admission deadline | Ограничение памяти/ожидания адаптера |
+| P2a Stop | До prompt/в detect/admission, поздний success, nonzero exit, rejected done, throw/reject signal, stdout/stderr failure, drain, повтор Stop и неизменный terminal, совмещённые ошибки | Управляемые ProcessRun doubles и собственные процессы |
+| Сигналы | Собственный fake после регистрации SIGTERM-handler; Stop требует SIGTERM→SIGKILL, exited/EOF и один interrupted | Не установленный Codex и не гарантия detached cleanup |
+
+### Ревью и фактические проверки
+
+C проверил diff A: Claude default generic-параметры и обязательные поля сохранены, shared/P2a не изменены; замечаний к этому diff нет. Первый целевой прогон выявил недостаточное распознавание Codex version в detect; B исправил. C усилил отрицательный тест объявления флага в help, B исправил привязку к строке опции. Предположение C о вызове общего `--help` заменено проверкой фактически используемых exec/resume-help: это исправление тестового сценария, общий help не является шагом detect. Исключение `*/` в комментарии args.ts исправлено владельцем B до интеграции.
+
+В self-review C исправлено чтение stdin двойником: `setEncoding('utf8')` сохраняет многобайтный символ между чанками. Существующий subprocess-тест усилен большим русским prompt с emoji; проверяется полное совпадение полученного stdin. Тогда повторены целевые проверки, typecheck/lint и полный Vitest; Node-набор/сборка/границы не затрагивались. Последующее добавление recheck в production lifecycle B стало основанием нового общего цикла, с новыми типовыми и файловыми проверками C. Ранние полные результаты: 1100/1100 (141,27 с), после UTF-8 правки 1100/1100 (121,35 с); они не подменяют приведённый ниже последний прогон.
+
+Общие приёмочные циклы выполнял только C через `sh scripts/with-node.sh`; A/B отдельно проверяли свои изменения. **Цикл до полученного ревью A→B и дополнительных регрессий:**
+
+| Проверка | Фактический итог |
+|---|---|
+| `npm test -- tests/codex` | **5 файлов, 127/127 passed**, последняя длительность 6,86 с |
+| `npm run typecheck` | exit 0, включая прежних Claude-потребителей и новые тесты |
+| `npm run lint` | exit 0, без расширения исключений |
+| `npm run check:boundaries` | exit 0; 38 modules, 93 dependencies, нарушений нет |
+| `npm test` | **25 файлов, 1108/1108 passed**, 120,10 с после recheck executable и новых тестов |
+| `npm run test:node` | **78/78 passed**, 7 suites, 0 skipped/todo, последний прогон 115,81 с (ранний: 135,59 с) |
+| `npm run build` | exit 0, сборка main/preload/renderer, последний запуск 0,67 с |
+| `npm run smoke` | **Не пройден:** повтор после последней сборки также завершился SIGABRT, npm exit 1. Причина не установлена; это не выдаётся за успех и не приписывается Codex или sandbox без отдельной диагностики |
+| `git diff --check` | exit 0; новые untracked файлы дополнительно проверены через `git diff --no-index --check`, сообщений о whitespace нет |
+
+Ни `skip`/`todo` в тесты, ни ослабление assertions/линтера не добавлялись. Фильтр `-t` использован для одной целевой проверки большого stdin; затем полный Codex-набор и полный Vitest выполнены без такого фильтра. Установленные Codex/Claude и live-runner не запускались.
+
+SHA-256 общего порта, всех исходников Codex и его tests/helpers/fixtures сверены до и после приведённого раннего цикла: тогда 20 файлов не изменились. Эти хеши не описывают последующие правки по ревью. Системный `shasum` сначала отказал из-за неподдерживаемой locale `C.UTF-8`; хеширование выполнено штатным Node `crypto`, без изменения окружения/исходников. Этот отказ инструмента не считается дефектом адаптера или результатом тестов.
+
+**Полученные результаты перекрёстного ревью:** C→A без замечаний; B→C не нашёл дефектов прежних 119 tests/helpers/fixtures, но потребовал расширить покрытие; исходное A→B выявило продолжение diagnostics после Stop, зависание null-запроса, общую изменяемую ссылку terminal usage и недостаточную привязку resume. Эти замечания устранены; заключение повторного A→B приведено ниже. По более ранним замечаниям C B уточнил область `user_extensions_disabled` до CODEX_HOME и добавил stat recheck; пять файловых регрессий C и типовые проверки порта проходят.
+
+C добавил классификацию turn.failed/error/EOF, ошибку после terminal, item до thread.started, forbiddenItems всех пяти инструментов; положительные clap-алиасы и resume-help; точное значение sandbox и запреты bypass; first→resume через production detectCodex с настоящим синтетическим executable. Добавлены null/undefined, мутация usage, девять проверок происхождения истории и четыре Stop/deadline сценария с production detectCodex и полностью управляемым runner.
+
+Первый расширенный прогон: 144 passed / 6 failed из 150 (62,64 с). Четыре отказа показали потерю diagnostic completion; ещё два вызваны новым барьером resume, до которого прежние isolated-тесты не передавали доверенную synthetic-запись (один ожидал запуска 60 с). C добавил явный `verifyThread` только этим положительным тестам, сохранив отдельные отрицательные проверки происхождения. Одна ошибка lint (`_request` не использовался) исправлена передачей запроса своему process double.
+
+**Промежуточный прогон до исправления diagnostic completion:** `npm test -- tests/codex` — **155 passed / 4 failed из 159**, 6 файлов, 7,43 с; `npm run typecheck` и `npm run lint` — exit 0. Четыре отказа находились в `diagnostic-lifecycle.test.ts`: interrupt/kill с подтверждёнными exit/EOF/signals либо deadline/ошибка Stop возвращали `process=not_started` вместо наблюдённого exited/unconfirmed. Assertions сохранены, дефект исправлен B.
+
+**Разногласие о diagnostic completion разрешено A/B/C:** B первоначально относил not_started только к отсутствующему prompt. По предложению C и ревью A сохраняется последний diagnostic completion с накопленными issues, active/unconfirmed не подменяется not_started. B реализовал этот контракт без изменения DTO; assertions не ослаблялись.
+
+Повторное A→B выявило коллизию NUL в ключе привязки, ранний terminal до отказа interrupt и потерю stream EIO диагностики. C добавил четыре проверки: NUL, delayed EPERM через 10 мс при drain 50 мс, stdout и stderr EIO с pending done. На исправлениях B полный Codex-набор **163/163**, 6 файлов, 7,00 с; typecheck/lint — exit 0; boundaries — 38 модулей, 93 зависимости, нарушений нет.
+
+При последующем чтении C нашёл ещё один путь: `capture()` подавлял rejection своего внутреннего kill, не проходящего через pendingStops. Новая совмещённая регрессия завершает child.done и только затем отклоняет kill через 10 мс; до исправления terminal терял signal_failed/EPERM и сохранял один stream_failed/EIO. Отдельный diagnostic-набор тогда дал **7 passed / 1 failed из 8**, 0,203 с. Это воспроизведение на doubles, не ошибка окружения; исправление принадлежит B. Начатый ранее полный Vitest завершился **1144/1144**, 26 файлов, 135,67 с; он относился к прежнему набору 163 и новую регрессию не содержал. Последующие Node/build/smoke были отложены до устранения отказа.
+
+B направил внутренние interrupt/kill диагностического wrapper через общий `stopOne`, сохраняющий ошибки в completion и ожидаемые Promise в pendingStops. Ранний terminal ждёт их через `settleStops` в пределах drain. Новая регрессия теперь сохраняет оба stream_failed/EIO и signal_failed/EPERM без выдуманного timeout. Код исходников и assertions проверены C. Финальное повторное A→B подтвердило исправления diagnostic completion, NUL-привязки, null-request и изменяемого usage; блокирующих замечаний к проверенному инженерному срезу нет. Независимая репродукция A (stdout EIO → done → kill EPERM через 10 мс) получила один error-terminal, тот же объект в done, обе причины в completion, без ложного timeout и утечки текста ошибок; реальных CLI-вызовов 0.
+
+**Последний общий цикл после исправления внутреннего diagnostic kill (2026-10-19):**
+
+| Проверка | Фактический итог |
+|---|---|
+| `npx vitest run tests/codex` | **6 файлов, 164/164 passed**, 7,57 с; включает все 8 diagnostic lifecycle регрессий |
+| `npm run typecheck` | exit 0; прежние Claude-потребители и новые проверки generic-контракта |
+| `npm run lint` | exit 0, без ослабления правил |
+| `npm run check:boundaries` | exit 0; 38 modules, 93 dependencies, нарушений нет |
+| `npm test` | **26 файлов, 1145/1145 passed**, 137,37 с; включает новую совмещённую регрессию |
+| `npm run test:node` | **78/78 passed**, 7 suites, 0 failed/cancelled/skipped/todo, 127,09 с |
+| `npm run build` | exit 0, main/preload/renderer, 0,72 с |
+| `npm run smoke` | **Не пройден:** SIGABRT, npm exit 1, 0,13 с; причина отказа регистрации приложения не установлена |
+| `git diff --check` | exit 0; 23 новых файла отдельно проверены `git diff --no-index --check`, сообщений о whitespace нет |
+
+SHA-256 23 файлов общего порта, исходников Codex, tests/helpers/fixtures совпал до и после этого цикла. Новых правок исходников во время проверки не обнаружено. Последующее изменение отчётов не требует повторения успешных полных наборов.
+
+После получения финального ревью C дополнительно выполнил `npx vitest run tests/codex/diagnostic-lifecycle.test.ts` через `scripts/with-node.sh`: **8/8 passed**, 0,203 с, начало 10:45:45. Сообщение B о необходимости нового общего цикла относилось к правке `index.ts` в 10:35:30; она уже входила в приведённый полный прогон с началом 10:38:41. Текущий `stopOne` и его вызов из diagnostic wrapper сверены с прочитанной перед тем прогоном версией; время изменения остальных 22 файлов также предшествует прогону. Полные успешные наборы повторно не запускались; в этом продолжении менялись только документы.
+
+Smoke исследован чтением собственного системного crash-report `Electron-2026-10-19-104118.ips`, captureTime `2026-10-19 10:41:18 +0300`: SIGABRT/`abort()` в `_RegisterApplication`, вызванном при инициализации `NSApplication`/AppKit. Это наблюдение места сбоя запуска Electron, не воспроизведение дефекта Codex; smoke-каркас не подключает адаптер. Причина отказа регистрации и связь с ограничениями среды не доказаны. Сырой crash-report в репозиторий не копировался, права/окружение для обхода не менялись, повторной попытки этого запуска не было.
+
+### Оставшиеся критерии и следующий шаг
+
+Реальных наблюдений Codex пока **нет**. Открыты executable/interface выбранной установки, штатный provider request/refresh, фактические first/resume и инструкции, инструменты и конфигурация/расширения, реальные лимиты/Stop. Production-профиль остаётся unsupported. Unknown не заменён known empty; P3 не закрывается по зелёным doubles.
+
+Следующий конкретный шаг для совместимости Codex — согласовать целиком D из [P3-CODEX-LIVE-PLAN.md](P3-CODEX-LIVE-PLAN.md): один назначенный исполнитель B, один executable, 6 диагностических вызовов, 0 модельных, конечные таймауты/evidence/cleanup и без повторов. Отдельно остаётся выяснить причину smoke SIGABRT; инженерное ревью адаптера не закрывает этот отказ. M пока не готов к запуску: сначала подтвердить механизм обязательных прав/расширений и соответствующий production admission, затем зафиксировать точные argv/модель и получить отдельное согласие на этот конечный набор. Никакого автоматического перехода к P4.
+
+### Продолжение A 2026-10-20: стенд D и локализация GUI-барьера
+
+Добавлены `scripts/codex-diagnostics.ts`, его synthetic-тесты и [методика D](P3-DIAGNOSTIC-RUNNER.md). Ошибка автоматической передачи из-за Node 26 исправлена выбором проектного Node через `with-node.sh`, без ослабления assertions. Новое независимое GPT-ревью выявило потерю позднего kill EPERM и пропуск относительных компонентов PATH при проверке Node; обе ошибки воспроизведены регрессиями и устранены. Повторное ревью не нашло блокирующих замечаний в прочитанной области. Это самостоятельное новое ревью, не переименование прежних отзывов B/C.
+
+Последний общий цикл A (начало 09:57:49): **1172/1172 Vitest, 27 файлов, 128,94 с; 78/78 Node, 127,05 с**. Целевые Codex/diagnostics — **191/191**, 7,62 с; диагностический набор под родительским Node 26 — **27/27**, 1,67 с. Typecheck/lint/boundaries/build прошли. Исходники адаптеров, общий порт, main/preload/UI и ProcessRunner в этом продолжении не менялись.
+
+Добавлены `scripts/macos-gui-probe.c/.mjs`. Единственный запуск дал код 1100 (`BOOTSTRAP_NOT_PRIVILEGED`) для `com.apple.coreservices.launchservicesd` и `com.apple.windowserver.active`; сборка clang с предупреждениями как ошибками прошла. Это независимое от Electron наблюдение отказа доступа к двум GUI-службам текущему процессу. Оно согласуется с историческим abort при AppKit-регистрации, но не устанавливает единственную внутреннюю причину SIGABRT. После подтверждённого отказа smoke не повторялся: **blocked, не passed**. Детали и конечная передача GUI-проверки — [P3-GUI-DIAGNOSIS.md](P3-GUI-DIAGNOSIS.md).
+
+Следующий сценарий D подготовлен к отдельному согласованию: 6 диагностик, 0 моделей, один исполнитель B, неизменённые штатные auth/HOME, конечные сроки и evidence. Реальных Codex/Claude-вызовов в продолжении **0**. Production по-прежнему unsupported; реальная политика инструментов/расширений, модельная приёмка и GUI-smoke остаются открытыми. **P3/0C не закрыты; P4 не начат.**
+
+**Согласие и передача 2026-10-20:** пользователь явно выбрал «D и GUI за B». A зафиксировал назначение B и весь объём разрешения в журнале P3-CODEX-LIVE-PLAN и передал B сценарий штатным сообщением Swarm. Начальный расход на момент передачи: D 0/6, GUI preflight B 0/1, GUI smoke 0/1; модели не разрешены. A не дублирует реальные команды. Это фиксация согласия и передача поручения, не подтверждение старта или результата B. Изменены только документы; успешные полные проверки не повторяются.
+
+### Фактический D и исправление resume — 2026-10-20
+
+Предыдущая передача B была текстовым маркером, а не техническим запуском исполнителя: в доступном списке присутствовал только `/root`. После требования пользователя продолжить сейчас A выполнил согласованный конечный сценарий самостоятельно, в текущей среде и без изменения её прав. История согласия, точная команда и пределы — [P3-CODEX-LIVE-PLAN.md](P3-CODEX-LIVE-PLAN.md#результат-фактического-d).
+
+**Фактические наблюдения.** D начат в `2026-10-20T07:20:51.502Z`, 468 мс, внешний exit 1 / `interface_unsupported`. Выполнены D1–D4, **4 диагностических вызова, 0 модельных, без повторов**. D1 подтвердил 0.163.0, D2/D3 прошли. D4 обнаружил несовпадение ожидаемого интерфейса: `exec resume --help` не объявляет `--sandbox`, но объявляет `--config`, JSONL и оба ignore-флага. Каждый из четырёх процессов завершился exit 0, оба потока ended, wait settled, issues пусты; `SIGKILL/group/not_found/ESRCH` записан при cleanup ProcessRunner. Собственный рабочий каталог удалён. Содержимое штатных credentials не читалось; HOME/auth/config не менялись.
+
+Исходное evidence 0600 сохранено в собственном tmp, обезличенная копия — [observed-0.163.0-diagnostics.json](../tests/fixtures/codex/observed-0.163.0-diagnostics.json). Удалены только пути/stat идентичностей и конкретный workspace; SHA-256 файлов, лимиты, флаги, времена, completion и старый failed сохранены. Это реальная сводка диагностик, **не модельный JSONL и не сырой help**. D5/D6 не выполнялись по правилу остановки; авторизация остаётся unknown, а не unauthenticated. Остаток численного бюджета не разрешает продолжить или повторить остановленный набор.
+
+**Исправление.** В `args.ts` resume теперь получает собственный `-c sandbox_mode="read-only"`; первый ход сохраняет `--sandbox read-only`. `detect.ts` и стенд D отдельно проверяют обязательные флаги каждого интерфейса. Отсутствующие config, JSONL, ignore-флаги или stdin у resume приводят к отказу. Источники, прочитанные 2026-10-20: [CLI reference](https://learn.chatgpt.com/docs/cli/reference), [Configuration Reference](https://learn.chatgpt.com/docs/config-file/config-reference). Они обосновывают конфигурационный argv; фактическое применение политики при resume не наблюдалось. Production admission не заменён synthetic-ready, права не расширены.
+
+**Проверки и ревью.** Регрессии перед исправлением дали 8 failed / 81 passed; после исправления целевые Codex/diagnostics — **203/203**, 7 файлов, 10,70 с. Общий цикл после последней правки кода, начало 10:26:54: **1184/1184 Vitest**, 27 файлов, 129,00 с; **78/78 Node**, 0 skipped, 127,61 с. Typecheck, lint, boundaries (38 modules/93 dependencies), build, `git diff --check` — exit 0. Авторское ревью сверило различие интерфейсов, обязательность политики, неизменность production-отказа и разделение реальных/synthetic evidence. Нового независимого ревью этой небольшой правки не было; прежнее ревью не выдаётся за новое.
+
+Изменены Codex `args.ts`, `detect.ts`, комментарий capability в `contracts.ts`, стенд D, соответствующие тесты/fixtures и документы. Общий порт, Claude, ProcessRunner, main/preload/UI не менялись. GUI-preflight/smoke не повторялись после уже подтверждённого отказа доступа к LaunchServices/WindowServer: **blocked, не passed**. Инженерный дефект argv устранён; открыты завершение диагностики auth, допустимый production-механизм закрытого чтения/отключения расширений и отдельная модельная приёмка. M не разрешена. **P3/0C остаются открытыми; P4 не начат. Коммитов/push/deploy нет.**
+
+### Успешный повтор D02 — 2026-10-20
+
+После подготовленного запроса на один повтор пользователь потребовал продолжить сейчас в том же диалоге. A принял это как разрешение именно описанного D, без расширения до M/GUI; точное основание и условия сохранены в [журнале](P3-CODEX-LIVE-PLAN.md#подготовленный-повтор-после-исправления). Выполнена одна команда `sh scripts/with-node.sh node --experimental-transform-types scripts/codex-diagnostics.ts --run-p3-diagnostics`, начало **2026-10-20T08:46:28.628Z**, **612 мс**, внешний **exit 0**.
+
+**D1–D6: 6/6 passed.** Версия 0.163.0; объявления first/resume прошли исправленный контракт; `login status` вернул **authenticated**. Все шесть процессов exit 0 / signal null; stdout и stderr ended, wait settled, issues пусты. Cleanup ProcessRunner сохранил `SIGKILL/group/not_found/ESRCH`. Собственный cwd удалён; отсутствие каталога дополнительно проверено обычной командой на чтение. Источник evidence — файл 0600 в собственном tmp. Credentials не читались стендом или исполнителем; значения env не экспортировались. HOME, auth и настройки не менялись.
+
+Обезличенная запись [observed-0.163.0-diagnostics-d02.json](../tests/fixtures/codex/observed-0.163.0-diagnostics-d02.json) структурно сверена с исходным JSON после удаления заявленных путей/stat и замены workspace. SHA-256 wrapper, native executable и Node совпали с D01. Проверка assertions подтвердила 6 passed, authenticated, completion и cleanup; старое evidence D01 оставлено без изменений. Сырых help/auth-строк и модельного JSONL этот файл не содержит. В этом наборе **6/6 диагностик, 0 моделей**; с учётом D01 **10 диагностик, 0 моделей**. Дальнейших повторов не было.
+
+**Приёмка D завершена в границах диагностики executable/interface/login-status.** Это не provider inference/refresh и не наблюдение выполнения политики/инструкций при first/resume. Production admission по-прежнему возвращает unsupported: требуется подтвердить закрытое чтение без произвольного shell и отключение расширений; synthetic-ready в реальном запуске не использовался. M не разрешена и не запускалась. GUI остаётся blocked по измеренному отказу LaunchServices/WindowServer, повторных lookup/smoke нет. **P3/0C остаются открытыми, P4 не начат.**
+
+В этом продолжении изменены только документы и добавлен реальный fixture D02. Производственный код и тесты совпадают с уже проверенными: Vitest **1184/1184**, Node **78/78**, typecheck/lint/boundaries/build — exit 0 в последнем полном цикле. Без изменения кода общий цикл не повторялся. Проверены экспорт evidence, неизменность идентичностей, mode 0600 и фактический cleanup; `git diff --check` — exit 0. Нового независимого ревью нет, авторская сверка не выдаётся за него. Коммитов/push/deploy нет.
+
+### P3: исполняемая приёмка и независимая сверка C — 2026-10-20
+
+**Статус:** инженерный стенд M реализован и проверяется на подстановках; реальная M не выполнялась. **P3/0C остаются открытыми.** D закрыт ранее и не повторялся. По отдельному [журналу B](P3-GUI-DIAGNOSIS.md#результат-проверки-b-2026-10-20-среда-claude-code) штатный GUI-smoke прошёл в среде B; прежний отказ служб в среде A этим не стирается и единственная причина всех исторических crash не устанавливается. Ни C, ни этот отчёт не запускают P4.
+
+**База и владение.** В начале назначенная копия `…/73476865-f808-4f0c-9046-d3aaec197091/session` находилась на `749f040`, без файлов P3. В доступной ревизии `e1066e3` найдены прежние 34 файла P3, tree `b606824820848c10c8c17090f8c8486df07d6c88`; A перенёс существующую работу в эту копию. C прочитал её до реализации и не создавал адаптер заново. Работа C ограничена двумя новыми helper, тремя независимыми тестовыми файлами, live-точкой входа и тремя документами ниже; производственный код, общие DTO/ProcessRunner, Claude, Git, SQLite и UI C не менял. C не выполнял commit/push/deploy.
+
+| Файл C | Изменение и проверяемое свойство |
+|---|---|
+| `tests/helpers/codex/live-harness.ts` | Manifest на каждом ProcessRunner.start, учёт попытки до получения handle, конечные бюджеты, запрет позднего/параллельного запуска, ограниченные потоки и текст, Stop, единственный terminal/согласованный done, безопасное evidence и cleanup |
+| `tests/helpers/codex/live-plan.ts` | Независимые ожидаемые argv first/resume, четыре диагностики на модельный ход, методика контроля чтения/памяти/инструкции; отсутствие событий и маркеров не считается доказательством политики |
+| `tests/live/codex.live.ts` | Реальный исполняемый вход M1–M5, выключен без трёх opt-in; закреплённые executable/Node SHA D02 и stat recheck, штатное окружение, production admission/detect без подстановок, собственный временный Git-проект |
+| `tests/codex/live-harness.test.ts` | Отказы до spawn при изменении argv/env/cwd/deadline; бюджет; snapshot/delta; duplicate terminal; rejected done; потерянный handle; overflow; зависший start; ошибки Stop/cleanup и исключение inspector |
+| `tests/codex/live-plan.test.ts` | Независимость manifest, точное наблюдение инструкции и памяти, отсутствие ложного успеха по пустому inventory; default-off импорт; production-отказ после четырёх synthetic диагностик без модели; M1/M2 на двух экземплярах настоящего адаптера с явно synthetic runner/admission |
+| `tests/codex/production-admission.test.ts` | Исходно обоснованный предел встроенного маршрута отдельно от unknown version/auth/capability, конфликтного argv/env и ошибки оценки; synthetic facts не создают production-ready |
+| `docs/P3-CODEX-LIVE-PLAN.md`, `docs/IMPLEMENTATION-PLAN.md`, этот отчёт | Исполняемая методика, точные бюджеты, актуальный статус и границы доказательств |
+
+**Допуск.** В текущей реализации A production оценивает конкретный контекст. Для неполной версии/auth/capabilities и конфликтных argv/env есть отдельный blocked; для отсутствующей обязательной capability — unsupported. Для проверенного встроенного exec-маршрута 0.163.0 фиксируется `reads_closed / closed_read_mechanism_unavailable`: в изученном реестре тега `83086188ae0614bd882818ff1aa23f3194962012` нет встроенного закрытого чтения текстовых файлов без shell, host-only ToolPolicy не является доступным флагом exec. Граница вывода явно сохранена как `scope=builtin_exec`, `binaryCorrespondence=unconfirmed`; это не утверждение о невозможности любого решения на Codex. Остальные требования расширений и полного запрета альтернативных действий остаются unconfirmed. Ни допуск, ни стенд не получают ready из synthetic evidence.
+
+**Методика M.** Модельные M1/M2/M4/M5 дают максимум 16 диагностик и 4 модели — 20 управляемых CLI-запусков; M3 содержит три нулевых по процессам отказа. Дополнительно один ограниченный `git init`; Node-wrapper/native и возможные штатные дочерние процессы не выдаются за один ОС-процесс. Надзор учитывает каждый start, включая detect, и прекращает набор после failed/unconfirmed, Stop/error/deadline или ошибки evidence. Потерянный handle и неподтверждённые exit/EOF запрещают удаление корня. Ошибка отправки Stop возвращается адаптеру и отдельно сохраняется в cleanup стенда. Реальный M2 использует новый экземпляр адаптера: только собственная binding M1 разрешает resume; MEMORY-метки нет в новом prompt и файлах, поэтому восстановление через новый CLI-процесс независимо проверяет сохранённую историю. Формат чужих rollout/SQLite не предполагается и чужие сессии не перечисляются.
+
+M4 содержит безопасные локальные hook/MCP-приманки и контроль собственного запрещённого действия. При текущих возможностях наблюдения `toolPolicy` и `extensionPolicy` остаются **unconfirmed**, даже если маркеров нет. Для зелёной реальной M необходим подтверждённый механизм и его независимый инспектор; стенд не скрывает этот незавершённый критерий. Успешная последовательность на doubles проверяет надзор, а не политику установленной CLI.
+
+**Источники инструкций.** Перед подготовкой C прочитал `VibeForgeInfo/prompts/README.md`, REPORT «Общий контекст, восстановление и слияния», `worker-first-task.md`, `session-followup.md` и `docs/STAGE-0C-PROMPTS.md`. Производственный `buildAgentInstructions` не менялся. Из Claude practical live переиспользован способ запросить полный первый контекстный абзац без его подстановки в пользовательский prompt. Адаптации: Codex получает инструкции через `developer_instructions`; M1 имеет отдельные строки ЧТЕНИЕ/ПАМЯТЬ, M2 не повторяет MEMORY-метку. Новые приёмочные формулировки специфичны для контрольного файла, запретной собственной команды и Stop; шаблоны Swarm/недоступные инструменты/исследовательская разметка в них не перенесены.
+
+**Реальные наблюдения, отдельно от doubles.**
+
+- D01/D02 сохранены неизменными: 10 диагностик, 0 моделей; D02 6/6, версия 0.163.0, authenticated, exit/EOF/cleanup. Auth не переименован в успешный inference/refresh.
+- B записал R в `observed-0.163.0-policy-r.json`: SHA-256 **`e5140a8ad07a9f18c2df8aeaa863b6c40c2da9e3a8277ec509386caa0c4b3d2d`**, 7 немодельных + 3 модельных вызова, `completed`, 37 289 мс; все десять exit 0, оба EOF, wait settled, issues 0, cleanup removed. C независимо проверил эти закрытые поля и состав шагов из уже экспортированного fixture; это не повтор запуска и не побайтовая сверка с недоступным C исходным tmp. Согласно журналу B, разрешённый предел был 8 немодельных и 3 модельных вызова; модели израсходованы полностью, остаток одного диагностического вызова не разрешает повтор набора.
+- C обнаружил существенное ограничение вывода R1s: экспорт содержит только `cat CONTROL.txt` и `echo shell-ok`; попытка чтения `../outside/OUTSIDE.txt` как tool event отсутствует. `tokens.outside=false` не доказывает предотвращение чтения. В R1c внешний `cat` и `tokens.outside=true` действительно наблюдались. Утверждение карты B о предотвращении внешнего чтения требует адресного подтверждения исходным tool response, а не текста модели; замечание передано B.
+- Положительный контроль R1p hook/MCP не сработал, поэтому отсутствие их маркеров в других шагах не доказывает отключение расширений. Проектный AGENTS.md присутствует в prompt-input. Реального resume/Stop продуктового M в R нет.
+- GUI по протоколу B: preflight 1/1 с reachable обеих служб; build exit 0; smoke 1/1, exit 0, без сигнала, около 2,5 с, новые crash-report не наблюдались. C GUI не повторял; это собственное наблюдение B, не проверка C.
+
+Карта B сообщает о пользовательском выборе варианта a с разрешённым shell в ограниченном профиле. В текущий SPEC/производственный `codex-read-only-v1` и стенд M этот иной контракт не интегрирован. C не меняет требования по одному исследовательскому выводу, тем более при незакрытом отрицательном контроле R1s. Для такого направления нужно закрепить точный контракт, ограничения расширений/AGENTS.md и критерии приёмки, сохранив историю согласия; R не заменяет этот шаг.
+
+**Проверки текущего изменения.** C выполнил один итоговый общий цикл через `sh scripts/with-node.sh`, после завершения изменений кода:
+
+| Проверка | Фактический результат |
+|---|---|
+| `npm test -- tests/codex tests/codex-diagnostics.test.ts tests/codex-policy-lab.test.ts` | **267/267**, 11 файлов, 13,40 с, exit 0 |
+| `npm run typecheck` | exit 0 |
+| `npm run lint` | exit 0 |
+| `npm run check:boundaries` | exit 0; 38 modules / 95 dependencies |
+| `npm test` | **1248/1248**, 31 файл, 140,90 с, exit 0 |
+| `npm run test:node` | **78/78**, 7 suites, 134,11 с, skipped/cancelled/todo 0, exit 0 |
+| `npm run build` | exit 0, main/preload/renderer собраны |
+| `git diff --check` | exit 0; новые файлы дополнительно проверены через `--no-index --check` |
+
+После этого изменялись только документы, успешные полные наборы не повторялись. Исторические 1184/1184 и 78/78 не приписываются новым файлам: приведённые выше результаты получены заново. Настоящих Codex, R/M и GUI-вызовов C — **0**.
+
+**Ревью и оставшиеся условия.** C проверил границы доказательств B и направил конкретное замечание к R1s; оно пока не закрыто исходным evidence. A получил новые helper/live-файлы для проверки допуска, бюджета и lifecycle; получение запроса не считается завершённым ревью. До полученного отзыва A→C оно остаётся открытым. P3 не закрывается: нет принятого обеспечиваемого production-профиля, не подтверждены расширения/превентивная политика, реальная M1–M5 не выполнена. Следующее действие — согласованное завершение конкретного профиля и его проверок, затем конечное отдельное разрешение M; автоматического перехода к P4 нет.
+
+### P3: исполняемая проверка достаточности evidence — 2026-10-20
+
+Продолжение C по запросу «Заверши этап P3», исходный HEAD `4705a47`, рабочая копия `…/73476865-f808-4f0c-9046-d3aaec197091/session`. C сохранил разделение владения: производственный адаптер принадлежит A, статическое исследование и реальные пробы — B. Через Swarm направлены конкретные запросы о текущем контракте, ревью M и исходном R1s; новых ответов в этом продолжении не поступило. Отправка сообщений не считается выполнением работы другими участниками.
+
+**Изменения C.**
+
+- `tests/helpers/codex/policy-evidence.ts` — чистый ограниченный инспектор экспортированной сводки R. Проверяет форму, расход запусков, уникальность шагов, завершение процессов/EOF, сигналы и объявленный cleanup; выводит только закрытые значения наблюдений. Точные команды чтения и контрольные метки оцениваются совместно. Он не запускает процессы, не читает исходные журналы и не выдаёт production-допуск.
+- `tests/codex/policy-evidence.test.ts` — 17 тестов: сверка реального R с идентичностями D02 и явные synthetic-контрпримеры к ошибочным выводам по prose, echo, неполному/противоречивому результату, ошибке команды, эффекту записи, дубликатам/потере шагов, бюджетам и lifecycle. Изменённые данные всегда помечены synthetic и не записываются в observed fixtures.
+- `docs/P3-CODEX-LIVE-PLAN.md`, `docs/IMPLEMENTATION-PLAN.md`, этот отчёт — команда независимой проверки, актуальные результаты и условия закрытия. Выбор варианта a учитывается по журналу B; он не объявляется отсутствующим разрешением, которое пользователь должен дать ещё раз.
+
+**Независимый результат по сохранённому R.** Lifecycle подтверждён **в экспортированной сводке**, чтение CONTROL в R1s наблюдалось. В R1c имеются успешный `cat ../outside/OUTSIDE.txt` и внешняя метка. В R1s такой попытки нет: `candidateOutsideRead=unconfirmed`, отсутствие файлов записи означает только `not_observed`. Положительные контроли hook и MCP — `unconfirmed`, отключение всех расширений также не подтверждено. Даже добавленный в synthetic-сценарии ненулевой код команды даёт только `command_failed_cause_unconfirmed`: без результата инструмента он не отличает sandbox от отсутствующего файла или иной ошибки. Утверждение модели «Operation not permitted» само по себе вывод не меняет.
+
+Реальный R fixture не изменён: SHA-256 `e5140a8ad07a9f18c2df8aeaa863b6c40c2da9e3a8277ec509386caa0c4b3d2d`. Повторной сверки с исходным tmp B не было; имеющийся экспорт не доказывает утверждение U7 карты совместимости о предотвращённом чтении. Замечание остаётся открытым, а не устраняется подменой исторического evidence.
+
+**Один новый общий цикл после добавления тестов**, через `sh scripts/with-node.sh`:
+
+| Проверка | Результат |
+|---|---|
+| Целевые `tests/codex`, diagnostics, policy-lab | **284/284**, 12 файлов, 12,12 с, exit 0 |
+| Typecheck | exit 0 |
+| Lint | exit 0 |
+| Архитектурные границы | exit 0, 38 modules / 95 dependencies |
+| Полный Vitest | **1265/1265**, 32 файла, 142,04 с, exit 0 |
+| Node | **78/78**, 7 suites, 134,61 с, exit 0; skipped/cancelled/todo 0 |
+| Build | exit 0, main/preload/renderer собраны |
+| Diff-check | exit 0; оба новых файла дополнительно проверены через `--no-index --check` |
+
+Изменений кода после этих проверок нет. Повторный полный цикл выполнен из-за нового набора, а не присвоен от прежних 1248/1248. Настоящих Codex/D/R/M/GUI-вызовов C в этом продолжении — **0**. Исторический расход остаётся: D — 10 диагностик / 0 моделей; R B — 7 немодельных / 3 модельных, cleanup по сводке завершён; GUI B — один preflight и один smoke по его журналу. Сохранённые результаты не являются новым разрешением или новой попыткой.
+
+**Условия закрытия P3.**
+
+| Условие | Состояние и конкретное следующее действие |
+|---|---|
+| Диагностика установленной CLI | D закрыт; не повторять |
+| GUI | Preflight/smoke прошли по журналу B; текущая сборка C успешна, нового GUI-запуска не было |
+| Полезный production-профиль | Открыто. Текущий `codex-read-only-v1` отказывает из-за отсутствующего встроенного закрытого чтения без shell. Вариант a выбран по журналу B, но A должен закрепить точный контракт и его обеспечиваемые ограничения в реализации |
+| Доказательства политики | Открыто. B должен закрыть замечание R1s адресным результатом инструмента либо оставить его unconfirmed; проверить область `project_doc_max_bytes` и оставшиеся каналы расширений/`apply_patch`. Одно отсутствие маркеров недостаточно |
+| Независимое ревью | Запрошено, но новое A→C ревью не получено; C→B замечание R1s открыто |
+| Продуктовая M1–M5 | Не выполнялась. После реализации профиля необходимо обновить независимый manifest и M4-инспектор, пересчитать бюджет и подготовить конечный сценарий для отдельного разрешения B. При нынешнем production-отказе M запрашивать/запускать преждевременно |
+
+**P3 остаётся открытым.** Запрос завершить этап разрешает необходимую инженерную работу, но не отменяет отдельно установленных условий новых модельных проб и не разрешает фиктивный ready. C не расширял права, не менял SPEC/production вместо A, не выполнял чужие реальные пробы и не начинал P4.
+
+### P3: немодельный стенд R2 с прямым файловым контролем — 2026-10-20
+
+Продолжение C по поручению «Продолжай этап P3, пока не сделаешь его», исходный HEAD `bf8a632`, та же назначенная рабочая копия. Подготовлена следующая исполнимая проверка пробела R1s, который независимый инспектор оставил `unconfirmed`. Самого запуска установленной CLI в этом продолжении нет.
+
+**Изменения C — семь файлов.**
+
+- `tests/helpers/codex/fs-policy-probe.c`: пять обязательных системных операций над собственными приманками, ограниченный JSON; без модели, shell, сети и чтения env. Ошибка закрытия дескриптора не выдаётся за предотвращение уже выполненного чтения.
+- `tests/helpers/codex/policy-probe.ts`: последовательность compile → положительный baseline → sandbox-help → sandbox; сверка неизменности бинарника/приманок, точный бюджет, Stop, отдельные наблюдения EOF и безопасный cleanup.
+- `tests/live/codex-policy.probe.ts`: по умолчанию только manifest; отдельный opt-in и закреплённая установка D02 для реального запуска B. Сохранение безопасного evidence с хешами реализации, без присвоения production-ready.
+- `tests/codex/policy-probe.test.ts`: 26 проверок. Помимо doubles есть настоящая локальная компиляция и исполнение собственного C-контроля; оба Codex-вызова при этом подставлены. Проверяются реальные эффекты baseline, противоречивые/неполные результаты, budgets, идентичность, ошибки Stop/exit/EOF/evidence и запрет следующих запусков. Каталоги настоящих вспомогательных процессов не удаляются тестовым afterEach в обход надзора.
+- `docs/P3-CODEX-LIVE-PLAN.md`, `docs/IMPLEMENTATION-PLAN.md`, этот отчёт: конкретный сценарий, границы утверждений, актуальный статус и результаты.
+
+**Что именно подготовлено.** R2 имеет предел 2 немодельных запуска Codex и 2 вспомогательных, моделей 0; надзор 60 с, cleanup ещё 5 с. Внешнее чтение, симлинк и две записи должны быть действительно попытаны фиксированной программой и дать `EACCES`/`EPERM`, а внутреннее чтение — пройти. Перед этим тот же бинарник обязан выполнить все пять операций без sandbox. Отсутствие файла/вывода или рассказ модели не принимаются как защита. `--include-managed-config` обязателен: исследовательская команда не должна исключать managed requirements ради прохождения. Полные argv/env/cwd, источники, таймауты, сеть/штатные записи, Stop и SHA внесены в [сценарий R2](P3-CODEX-LIVE-PLAN.md#r2-прямые-операции-с-файлами-без-модели--подготовка-2026-10-20).
+
+При успешном будущем R2 будут наблюдаться только пять операций маршрута `sandbox`. Перенос результата на `exec`, resume, все пути файловой системы или расширения запрещён без отдельного обоснования. Профиль содержит runtime-исключения `:minimal`; слои конфигурации не аудированы. Вывод по исходнику о `project_doc_max_bytes=0` и явном untrusted проекте передан A/B как кандидат для проверки проектных документов, а не доказанное отключение пользовательских инструкций/skills/plugins. Производственный код, SPEC и инструкции модели C не изменял.
+
+**Реальные наблюдения и расход.** D остаётся 10 диагностик / 0 моделей; authenticated не превращён в inference/refresh. Исторический R B остаётся 7 немодельных / 3 модельных, cleanup по экспортированной сводке removed; SHA fixture повторно проверен: `e5140a8ad07a9f18c2df8aeaa863b6c40c2da9e3a8277ec509386caa0c4b3d2d`. Новых observed fixtures нет. GUI — прежние 1 preflight и 1 smoke B, новых запусков нет. **R2 установленной CLI: 0/2; модельных вызовов C: 0; M не запускалась.** Настоящие compiler/baseline в обычных тестах не являются выполнением R2: смешанный маршрут помечен synthetic, его результаты не экспортированы как наблюдение sandbox.
+
+**Ревью.** C проверил собственный надзор и исправил ошибку потенциальной уборки живого tmp через тестовый afterEach. A получил конкретные файлы для проверки бюджета/lifecycle, B — команду и основание обязательного managed-флага; новых ответов в этом продолжении не поступило. A→C и B→R2 остаются открытыми. C→B замечание R1s не закрыто адресным исходным evidence. Это не препятствует локальной инженерной проверке стенда, но отправка сообщений не считается ревью или выполнением пробы.
+
+**Оставшиеся условия P3.** По журналу B вариант a уже выбран пользователем — повторно выбирать его не требуется. Владельцу A остаётся закрепить точный обеспечиваемый production-контракт: текущий `codex-read-only-v1` по-прежнему обоснованно отказывает закрытому чтению без shell. Нужны достаточные основания для ограничения инструментов/расширений и применимости к first/resume; затем C обновляет manifest/M4 и рассчитывает конечный бюджет M, а B выполняет отдельно разрешённую M1–M5. Объединять пока неготовую M с R2 в автоматическую цепочку нельзя. Сам R2 требует нового отдельного согласия: изменились команда, метод и бюджет, остаток прежнего R его не покрывает. **P3 открыт, P4 не начат; коммитов/push/deploy C не выполнял.**
+
+**Проверки окончательной редакции C**, все команды npm через `sh scripts/with-node.sh`:
+
+| Проверка | Результат |
+|---|---|
+| Целевые `tests/codex`, diagnostics, policy-lab | **310/310**, 13 файлов, 12,90 с, exit 0 |
+| Typecheck | exit 0 |
+| Lint | exit 0 |
+| Архитектурные границы | exit 0, 38 modules / 95 dependencies |
+| Полный Vitest | **1291/1291**, 33 файла, 135,02 с, exit 0 |
+| Node | **78/78**, 7 suites, 128,28 с, exit 0; skipped/cancelled/todo 0 |
+| Build | exit 0, main/preload/renderer собраны |
+| Diff-check | `git diff --check`: без замечаний; новые файлы отдельно проверены через `--no-index --check`, без замечаний о пробелах (exit 1 обозначает добавленные файлы) |
+
+Первый полный Vitest этого продолжения также прошёл 1291/1291, но затем был исправлен описанный выше путь тестовой уборки. Поэтому он не присвоен окончательной редакции: целевые тесты, typecheck/lint и полный Vitest повторены после правки. Node и build выполнены на окончательном коде. После этого изменялись только документы; успешные полные наборы повторно не запускаются. Ни один из этих результатов не означает приёмку установленной Codex CLI.
+
+### P3: отдельное разрешение одного R2
+
+Пользователь ответил **«Разрешить один R2»** на подготовленный вопрос: «Разрешить B один описанный R2 после ревью A/B, без запуска M?». Это разрешение единственного набора в рабочей копии `…/73476865-f808-4f0c-9046-d3aaec197091/session`, с опубликованной командой, установкой D02 и бюджетом **2 немодельных CLI + 2 вспомогательных запуска, 0 моделей, 60 с + cleanup 5 с**. Оно не разрешает повторов, D/M/GUI, смены исполнителя, HOME/авторизации/глобальных настроек или прав.
+
+C сверил четыре SHA исходников и тестов R2 на HEAD `9c3d0cc`: все совпали с таблицей live-плана. Код не менялся. Через Swarm направлены адресное ревью A и поручение B выполнить один набор после обоих отзывов, сохранив безопасный `results.json`, его точный путь/SHA, расход и cleanup. B должен сам подтвердить фактическое исполнение как Claude Code; C не создаёт вместо него GPT-подагента и не запускает установленную CLI.
+
+На момент записи новых отзывов A/B, подтверждения принятия исполнения B и результата R2 **не получено**. Подтверждённого расхода этого разрешения нет; это состояние учёта C, а не утверждение о неизвестных действиях другого процесса. Перед стартом B обязан сверить собственные попытки и не повторять уже начатый набор. Разрешение сохраняется при продолжении неизменного сценария; повторный вопрос пользователю не требуется.
+
+Изменены только live-план, статус реализации и этот отчёт. Прежние 310/310 целевых, 1291/1291 Vitest и 78/78 Node не запускались заново ради документов. Отсутствующий результат R2 не заменён synthetic-evidence; production-ready и закрытие P3 не объявлены.
+
+### P3: отсутствующий исполнитель и исправление завершения R2
+
+**Уточнение пользователя: «B не запущен».** C ошибочно рассчитывал на ответ отсутствующего исполнителя; текстовые сообщения не запускали Claude Code. Доступный механизм делегирования поддерживает GPT, не Claude Code. Проведено отдельное независимое GPT-ревью R2, строго только чтением, без установленной CLI и правок файлов. Оно не считается прежними A→C/B→R2 отзывами и не меняет назначение B.
+
+**Найденное замечание и исправление.** После неподтверждённого выхода дочернего процесса `ProcessRunner.done` может разрешиться, оставив активный handle. Прежний entrypoint ставил только `process.exitCode` и мог остаться живым после возврата надзора. В `tests/live/codex-policy.probe.ts` C добавил явный выход после завершения надзора и синхронного вывода результата; в `tests/codex/policy-probe.test.ts` регрессия проверяет успешный default и отказ opt-in с собственным удерживающим Node таймером. Установленная CLI этим тестом не вызывается. `cleanup=retained`, неподтверждённые exit/EOF и ненулевой код не превращаются в успех. Общий ProcessRunner не менялся.
+
+Повторное независимое GPT-ревью закрыло замечание. Остаточный предел зафиксирован явно: завершение самого стенда не доказывает остановку дочернего процесса; 60+5 с ограничивают асинхронный надзор при работающем event loop, без внешнего watchdog для синхронных операций ОС и предварительной сверки SHA. Актуальные SHA исправленных entrypoint и теста записаны в live-плане; исходный надзор и C-программа не менялись.
+
+**Разрешение и расход.** Для выполнения исправленного R2 текущим C требуется явное изменение исполнителя и условия ревью. Повторять согласие на неизменный бюджет одного набора не требуется: 2 немодельных CLI + 2 вспомогательных, 0 моделей. Команда, env, worktree и ограничения прежние; обход sandbox не допускается. Реальных запусков R2, D, M или GUI в этом продолжении нет. Production-допуск и P3 не закрыты; P4 не начат.
+
+**Проверки исправленной редакции**, все npm-команды через `sh scripts/with-node.sh`: целевые **310/310** (13 файлов, 12,62 с), полный Vitest **1291/1291** (33 файла, 139,10 с), Node **78/78** (7 suites, 136,88 с, skipped/cancelled/todo 0). Typecheck, lint, check:boundaries (38 modules / 95 dependencies), build и `git diff --check` прошли, exit 0. Полный цикл повторён из-за изменения исполняемого entrypoint и регрессии, а не ради документов. Новых тестов, обходящих установленную CLI или продуктовый допуск, нет; default/отказ проверяются без реального opt-in. После цикла изменялись только записи результатов.
+
+**Окончательный выбор исполнителя R2: «Только B после A/B».** Пользователь отклонил передачу R2 текущему C и замену обязательных отзывов отдельным GPT-ревью. Сохраняются один разрешённый набор, бюджет 2 немодельных CLI + 2 вспомогательных запуска / 0 моделей и запрет M. Исполнитель — только фактически запущенный B (Claude Code), после ревью A/B исправленного стенда и сверки актуальных SHA из live-плана. B пока не запущен, обязательные отзывы не получены; C реальную пробу не выполняет и не предлагает повторно изменить этот выбор. В этом продолжении изменены только три документа; `git diff --check` прошёл, полные проверки неизменного кода не повторялись. Нового расхода R2, D, M или GUI нет; P3 остаётся открытым.
+
+### P3: независимая проверка R2 и перенос подготовленной редакции — 2026-10-20
+
+Новая команда получила копию `…/bbf9bd8d-96e8-4877-bcc1-be3b7d15a611/session` с чистым HEAD `749f040` и без файлов P3. Подготовленный `d14056d962a7452a0c7580e5fd8be3a689c96e85` доступен локально; merge-base равен исходному HEAD. Согласованный fast-forward не состоялся: Git отказал в записи `ORIG_HEAD.lock` в общий `.git/worktrees/session23` вне разрешённой копии. C применил точную дельту через `git apply` без изменения index/refs и сверил **50/50 файлов побайтово** с `d14056d`. HEAD остаётся `749f040`; импорт виден как рабочие изменения, новых коммитов нет. Это перенос подготовленных материалов, не новая реализация всего P3.
+
+Собственные изменения C:
+
+- `tests/helpers/codex/policy-probe-evidence.ts`: отдельная ограниченная схема R2, сверка с внешним manifest идентичности, последовательности и расхода попыток, exit/EOF/cleanup, положительного baseline и каждого syscall; безопасная проекция с SHA исходного JSON. Инспектор не импортирует verdict-функции надзора и не читает установленную CLI. Маркеры/неизменность контрольных файлов известны только из итогового вердикта надзора, поэтому не объявлены независимо подтверждёнными. Synthetic не повышается до live; production/exec/extensions не оцениваются.
+- `tests/codex/policy-probe-evidence.test.ts`: 29 контрольных и отрицательных тестов, в том числе ложный `observed`, несовпадающие SHA, пропущенные/повторные попытки, неподтверждённые exit/EOF, ошибка Stop, retained cleanup, сломанный baseline и неполные syscall-результаты.
+- `tests/helpers/codex/live-plan.ts`, `tests/codex/live-plan.test.ts`: M4 различает старый запрет shell и новый кандидатный профиль `codex-sandbox-read-v1`. Shell во втором оставляет политику `unconfirmed`; он не разрешает file_change/MCP/collab/web/неизвестные инструменты. Старые отрицательные проверки сохранены. Промпты и product-инструкции не менялись.
+
+**Локальная проверка C:** `sh scripts/with-node.sh npm test -- tests/codex/live-plan.test.ts tests/codex/policy-probe-evidence.test.ts` — **43/43**, 2 файла, exit 0. Typecheck первоначально выявил некорректную мутацию readonly completion и отсутствие обязательного `detail` в тестовом issue; тесты исправлены без изменения assertions. После исправления **typecheck прошёл**, отдельные 29/29 inspector-тестов также прошли. ESLint четырёх изменённых TS-файлов и `git diff --check` — без замечаний. Это synthetic-проверки, без CLI/моделей. Итоговый общий цикл ещё не выполнен: он следует после производственных изменений A, интеграции manifest C и перекрёстного ревью. Прежние 310/1291/78 принадлежат подготовленной редакции и не подставляются вместо нового цикла.
+
+C прочитал новые разделы 14–17 карты совместимости B: поправка R1s и ограничение вывода R2 маршрутом sandbox сохранены. B переданы уточнения заголовка сокращённых выдержек и границы утверждения об отсутствии записываемых путей в effective-профиле. Это проверка границ утверждений C, не повторное исследование всего исходника и не замена A→C ревью стенда. В журнале B записаны отзывы A/B по R2; результат реального запуска отсутствует.
+
+**Согласие и расход:** B сообщил о фактическом присутствии Claude Code, совпадении wrapper/native/Node с pins и отсутствии известного расхода R2. C независимо сверил четыре SHA исходников с заданием. Разрешение относится к пути `73476865…`, поэтому до его конкретного переноса на `bbf9bd8d…` R2 не выполняется; оба актуальных отзыва также обязательны. C не запускал D/R/R2/M/GUI; observed R2 не создавал. M не разрешена, P4 не начат. Результат исследования/реализации A/B и итоговая интеграция остаются открытыми.
+
+### P3: интегрированный контракт и общий цикл C — 2026-10-20
+
+**Результат:** выбранный вариант a доведён до отдельного проверяемого контракта, независимых тестов и стенда M. Производственный запуск остаётся заблокирован по конкретным непроверенным требованиям. Инженерный цикл прошёл; реальная приёмка P3 не заменена тестами. Работа выполнена только в назначенной копии `bbf9bd8d…`, без коммитов, push/deploy и P4. Перенос предыдущей редакции и неизменный HEAD `749f040` описаны выше.
+
+**Изменения по владельцам относительно подготовленного `d14056d`:**
+
+- A — `src/adapters/codex/{contracts,args,profile,detect,index,parser}.ts`, узкие уточнения SPEC §3 и ARCHITECTURE-REASSESSMENT §0. `CodexAccessProfile` различает старый профиль без shell и новый `codex-sandbox-read-v1`; first/resume получают одинаковые именованные permissions без legacy sandbox, strict-config проверяется существующими help-вызовами. `command_execution` разрешён по классу только новому профилю; остальные запрещённые классы сохраняются.
+- B — `docs/P3-CODEX-COMPATIBILITY.md`, §§14–17: исправление прежних слишком сильных выводов R, источниковая матрица CLI 0.163.0, ревью managed-маршрута и журнал неиспользованного R2. Исходник тега прочитан B локально; его выводы отделены от наблюдений установленного бинарника.
+- C — новые `tests/helpers/codex/policy-probe-evidence.ts`, `tests/codex/policy-probe-evidence.test.ts`, `tests/codex/sandbox-read-profile.test.ts`; обновлены `tests/helpers/codex/{requests,live-plan}.ts`, `tests/codex/{detect,live-plan}.test.ts`, `tests/live/codex.live.ts`, две synthetic help-fixture и их README, live-план и итоговые документы. Независимый manifest буквально проверяет argv обоих профилей. Контрпримеры проверяют пропущенные требования, strict-флаги, конфликтующие/дублирующие overrides, неподходящий env, чужой ready, отсутствие истории и отсутствие fallback в новый диалог. Настоящий adapter с тестовым runner сохраняет один terminal и согласованный done; synthetic-допуск существует только в tests.
+
+Общие ProcessRunner, Git, SQLite, SessionEngine, продуктовый Swarm и Claude в этом продолжении не перерабатывались. Промпты моделей не менялись. Исторические отрицательные проверки сохранены; skip и ослабления assertions не добавлялись.
+
+**Производственный предел.** Старый `codex-read-only-v1` сохраняет мотивированный `unsupported` для встроенного чтения без shell. Новый профиль возвращает `blocked/requirement_unconfirmed` с пятью отдельными gaps:
+
+| Требование | Недостающее основание |
+|---|---|
+| `shell_sandboxed` | Effective-профиль команд установленного exec; при resume — применение текущих permissions, а не только вывод по исходнику |
+| `reads_scoped` | Границы чтения, симлинки, дополнительные roots и состав исключений `:minimal` |
+| `writes_forbidden` | Отсутствие записываемых путей в effective-профиле и предотвращение эффектов альтернативных инструментов |
+| `project_extensions_disabled` | Отключение всех требуемых проектных MCP/skills/hooks/plugins/инструкций и альтернативных инструментов |
+| `user_extensions_disabled` | Отключение пользовательских расширений и инструкций; `ignore-user-config` не исключает поиск skills |
+
+Отсутствующее объявление strict-config даёт `unsupported/cli_unsupported`, неизвестная возможность — `blocked`, несоответствующие argv/env — `blocked/configuration_conflict`. R2 и произвольный synthetic evidence не принимаются production-оценщиком как допуск. Стенд M не подставляет `detect` или `assessAdmission`; тестом подтверждено прекращение после четырёх внутренних диагностик без модельного процесса при текущем отказе. Не запускать реальные диагностики M ради повторной демонстрации этого известного отказа.
+
+**Общий цикл**, выполнен C один раз после интеграции, все npm-команды через `sh scripts/with-node.sh`:
+
+| Проверка | Результат |
+|---|---|
+| Целевые `tests/codex`, diagnostics, policy-lab | **388/388**, 15 файлов, 14,29 с |
+| Typecheck | passed |
+| Полный ESLint | passed, warnings 0 |
+| check:boundaries | passed, 38 modules / 95 dependencies |
+| Полный Vitest | **1369/1369**, 35 файлов, 140,86 с |
+| test:node | **78/78**, 7 suites, 134,65 с; fail/skipped/cancelled/todo 0 |
+| build | passed, main/preload/renderer собраны |
+| `git diff --check` | passed; дополнительно проверены whitespace всех 50 untracked-файлов |
+
+Все команды завершились с exit 0. Сверка SHA-256 **181 исполняемого входного файла** перед полными проверками и после сборки не выявила изменений. Логи и manifest сохранены в собственном tmp `vs-c-p3-checks-2zhxgmaz/{vitest.log,node.log,build.log,source-sha256.json}`. После цикла менялись записи результатов; успешные полные проверки ради документов не повторялись. Эти числа относятся к новой редакции, прежние 310/1291/78 сохранены только в истории.
+
+**Реальные наблюдения и расход отделены от doubles:**
+
+| Набор | Расход и состояние |
+|---|---|
+| D01+D02, исторический observed | 10 диагностик, 0 моделей; D02 6/6, authenticated, подтверждённые exit/EOF/cleanup. Не повторялся; inference/refresh не доказаны |
+| R, исторический observed | 7 немодельных + 3 модельных запуска; модельный бюджет израсходован. R1s внешняя попытка не наблюдалась, отказ остаётся unconfirmed; R1c внешнее чтение observed; positive hook/MCP не подтвердили достаточность стенда |
+| GUI B, исторический журнал | preflight 1/1, smoke 1/1; повторов нет. Отказы A остаются отдельным наблюдением |
+| R2 | По журналу B **0/2 CLI + 0/2 auxiliary, 0 моделей**; запуска/evidence нет. Cleanup нового набора не начинался. C observed-fixture не создавал |
+| M | **0**, не разрешена; production недопущен |
+
+Собственный новый код проверялся только doubles и обычными локальными тестами. Инспектор R2 подтверждает согласованность экспортированной сводки с внешним manifest, а не самостоятельно повторяет syscall. Отдельные файловые эффекты известны только из отчёта надзора (`reported_by_supervisor`). Будущий экспорт сохраняет provenance и SHA исходных bytes, удаляет посторонние поля; sandbox-результат не доказывает exec/resume/extensions или production-ready.
+
+**Перекрёстное ревью.** Отзыв A по исправленному R2 получен: budgets, Stop, lifecycle, exit/EOF и cleanup проверены статически без блокирующих замечаний. B дал отзыв интерфейса/managed без блокеров; в live-план добавлены условная сеть cloud-bundle, возможные штатные refresh/cache и риск сетевого deadline, без новой пробы среды. C сверил четыре SHA R2, проверил границы §§14–17 B и сохранил независимые выводы R1s/R1c/контролей. Новая зависимость R2 `args.ts` имеет другой SHA из-за модельного builder, но `buildCodexEnv` и `CODEX_ENV_ALLOWLIST` побайтово прежние; актуальные значения переданы A/B и записаны в live-плане. Отдельные итоговые отзывы A о новых инспекторе/тестах C и B о новой реализации A на момент этой записи ещё не получены; общий успешный цикл их не заменяет.
+
+**Оставшиеся условия:** получить конкретный перенос разрешения R2 на cwd `bbf9bd8d…`, сохранить актуальность обоих отзывов и неиспользованного бюджета, затем только B может выполнить один набор. C должен получить точный путь/SHA безопасного evidence B и независимо экспортировать observed-fixture. Даже успешный R2 оставляет пять оснований production-допуска и достаточную M4-проверку открытыми. Команда/cwd/config, внутренние detect, предел 16 диагностик + 4 модели + 1 git-init, таймауты, сеть/расходы/штатные записи и Stop/cleanup M подготовлены в live-плане; до устранения конкретных пробелов и отдельного согласия M не выполняется. **P3 открыт.**
+
+### P3: исправление инспектора после перекрёстного ревью — 2026-10-20
+
+Получен отзыв A по независимому инспектору R2 и `sandbox-read-profile.test.ts`. К границам observed/synthetic и проверяемым утверждениям нового профиля замечаний нет. Найден дефект: при `completion.issues=[signal_failed]`, пустом `signals` и `stopFailures=0` инспектор ошибочно подтверждал lifecycle/cleanup. C добавил четыре отрицательные регрессии (`signal_failed`, `stream_failed`, `exit_unconfirmed`, `process_result_failed`): до исправления все четыре упали именно на ложном подтверждении. После правки `exited()` в `policy-probe-evidence.ts` эти причины оставляют lifecycle/cleanup `unconfirmed`, в том числе в безопасном экспорте. Отдельная положительная регрессия сохраняет cleanup после timeout при наблюдаемых exit/обоих EOF; политика при этом не подтверждается. Сам исполняемый R2 не менялся.
+
+По запросу A добавлена независимая проверка `dynamic_tool_call` на настоящем адаптере с потоками doubles: новый профиль возвращает `runtime_inventory_unknown`, legacy сохраняет прежнее диагностическое игнорирование; неизвестный инструмент не выдаётся как `tool_started`. Оба результата по-прежнему имеют один terminal, совпадающий с done. Код A, включая `rejectUnknownItems`, уже входил в предыдущий общий цикл; C его не менял.
+
+**Проверки после исправления:** два затронутых набора — **71/71**, exit 0; typecheck и ESLint трёх изменённых TS-файлов — exit 0; diff-check — без замечаний. Побайтовая сверка с manifest предыдущего общего цикла обнаружила изменения ровно в `policy-probe-evidence.ts` и двух названных тестах. Production, исполняемые стенды, Node/Git-проверки и сборочные входы не изменились. Полные проверки неизменных участков не повторялись; прежние 388/1369/78 относятся к редакции до этой правки и не объявляются новым прогоном.
+
+В §18 карты совместимости B появился source-review реализации A: argv first/resume, выбор именованных permissions, strict-config, управление проектными инструкциями, отказ допуска и тексты gaps согласуются с изученным исходником; замечания отмечены как неблокирующие. B полностью прочитал args/contracts/detect/profile и участок допуска index; остальной lifecycle/parser и тесты не входят в его отзыв. Ограничение detect по legacy `--sandbox` касается будущих версий, а невключённые кандидаты skills/image_generation/tool_suggest сохраняются в непроверенных требованиях, не дают ready. Это уточняет предыдущую запись об ожидаемых отзывах: A проверил стенды C и дал замечание, исправленное C; B проверил production-контракт A в указанном объёме.
+
+**Повторный отзыв A получен: блокер закрыт.** A перечитал исправление и assertions; блокирующих замечаний к инспектору, manifest и тестам нового профиля нет. Отдельные timeout/nonzero при подтверждённых exit/EOF сохраняют допустимость cleanup, но не становятся успехом политики. Новый и прежний профили различаются в регрессии `dynamic_tool_call` согласно контракту. Это статическое ревью A; **71/71 — прогон C**, не повтор A. C сверил SHA-256 текущих файлов с указанными в отзыве:
+
+| Файл | SHA-256 редакции отзыва A |
+|---|---|
+| `tests/helpers/codex/policy-probe-evidence.ts` | `57e2711995ac24962974993268016e92da33c3db46687b9f537fed76dcd7d112` |
+| `tests/codex/policy-probe-evidence.test.ts` | `696122f1f8e5204a89d4d2fe3f68dd0c14b1efca8a610ce0946d7d18c1029984` |
+| `tests/codex/sandbox-read-profile.test.ts` | `83f8a408d074d1a5cf5f4fa18c675c0cde815b58624d8e11c67e99fbbd1d7a16` |
+
+Все три совпали. При фиксации отзыва изменён только этот отчёт; `git diff --check` прошёл, успешные тесты неизменного кода не повторялись.
+
+Новых D/R/R2/M/GUI-запусков нет; observed R2 по-прежнему отсутствует, разрешение на перенос cwd не получено. P3 остаётся открыт по прежним основаниям, P4 не начат.
+
+### P3: восстановление контекста после перезапуска среды — 2026-10-24
+
+Пользователь возобновил сессию после сообщения «Бэкенд был перезапущен во время работы этой сессии — она на паузе». Текущий cwd сохранился: `…/bbf9bd8d-96e8-4877-bcc1-be3b7d15a611/session`. До продолжения среда VibeForge создала checkpoint `6753c42ddb510bda41e6945cb0d8efcac6b1b7f7` от 2026-10-24; рабочая копия была чистой. C коммитов не создавал. Checkpoint содержит подготовленные файлы P3 и закрытый отзыв A, поэтому повторное восстановление через git apply/reset/merge не требуется.
+
+**Локализация остановки.** Текст сообщения не найден в рабочем дереве; в src/scripts/.vibeforge нет обработчика такой остановки. Прочитанные `src/main/index.ts` и `src/renderer/App.tsx` содержат Electron-каркас VibeStudio, без бэкенда внешней агентной сессии. По сообщению остановка относится к среде VibeForge. Её исходники, журналы перезапуска и инструмент управления этой сессией в доступной копии отсутствуют; первопричина restart не установлена и не объявляется исправленной. Переписывание ProcessRunner или продуктового Swarm VibeStudio из этого сообщения не следует.
+
+**Сохранность и доступное выполнение.** Четыре SHA исходников R2 совпали с исходным сценарием; три SHA инспектора и тестов совпали с итоговым отзывом A выше. Отдельное чтение через openssl подтвердило прежние pins wrapper/native/Node, без запуска Codex и чтения credentials. Команда `sh scripts/with-node.sh node --experimental-transform-types tests/live/codex-policy.probe.ts` без opt-in завершилась с exit 0 и `armed=false`: только manifest, без лаборатории и ProcessRunner.start. Это проверка доступности локального исполнения после перезапуска, а не реальная проба и не расход её 2+2 попыток. Код не менялся; успешные полные проверки и 71/71 неизменных тестов не повторялись.
+
+**Точка продолжения.** В репозитории нет нового observed R2; последний журнал B сохраняет нулевой расход. Это не исключает неизвестной попытки вне сохранённого журнала. C направил B сообщение о необходимости подтвердить фактическое присутствие Claude Code и актуальный расход/отсутствие незавершённой попытки; отправка сообщения не считается ответом или запуском B. Перенос разрешения на новый cwd остаётся несогласованным. После него и сверки текущих условий только B может исполнить один набор; C проверяет его путь/SHA evidence и экспортирует обезличенную fixture. Production остаётся blocked по пяти основаниям, M не разрешена, P3 открыт. Для ремонта самого внешнего бэкенда нужна отдельная рабочая сессия с исходниками и диагностикой VibeForge; эта копия VibeStudio не предоставляет такого доступа.
+
+Если для ремонта VibeForge нужны изменения вне этой копии, работа выполняется в новой сессии VibeForge с режимом «Прямо в проекте», выбрав каталог его исходников и предоставив относящуюся к перезапуску диагностику. Смена cwd текущей сессии не расширяет её полномочия.
+
+В этом продолжении изменены только три статусных документа; `git diff --check` прошёл. Новых живых D/R/R2/M/GUI-проб, push/deploy и начала P4 нет.
+
+### P3: перенос одного R2 для B согласован — 2026-10-24
+
+Источник согласия — прямой ответ пользователя **«Перенести для B»** на вопрос о переносе одного R2 с `73476865…` на текущую `bbf9bd8d…`, только для B после A/B и сверки расхода. Полные пути записаны в начале live-плана. Разрешение сохраняет прежние команду, pins, managed-флаг, 2 немодельных CLI + 2 вспомогательных / 0 моделей, 60 с надзора + 5 с cleanup, остановку набора при первом отказе и отсутствие повторов. Возможные штатные сеть/refresh/cache были указаны в вопросе и плане. Это перенос неиспользованного разрешения, не новый бюджет и не разрешение M/D/GUI.
+
+C перед изменениями проверил cwd, чистый status и новый HEAD `28bbf0f3e574a1fcefc12c7a3ac26e48ffc928cb`: автоматический checkpoint VibeForge сохраняет предыдущие статусные документы, код сценария не изменён. Четыре SHA R2 и SHA args/live-harness совпали с актуальным планом. Отзывы A/B не заменяются новым исполнителем. B направлено поручение подтвердить фактическое присутствие Claude Code после перезапуска, проверить собственный расход и отсутствие незавершённой попытки, затем выполнить единственный набор без повторного запроса того же согласия и передать путь/SHA безопасного evidence, расход, exit/EOF/cleanup. Его собственный журнал остаётся во владении B.
+
+На момент записи ответа B и результата R2 нет. Передача поручения не считается присутствием или исполнением; C реальную пробу не запускал, расход не увеличивал и observed-fixture не создавал. Сохраняются пять непроверенных оснований production-допуска и запрет M; P3 остаётся открыт. Изменены только live-план, план реализации и этот отчёт; `git diff --check` прошёл, полные проверки неизменного кода не повторялись.
+
+### P3: новая копия и независимая идентичность R2 — 2026-10-24
+
+**База и владение.** Назначенный cwd — `/Users/nishimata/Library/Application Support/com.vibeforge.app/data/worktrees/0712ff57-4c40-4d55-b797-62e225b94a6a/session`. Начальный HEAD `749f040ad8d6fec65edcb4c5e03e0c2c66e84a97`, status чистый, P3 отсутствовал в дереве. Сохранённый checkpoint `ce80a5cbd48742eaccabb1cbb3f9285134f34fd2` доступен, HEAD — его предок. A и C предложили одинаковый перенос файловой дельтой; C проверил её применимость, перечитал и сверил существующие файлы с базой, применил дельту только внутри cwd и сравнил все **55/55 файлов побайтово** с checkpoint. HEAD/index и внешние Git metadata не менялись. Коммитов, push/deploy нет. В координации запись была недоступна; фаза реализации получила разрешённую запись в cwd, обход ограничений другим исполнителем не применялся.
+
+Сохранённая реализация A, источниковое ревью B и прежние исправления C перенесены целиком. Новая работа C относительно checkpoint — `tests/fixtures/codex/r2-identity-manifest.json`, `tests/codex/r2-identity-manifest.test.ts`, пояснение в README fixtures и актуальные записи в трёх статусных документах. Production, ProcessRunner, общие порты, существующие инспектор/стенд R2 и закреплённые тесты заново не реализовывались и не менялись.
+
+**Внешняя идентичность.** Manifest SHA-256 — `6d13065d7fcdf1464027fa63ce2aaf1df79ab8da1ac768d38ca9a749a39975c5`; новый тест — `3bdc56d29298827bcddd890e9e839b9c1dfe834cbc3da12839b879681db9bd53`. До любого R2 C отдельно прочитал SHA исходника C, шести implementation-файлов и установки wrapper/native/Node. Четыре закреплённых SHA сценария, args/live-harness и три SHA закрытого отзыва A совпали с заданием; pins установки совпали с entrypoint/D02. Первое чтение через `shasum` не состоялось из-за аварии Perl на локали `C.UTF-8`; повторная сверка через `openssl dgst -sha256` успешна, окружение CLI не менялось. Manifest содержит только ожидаемую идентичность, не исходный результат пробы, не свидетельство политики и не разрешение. Тест обнаруживает изменение исходников и расхождение pins с сохранённым D02 без доступа к установленной CLI.
+
+**Отзыв A привязан к текущему дереву.** После переноса A независимо сверил девять закреплённых SHA в `0712ff57…`; сравнение всех шести `src/adapters/codex/*.ts` с checkpoint через `cmp` завершилось с exit 0. SHA runner `6dd2b293…55448b` и queue `8a066a16…6e30b4` совпали с внешним manifest C. Повторное статическое ревью бюджета **2 CLI + 2 вспомогательных / 0 моделей**, Stop, lifecycle, exit/EOF и cleanup завершено без новых блокирующих замечаний. В закреплённом ProcessRunner `signal_failed` сохраняет failed в signals, а `stream_failed` не превращается последующим EOF в ended. Четыре противоречивых `completion.issues` по-прежнему оставляют lifecycle/cleanup unconfirmed; timeout/nonzero при подтверждённых exit/EOF могут подтвердить только завершение/очистку, но не политику. `dynamic_tool_call` в новом профиле сохраняет `runtime_inventory_unknown`. A изменений не внёс, реальных проб не запускал, расход A — 0; общего тестового цикла не дублировал.
+
+**Ревью нового manifest и теста A завершено.** Блокирующих замечаний нет; SHA файлов совпали с опубликованными выше `6d13065d…9975c5` и `3bdc56d2…9bd53`. A независимо сверил по текущим bytes все семь исходников identity (C-программу и шесть implementation roles), а три executable pins — с entrypoint и историческим D02. Поля соответствуют `R2EvidenceIdentity`; тест не получает expected из будущего evidence, не исполняет CLI и не читает её установку. `purpose=expected_identity_only` корректно ограничивает manifest: он не подтверждает текущий расход B, происхождение результата или перенос разрешения. Три SHA закрытого отзыва A также неизменны; прежнее ревью R2 применимо к восстановленному дереву. A правок не внёс и тестов не повторял: **42/42** остаётся результатом прогона C.
+
+**Границы отзывов.** Источниковое ревью B (§§15–18 compatibility) сохранено в прежнем объёме: интерфейс/managed и заявленный участок реализации A, без полного parser/lifecycle и без наблюдения политики установленной CLI. Подтверждение B о применимости его отзыва в текущей сессии ещё не получено. A также не получал реального evidence R2: пять операций sandbox не подтверждают exec/resume, все runtime-пути или отключение расширений; пять production-gaps остаются открытыми. Фиксация новых отзывов затрагивает только отчёт, успешные проверки неизменного кода не повторялись.
+
+| Новая проверка C | Результат |
+|---|---|
+| `sh scripts/with-node.sh npm test -- tests/codex/r2-identity-manifest.test.ts tests/codex/policy-probe-evidence.test.ts` | **42/42**, 2 файла; 8 проверок manifest и 34 проверки инспектора |
+| `sh scripts/with-node.sh npm run typecheck` | exit 0 |
+| `sh scripts/with-node.sh node node_modules/eslint/bin/eslint.js tests/codex/r2-identity-manifest.test.ts --max-warnings 0` | exit 0 |
+| `git diff --check`, отдельная проверка новых файлов через `git diff --no-index --check` | ошибок пробелов нет; no-index exit 1 без диагностики означает ожидаемое различие с `/dev/null` |
+
+Итоговая сверка с checkpoint: из 55 перенесённых файлов отличаются только четыре документа (README fixtures и три статусных); **51/51 остальных файлов** побайтово неизменны. Manifest и его тест — два новых файла сверх checkpoint.
+
+Общий цикл неизменного production-кода не повторялся: текущая дельта к checkpoint — manifest, его тест и документация. Старые 388/388, 1369/1369, 78/78 и 71/71 остаются результатами соответствующих прежних редакций; новой проверке эти числа не присваиваются. Текущие проверки не запускали Codex/Claude, модели или GUI.
+
+**Реальный R2 и препятствие.** Исходного evidence и observed-fixture R2 нет. В текущем обмене подтверждение фактического присутствия B как Claude Code, проверка им собственного расхода/незавершённой попытки и результат не получены. Сообщения C не считаются присутствием или запуском B. Последняя сохранённая запись расхода — **0 из 2 CLI + 2 вспомогательных, 0 моделей**; отсутствие нового файла не исключает неизвестную попытку вне журнала. C R2 не исполнял. Новые exit/EOF и cleanup **не наблюдались**; успешное выполнение тестов не заменяет их. Observed-fixture и тест реального исхода не создавались из doubles.
+
+Согласие «Перенести для B» действительно для `bbf9bd8d…`; автоматического переноса на `0712ff57…` нет. После подтверждения B и его проверок нужен только перенос прежнего неиспользованного набора на полный cwd выше при тех же команде, pins, обязательном managed-флаге и условиях штатной сети/refresh/cache, без дополнительного бюджета. Только B может выполнить этот конечный набор. Затем C сверяет исходный файл и его SHA с сообщением B, использует `manifest.identity` в существующем инспекторе и экспортирует обезличенный наблюдённый результат, включая отказ. `confirmed_in_export` означает согласованность сводки; файловые эффекты остаются `reported_by_supervisor`. Synthetic не становится observed, R2 не подтверждает exec/resume или production-ready.
+
+**Оставшиеся критерии.** Production сохраняет пять отдельных `blocked/requirement_unconfirmed`: effective sandbox first/resume; область чтения с симлинками и runtime-исключениями; предотвращение записи альтернативными инструментами; отключение проектных расширений; отключение пользовательских расширений. Даже успешный R2 даст только наблюдение пяти операций маршрута sandbox. M не разрешена и требует положительного production-допуска, достаточной M4-проверки и отдельного согласия. Исторические D (10 диагностик, 0 моделей), R (7 немодельных + 3 модельных) и GUI B (preflight 1/1, smoke 1/1) не повторялись. P3 и 0C открыты, P4 не начат.

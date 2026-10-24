@@ -1,0 +1,14 @@
+Synthetic help, manually authored; not captured from Codex.
+Usage: codex exec [OPTIONS] [PROMPT] [COMMAND]
+Commands:
+  resume  Resume a session
+Options:
+      --json
+      --strict-config
+  -s, --sandbox <SANDBOX_MODE>
+  -c, --config <KEY=VALUE>
+      --ignore-user-config
+      --ignore-rules
+      --ephemeral
+  -m, --model <MODEL>
+Use - for PROMPT to read stdin.

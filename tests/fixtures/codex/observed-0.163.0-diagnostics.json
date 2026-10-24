@@ -1,0 +1,213 @@
+{
+  "schemaVersion": 1,
+  "scenario": "P3-D",
+  "provenance": "live",
+  "status": "failed",
+  "startedAt": "2026-10-20T07:20:51.502Z",
+  "durationMs": 468,
+  "budget": {
+    "processMs": 5000,
+    "graceMs": 200,
+    "drainMs": 1000,
+    "totalMs": 45000,
+    "cleanupMs": 5000,
+    "streamBytes": 65536
+  },
+  "attempts": 4,
+  "modelCalls": 0,
+  "envNames": [
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "LOGNAME",
+    "PATH",
+    "TMPDIR",
+    "USER"
+  ],
+  "identity": [
+    {
+      "role": "wrapper",
+      "sha256": "61b0194f3bb6534439c8d26a3ed57d0805f84b884588b761795323eeb92fcf70"
+    },
+    {
+      "role": "native",
+      "sha256": "8813367285524ac798dd96d1b071aea30d58708c7226fd236cd275cf1cfdee31"
+    },
+    {
+      "role": "node",
+      "sha256": "3200fbd9f7fd4410426dd541e10d1ab829d3472f270d743c7fabd1696c03fe32"
+    }
+  ],
+  "probes": [
+    {
+      "id": "D1",
+      "args": [
+        "--version"
+      ],
+      "status": "passed",
+      "durationMs": 50,
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found",
+            "errorCode": "ESRCH"
+          }
+        ],
+        "wait": "settled",
+        "issues": [],
+        "descendants": "not_guaranteed"
+      },
+      "stdoutBytes": 18,
+      "stderrBytes": 104,
+      "version": "0.163.0"
+    },
+    {
+      "id": "D2",
+      "args": [
+        "--help"
+      ],
+      "status": "passed",
+      "durationMs": 40,
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found",
+            "errorCode": "ESRCH"
+          }
+        ],
+        "wait": "settled",
+        "issues": [],
+        "descendants": "not_guaranteed"
+      },
+      "stdoutBytes": 5849,
+      "stderrBytes": 104
+    },
+    {
+      "id": "D3",
+      "args": [
+        "exec",
+        "--help"
+      ],
+      "status": "passed",
+      "durationMs": 40,
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found",
+            "errorCode": "ESRCH"
+          }
+        ],
+        "wait": "settled",
+        "issues": [],
+        "descendants": "not_guaranteed"
+      },
+      "stdoutBytes": 4331,
+      "stderrBytes": 104,
+      "flags": [
+        "--json",
+        "--sandbox",
+        "--config",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "--ephemeral",
+        "--model",
+        "--help",
+        "--version"
+      ]
+    },
+    {
+      "id": "D4",
+      "args": [
+        "exec",
+        "resume",
+        "--help"
+      ],
+      "status": "failed",
+      "durationMs": 38,
+      "completion": {
+        "process": {
+          "state": "exited",
+          "exitCode": 0,
+          "signal": null
+        },
+        "stdout": "ended",
+        "stderr": "ended",
+        "signals": [
+          {
+            "signal": "SIGKILL",
+            "target": "group",
+            "status": "not_found",
+            "errorCode": "ESRCH"
+          }
+        ],
+        "wait": "settled",
+        "issues": [],
+        "descendants": "not_guaranteed"
+      },
+      "stdoutBytes": 3183,
+      "stderrBytes": 104,
+      "flags": [
+        "--json",
+        "--config",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "--ephemeral",
+        "--model",
+        "--help"
+      ]
+    },
+    {
+      "id": "D5",
+      "args": [
+        "login",
+        "--help"
+      ],
+      "status": "not_run"
+    },
+    {
+      "id": "D6",
+      "args": [
+        "login",
+        "status"
+      ],
+      "status": "not_run"
+    }
+  ],
+  "workspace": "<temporary-workspace>",
+  "cleanup": "removed",
+  "reason": "interface_unsupported",
+  "redactions": [
+    "identity.path",
+    "identity.realpath",
+    "identity.stat",
+    "workspace"
+  ]
+}

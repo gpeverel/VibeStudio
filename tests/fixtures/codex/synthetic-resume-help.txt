@@ -1,0 +1,10 @@
+Synthetic help, manually authored; not captured from Codex.
+Usage: codex exec resume [OPTIONS] [SESSION_ID] [PROMPT]
+Options:
+      --json
+      --strict-config
+  -c, --config <KEY=VALUE>
+      --ignore-user-config
+      --ignore-rules
+  -m, --model <MODEL>
+Use - for PROMPT to read stdin.
