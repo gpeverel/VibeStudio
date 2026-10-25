@@ -50,8 +50,9 @@ export function validateCodexProfile(profile: unknown, cwd: string): CodexProfil
 }
 
 const isLimitation = (value: unknown): value is CodexLimitation => CODEX_LIMITATIONS.includes(value as CodexLimitation);
+// Array.every пропускает пустые позиции; разворачиваем их в undefined до проверки полноты.
 const complete = <T>(values: unknown, all: readonly T[], guard: (value: unknown) => value is T): values is readonly T[] =>
-  Array.isArray(values) && values.length === all.length && new Set(values).size === all.length && values.every(guard);
+  Array.isArray(values) && values.length === all.length && new Set(values).size === all.length && [...values].every(guard);
 
 export interface CodexVerdict { error?: 'profile_unsupported' | 'practical_admission_blocked'; reason: string; detail: string }
 
@@ -166,7 +167,7 @@ function launchConfigurationMatches(context: CodexAdmissionContext): boolean {
     ...(request.model === undefined ? [] : ['--model', request.model]),
     ...(request.resume ? [request.thread.threadId] : []), '-',
   ];
-  if (!Array.isArray(args) || args.length !== expected.length || args.some((arg, index) => arg !== expected[index])) return false;
+  if (!Array.isArray(args) || args.length !== expected.length || expected.some((arg, index) => arg !== args[index])) return false;
   if (!isRecord(env) || !isRecord(request.env)) return false;
   if (Object.entries(env).some(([name, value]) => !(CODEX_ENV_ALLOWLIST as readonly string[]).includes(name)
     || typeof value !== 'string' || value.includes('\0'))) return false;

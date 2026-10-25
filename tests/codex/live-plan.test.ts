@@ -2,12 +2,13 @@ import { readFileSync, realpathSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { buildCodexArgs } from '../../src/adapters/codex/args.ts';
 import { createCodexAdapter } from '../../src/adapters/codex/index.ts';
+import type { CodexRunRequest } from '../../src/adapters/codex/contracts.ts';
 import { buildAgentInstructions } from '../../src/core/agent-instructions.ts';
 import type { AgentRunCompletion } from '../../src/core/ports/agent.ts';
 import type { ProcessRequest, ProcessRunner } from '../../src/core/ports/process-runner.ts';
 import { createCodexLiveHarness } from '../helpers/codex/live-harness.ts';
 import type { Observation } from '../helpers/codex/live-harness.ts';
-import { expectedCodexLaunches, firstChecks, firstPrompt, instructionVerdict, policyChecks, RESUME_PROMPT, resumeChecks } from '../helpers/codex/live-plan.ts';
+import { expectedCodexLaunches, firstChecks, firstPrompt, instructionVerdict, policyChecks, POLICY_PROMPT, RESUME_PROMPT, resumeChecks } from '../helpers/codex/live-plan.ts';
 import { cleanCompletion, processResult } from '../helpers/codex/process-double.ts';
 import { firstRequest, resumeRequest, sandboxFirstRequest, sandboxResumeRequest, SYNTHETIC_ADMISSION,
   SYNTHETIC_SANDBOX_ADMISSION, THREAD } from '../helpers/codex/requests.ts';
@@ -102,7 +103,7 @@ describe('Codex M: независимый manifest и смысл наблюде�
 
   it('отсутствие событий и маркеров не подтверждает превентивную политику/выключение расширений', () => {
     expect(policyChecks(observation('ЧТЕНИЕ: ' + READ), READ, true)).toEqual({
-      allowedRead: 'passed', forbiddenEffectAbsent: 'passed', toolPolicy: 'unconfirmed', extensionPolicy: 'unconfirmed',
+      allowedRead: 'unconfirmed', forbiddenEffectAbsent: 'passed', toolPolicy: 'unconfirmed', extensionPolicy: 'unconfirmed',
     });
     expect(policyChecks(observation('ЧТЕНИЕ: ' + READ, { toolNames: ['command_execution'] }), READ, true).toolPolicy).toBe('failed');
     expect(policyChecks(observation('ЧТЕНИЕ: ' + READ), READ, false).forbiddenEffectAbsent).toBe('failed');
@@ -111,7 +112,7 @@ describe('Codex M: независимый manifest и смысл наблюде�
   it('новый профиль разрешает класс shell, сохраняя неизвестность его ограничений', () => {
     const shell = observation('ЧТЕНИЕ: ' + READ, { toolNames: ['command_execution'] });
     expect(policyChecks(shell, READ, true, 'codex-sandbox-read-v1')).toEqual({
-      allowedRead: 'passed', forbiddenEffectAbsent: 'passed', toolPolicy: 'unconfirmed', extensionPolicy: 'unconfirmed',
+      allowedRead: 'unconfirmed', forbiddenEffectAbsent: 'passed', toolPolicy: 'unconfirmed', extensionPolicy: 'unconfirmed',
     });
     expect(policyChecks(shell, READ, true, 'codex-read-only-v1').toolPolicy).toBe('failed');
     expect(policyChecks({ ...shell, deniedTools: ['command_execution'] }, READ, true, 'codex-sandbox-read-v1').toolPolicy)
@@ -153,7 +154,7 @@ describe('Codex M: независимый manifest и смысл наблюде�
     expect(report.completion?.process.state).toBe('exited');
   });
 
-  it.each([false, true])('два адаптера и synthetic допуск проверяют M1/M2 без CLI; named=%s', async named => {
+  it.each([false, true])('synthetic M1/M2 проходят, но текущий M4 останавливает M5 без процессов; named=%s', async named => {
     const fake = syntheticRunner();
     const harness = createCodexLiveHarness({ runner: fake.runner });
     const executable = realpathSync(process.execPath);
@@ -174,5 +175,29 @@ describe('Codex M: независимый manifest и смысл наблюде�
     expect(fake.starts).toHaveLength(10);
     expect(fake.starts[9]!.stdin).not.toContain(MEMORY);
     expect(fake.starts[9]!.args.slice(-2)).toEqual([THREAD, '-']);
+    const negatives = [
+      ['M3-missing', { ...next, thread: { adapter: 'codex', threadId: '019a0000-0000-7000-8000-000000000099' } }],
+      ['M3-foreign', { ...next, thread: { adapter: 'claude', threadId: THREAD } }],
+      ['M3-binding', { ...next, participantId: 'foreign-participant' }],
+    ] as const;
+    for (const [label, invalid] of negatives) {
+      const report = await harness.runScenario({ label, expected: [],
+        start: () => second.start(invalid as unknown as CodexRunRequest), inspect: () => ({}) });
+      expect(report.outcome).toBe('passed');
+      expect(fake.starts).toHaveLength(10);
+    }
+    const policyRequest = { ...request, prompt: POLICY_PROMPT };
+    const policy = await harness.runScenario({ label: 'M4', expected: expectedCodexLaunches(executable, policyRequest),
+      start: () => first.start(policyRequest),
+      inspect: observed => policyChecks(observed, READ, true, request.profile.kind) });
+    expect(policy.outcome).toBe('unconfirmed');
+    expect(policy.reason).toBe('required_unconfirmed');
+    expect(policy.checks).toMatchObject({ allowedRead: 'unconfirmed', toolPolicy: 'unconfirmed', extensionPolicy: 'unconfirmed' });
+    const startStop = vi.fn(() => first.start(request));
+    const stopped = await harness.runScenario({ label: 'M5', expected: expectedCodexLaunches(executable, request),
+      start: startStop, inspect: () => ({}) });
+    expect(stopped).toMatchObject({ execution: 'not_started', reason: 'halted', diagnostics: 0, models: 0 });
+    expect(startStop).not.toHaveBeenCalled();
+    expect(fake.starts).toHaveLength(15);
   });
 });

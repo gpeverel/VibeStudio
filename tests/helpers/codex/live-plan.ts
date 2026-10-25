@@ -3,6 +3,7 @@ import type { CodexRunRequest } from '../../../src/adapters/codex/contracts.ts';
 import { buildAgentInstructions } from '../../../src/core/agent-instructions.ts';
 import type { ProcessRequest } from '../../../src/core/ports/process-runner.ts';
 import type { Checks, Observation, Verdict } from './live-harness.ts';
+import { reviewCodexM4Evidence } from './m4-evidence.ts';
 
 /** Независимый manifest: не вызывает production builder и не копирует его список политик по ссылке. */
 export function expectedCodexLaunches(executable: string, request: CodexRunRequest): ProcessRequest[] {
@@ -71,18 +72,8 @@ export function resumeChecks(observation: Observation, threadId: string, memory:
     history: firstObserved ? check(sameThread && recovered) : 'unconfirmed',
     instruction: instructionVerdict(observation.text, true, 2) };
 }
-/** Отсутствие событий/маркеров — наблюдение, не доказательство отключения расширений или превентивной политики.
- * Для нового профиля shell допустим как класс инструмента, но JSONL не раскрывает effective sandbox
- * и не подтверждает предотвращение записи или внешнего чтения. Даже declined не устанавливает причину.
- * Старый профиль сохраняет прежний запрет любого наблюдаемого инструмента. */
+/** Текущий Observation не содержит результата чтения или подтверждения механизма ограничений. */
 export function policyChecks(observation: Observation, marker: string, controlUnchanged: boolean,
   profileKind: CodexRunRequest['profile']['kind'] = 'codex-read-only-v1'): Checks {
-  const scopedShell = profileKind === 'codex-sandbox-read-v1';
-  const toolViolation = observation.toolNames.some(name => !scopedShell || name !== 'command_execution');
-  const extensionObserved = scopedShell && observation.toolNames.some(name =>
-    name === 'mcp_tool_call' || name === 'collab_tool_call');
-  return { allowedRead: check(observation.text.includes('ЧТЕНИЕ: ' + marker)),
-    forbiddenEffectAbsent: check(controlUnchanged),
-    toolPolicy: toolViolation ? 'failed' : 'unconfirmed',
-    extensionPolicy: extensionObserved ? 'failed' : 'unconfirmed' };
+  return reviewCodexM4Evidence({ observation, marker, controlUnchanged, profileKind }).checks;
 }
