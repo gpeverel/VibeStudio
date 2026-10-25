@@ -1,0 +1,312 @@
+{
+  "schemaVersion": 1,
+  "sourceEvidenceSha256": "1916a7b769b152d6af08ede3fe315baaa5743f4b62c0e40dabaf36615e6426d1",
+  "evidence": {
+    "schemaVersion": 1,
+    "startedAt": "2026-10-24T14:48:21.346Z",
+    "recordedAt": "2026-10-24T14:48:24.159Z",
+    "expectedVersion": "0.163.0",
+    "executable": [
+      {
+        "role": "wrapper",
+        "sha256": "61b0194f3bb6534439c8d26a3ed57d0805f84b884588b761795323eeb92fcf70"
+      },
+      {
+        "role": "native",
+        "sha256": "8813367285524ac798dd96d1b071aea30d58708c7226fd236cd275cf1cfdee31"
+      },
+      {
+        "role": "node",
+        "sha256": "3200fbd9f7fd4410426dd541e10d1ab829d3472f270d743c7fabd1696c03fe32"
+      }
+    ],
+    "implementation": [
+      {
+        "role": "entry",
+        "sha256": "25fe9ffbf50a5e44c0afdb98635ed007a72a96ec5e17c833574aec53237943ba"
+      },
+      {
+        "role": "supervisor",
+        "sha256": "d09e78145dacb188a387ea93928ddda63517f0e4ab516f7e00fc530bb54d2ed1"
+      },
+      {
+        "role": "completion_export",
+        "sha256": "ece32b76b5e44f50b831912e272d4611f2531e60d78bb6f937d55bc784afda79"
+      },
+      {
+        "role": "runner",
+        "sha256": "6dd2b2937c2785b99eead1fd728f819ad9f6427a080e6b015d60e92a4c55448b"
+      },
+      {
+        "role": "queue",
+        "sha256": "8a066a162e6f8d1cb0e5065c9e0409128491b665dafd8120877a112b4c6e30b4"
+      },
+      {
+        "role": "environment",
+        "sha256": "8b1d3fccb4a10052fac13993ecc6d799a61f54f11a1f72fa9d2b75ab475858ee"
+      }
+    ],
+    "sourceSha256": "6b68bde03a0142f578d6f905817a269c2804ea113cc34ded122a83046381f6db",
+    "budget": {
+      "cli": 2,
+      "auxiliary": 2,
+      "models": 0,
+      "totalMs": 60000,
+      "compileMs": 20000,
+      "processMs": 10000,
+      "cleanupMs": 5000,
+      "stopMs": 2000,
+      "graceMs": 200,
+      "drainMs": 1000,
+      "outputBytes": 65536
+    },
+    "report": {
+      "scenario": "P3-R2",
+      "provenance": "live",
+      "productionAdmission": "not_assessed",
+      "status": "observed",
+      "attempts": {
+        "cli": 2,
+        "auxiliary": 2,
+        "models": 0
+      },
+      "sourceSha256": "6b68bde03a0142f578d6f905817a269c2804ea113cc34ded122a83046381f6db",
+      "probeSha256": "28f9107bd9baadf6b1892a9c9b0be69bc8b6ba7db0b3f66c69ec7df5bbb8a799",
+      "baseline": {
+        "schemaVersion": 1,
+        "control": {
+          "attempted": true,
+          "state": "allowed",
+          "code": "NONE",
+          "matched": true
+        },
+        "outside": {
+          "attempted": true,
+          "state": "allowed",
+          "code": "NONE",
+          "matched": true
+        },
+        "symlink": {
+          "attempted": true,
+          "state": "allowed",
+          "code": "NONE",
+          "matched": true
+        },
+        "writeInside": {
+          "attempted": true,
+          "state": "allowed",
+          "code": "NONE",
+          "matched": true
+        },
+        "writeOutside": {
+          "attempted": true,
+          "state": "allowed",
+          "code": "NONE",
+          "matched": true
+        }
+      },
+      "sandbox": {
+        "schemaVersion": 1,
+        "control": {
+          "attempted": true,
+          "state": "allowed",
+          "code": "NONE",
+          "matched": true
+        },
+        "outside": {
+          "attempted": true,
+          "state": "denied",
+          "code": "EPERM",
+          "matched": false
+        },
+        "symlink": {
+          "attempted": true,
+          "state": "denied",
+          "code": "EPERM",
+          "matched": false
+        },
+        "writeInside": {
+          "attempted": true,
+          "state": "denied",
+          "code": "EPERM",
+          "matched": false
+        },
+        "writeOutside": {
+          "attempted": true,
+          "state": "denied",
+          "code": "EPERM",
+          "matched": false
+        }
+      },
+      "processes": [
+        {
+          "step": "compile",
+          "argvSha256": "1f3242462a100f117513f52db0aa69b8f8c4ae018047d204feff42ecb322242c",
+          "envNames": [
+            "HOME",
+            "LOGNAME",
+            "PATH",
+            "TMPDIR",
+            "USER"
+          ],
+          "handle": "returned",
+          "stdoutBytes": 0,
+          "stderrBytes": 0,
+          "stdoutEnded": true,
+          "stderrEnded": true,
+          "completion": {
+            "process": {
+              "state": "exited",
+              "exitCode": 0,
+              "signal": null
+            },
+            "stdout": "ended",
+            "stderr": "ended",
+            "wait": "settled",
+            "descendants": "not_guaranteed",
+            "signals": [
+              {
+                "signal": "SIGKILL",
+                "target": "group",
+                "status": "not_found"
+              }
+            ],
+            "issues": []
+          }
+        },
+        {
+          "step": "baseline",
+          "argvSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "envNames": [
+            "HOME",
+            "LOGNAME",
+            "PATH",
+            "TMPDIR",
+            "USER"
+          ],
+          "handle": "returned",
+          "stdoutBytes": 409,
+          "stderrBytes": 0,
+          "stdoutEnded": true,
+          "stderrEnded": true,
+          "completion": {
+            "process": {
+              "state": "exited",
+              "exitCode": 0,
+              "signal": null
+            },
+            "stdout": "ended",
+            "stderr": "ended",
+            "wait": "settled",
+            "descendants": "not_guaranteed",
+            "signals": [
+              {
+                "signal": "SIGKILL",
+                "target": "group",
+                "status": "not_found"
+              }
+            ],
+            "issues": []
+          }
+        },
+        {
+          "step": "sandbox-help",
+          "argvSha256": "ca4cd30e9574cf9d5bc90dcf5fe81acfcf54bacc93dd2ac71de3fc2031e7b019",
+          "envNames": [
+            "HOME",
+            "LOGNAME",
+            "PATH",
+            "TMPDIR",
+            "USER"
+          ],
+          "handle": "returned",
+          "stdoutBytes": 2300,
+          "stderrBytes": 0,
+          "stdoutEnded": true,
+          "stderrEnded": true,
+          "completion": {
+            "process": {
+              "state": "exited",
+              "exitCode": 0,
+              "signal": null
+            },
+            "stdout": "ended",
+            "stderr": "ended",
+            "wait": "settled",
+            "descendants": "not_guaranteed",
+            "signals": [
+              {
+                "signal": "SIGKILL",
+                "target": "group",
+                "status": "not_found"
+              }
+            ],
+            "issues": []
+          }
+        },
+        {
+          "step": "sandbox",
+          "argvSha256": "d118aa467f7dbaa1011e9d6c3a743dfe5d2db87933dd59360518d13bcb1ccf26",
+          "envNames": [
+            "HOME",
+            "LOGNAME",
+            "PATH",
+            "TMPDIR",
+            "USER"
+          ],
+          "handle": "returned",
+          "stdoutBytes": 413,
+          "stderrBytes": 0,
+          "stdoutEnded": true,
+          "stderrEnded": true,
+          "completion": {
+            "process": {
+              "state": "exited",
+              "exitCode": 0,
+              "signal": null
+            },
+            "stdout": "ended",
+            "stderr": "ended",
+            "wait": "settled",
+            "descendants": "not_guaranteed",
+            "signals": [
+              {
+                "signal": "SIGKILL",
+                "target": "group",
+                "status": "not_found"
+              }
+            ],
+            "issues": []
+          }
+        }
+      ],
+      "cleanup": "removed",
+      "stopFailures": 0
+    },
+    "p3": "unconfirmed",
+    "execPolicy": "not_assessed",
+    "extensions": "not_assessed",
+    "limitations": [
+      "sandbox_command_only",
+      "runtime_reads_not_audited",
+      "configuration_layers_not_audited",
+      "network_effects_not_attested",
+      "detached_children_not_guaranteed"
+    ]
+  },
+  "review": {
+    "provenance": "live",
+    "basis": "exported_summary",
+    "identity": "matched",
+    "attemptAccounting": "confirmed_in_export",
+    "lifecycle": "confirmed_in_export",
+    "cleanup": "confirmed_in_export",
+    "baseline": "confirmed_in_export",
+    "sandboxOperations": "confirmed_in_export",
+    "filesystemEffects": "reported_by_supervisor",
+    "productionAdmission": "not_assessed",
+    "execPolicy": "not_assessed",
+    "extensions": "not_assessed",
+    "p3": "unconfirmed"
+  }
+}
