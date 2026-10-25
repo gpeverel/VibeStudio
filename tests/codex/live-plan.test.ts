@@ -8,6 +8,7 @@ import type { AgentRunCompletion } from '../../src/core/ports/agent.ts';
 import type { ProcessRequest, ProcessRunner } from '../../src/core/ports/process-runner.ts';
 import { createCodexLiveHarness } from '../helpers/codex/live-harness.ts';
 import type { Observation } from '../helpers/codex/live-harness.ts';
+import { M4CommandCapture, M4_READ_COMMAND } from '../helpers/codex/m4-command-evidence.ts';
 import { expectedCodexLaunches, firstChecks, firstPrompt, instructionVerdict, policyChecks, POLICY_PROMPT, RESUME_PROMPT, resumeChecks } from '../helpers/codex/live-plan.ts';
 import { cleanCompletion, processResult } from '../helpers/codex/process-double.ts';
 import { firstRequest, resumeRequest, sandboxFirstRequest, sandboxResumeRequest, SYNTHETIC_ADMISSION,
@@ -25,14 +26,16 @@ const observation = (text: string, patch: Partial<Observation> = {}): Observatio
 const execHelp = readFileSync(new URL('../fixtures/codex/synthetic-exec-help.txt', import.meta.url), 'utf8');
 const resumeHelp = readFileSync(new URL('../fixtures/codex/synthetic-resume-help.txt', import.meta.url), 'utf8');
 async function* bytes(text: string) { if (text) yield Buffer.from(text); }
-const jsonl = (text: string): string => [
+const jsonl = (text: string, tools: unknown[] = []): string => [
   { type: 'thread.started', thread_id: THREAD },
   { type: 'turn.started' },
+  ...tools,
   { type: 'item.completed', item: { type: 'agent_message', id: 'message', text } },
   { type: 'turn.completed', usage: { input_tokens: 4, output_tokens: 3, cached_input_tokens: 0 } },
 ].map(value => JSON.stringify(value)).join('\n') + '\n';
-function syntheticRunner(): { runner: ProcessRunner; starts: ProcessRequest[] } {
+function syntheticRunner(readResult = false) {
   const starts: ProcessRequest[] = [];
+  let capture: M4CommandCapture | undefined;
   const runner: ProcessRunner = { start(request) {
     starts.push(request);
     const argv = request.args.join(' ');
@@ -40,11 +43,17 @@ function syntheticRunner(): { runner: ProcessRunner; starts: ProcessRequest[] } 
       : argv === 'exec --help' ? execHelp
         : argv === 'exec resume --help' ? resumeHelp
           : argv === 'login status' ? ''
-            : jsonl(request.args[1] === 'resume' ? resumeText : firstText);
-    return { stdout: bytes(out), stderr: bytes(argv === 'login status' ? 'Logged in using ChatGPT\n' : ''),
+            : jsonl(request.args[1] === 'resume' ? resumeText : firstText,
+              readResult && request.stdin === POLICY_PROMPT ? [{ type: 'item.completed', item: {
+                id: 'read', type: 'command_execution', command: M4_READ_COMMAND,
+                aggregated_output: READ + '\n', exit_code: 0, status: 'completed',
+              } }] : []);
+    const run = { stdout: bytes(out), stderr: bytes(argv === 'login status' ? 'Logged in using ChatGPT\n' : ''),
       done: Promise.resolve(processResult()), interrupt: async () => {}, kill: async () => {} };
+    if (readResult && request.stdin === POLICY_PROMPT) { capture = new M4CommandCapture(run, READ); return capture.run; }
+    return run;
   } };
-  return { runner, starts };
+  return { runner, starts, capture: () => capture };
 }
 
 describe('Codex M: независимый manifest и смысл наблюдений', () => {
@@ -154,8 +163,9 @@ describe('Codex M: независимый manifest и смысл наблюде�
     expect(report.completion?.process.state).toBe('exited');
   });
 
-  it.each([false, true])('synthetic M1/M2 проходят, но текущий M4 останавливает M5 без процессов; named=%s', async named => {
-    const fake = syntheticRunner();
+  it.each([{ named: false, readResult: false }, { named: true, readResult: false }, { named: true, readResult: true }])(
+    'synthetic M4 останавливает M5 даже при подтверждённом чтении; named=$named readResult=$readResult', async ({ named, readResult }) => {
+    const fake = syntheticRunner(readResult);
     const harness = createCodexLiveHarness({ runner: fake.runner });
     const executable = realpathSync(process.execPath);
     const request = (named ? sandboxFirstRequest : firstRequest)('/synthetic/cwd', { prompt: firstPrompt(MEMORY),
@@ -189,10 +199,11 @@ describe('Codex M: независимый manifest и смысл наблюде�
     const policyRequest = { ...request, prompt: POLICY_PROMPT };
     const policy = await harness.runScenario({ label: 'M4', expected: expectedCodexLaunches(executable, policyRequest),
       start: () => first.start(policyRequest),
-      inspect: observed => policyChecks(observed, READ, true, request.profile.kind) });
+      inspect: observed => policyChecks(observed, READ, true, request.profile.kind, fake.capture()) });
     expect(policy.outcome).toBe('unconfirmed');
     expect(policy.reason).toBe('required_unconfirmed');
-    expect(policy.checks).toMatchObject({ allowedRead: 'unconfirmed', toolPolicy: 'unconfirmed', extensionPolicy: 'unconfirmed' });
+    expect(policy.checks).toMatchObject({ allowedRead: readResult ? 'passed' : 'unconfirmed',
+      toolPolicy: 'unconfirmed', extensionPolicy: 'unconfirmed' });
     const startStop = vi.fn(() => first.start(request));
     const stopped = await harness.runScenario({ label: 'M5', expected: expectedCodexLaunches(executable, request),
       start: startStop, inspect: () => ({}) });

@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import type { Checks } from './live-harness.ts';
+import { M4CommandCapture } from './m4-command-evidence.ts';
 
 const names = z.array(z.string().max(256)).max(256);
 const evidence = z.object({
   observation: z.object({
-    text: z.string().max(65_536), toolNames: names, deniedTools: names,
+    text: z.string().max(65_536), toolNames: names, deniedTools: names, threadIds: names.optional(),
     result: z.object({
       kind: z.enum(['success', 'error', 'max_turns', 'interrupted', 'limit']),
       stopAccepted: z.boolean(),
@@ -28,7 +29,7 @@ export type CodexM4Gap = 'invalid_evidence' | 'completion_unconfirmed' | 'read_t
   | 'exec_resume_policy_unconfirmed' | 'read_scope_unconfirmed' | 'alternative_write_paths_unconfirmed'
   | 'extension_controls_unconfirmed';
 export interface CodexM4Review {
-  basis: 'normalized_observation';
+  basis: 'normalized_observation' | 'normalized_observation_and_cli_jsonl';
   /** Это источник данных инспектора, а не аттестация происхождения live/synthetic. */
   responseMarker: 'matched' | 'mismatched' | 'unconfirmed';
   checks: Required<Pick<Checks, 'allowedRead' | 'forbiddenEffectAbsent' | 'toolPolicy' | 'extensionPolicy'>>;
@@ -37,12 +38,11 @@ export interface CodexM4Review {
 }
 
 /** Закрытая проекция текущего M4: без текста, имён неизвестных инструментов и ошибок.
- * Observation не содержит результата чтения, effective policy или положительных контролей
- * расширений. Даже точная метка и успешный shell не подтверждают эти основания.
- * Новые поля извне не становятся доказательствами; положительный путь требует отдельного
- * проверенного источника с привязкой к executable/config/маршруту exec или resume.
+ * Observation не содержит результата чтения: его передаёт отдельный захват JSONL того же хода.
+ * Даже подтверждённое чтение не подтверждает effective policy или контроль расширений.
+ * Произвольные поля входного объекта не становятся такими свидетельствами.
  * controlUnchanged относится только к проверенным файлам стенда, а не ко всей FS. */
-export function reviewCodexM4Evidence(input: unknown): CodexM4Review {
+export function reviewCodexM4Evidence(input: unknown, capture?: M4CommandCapture): CodexM4Review {
   const review: CodexM4Review = {
     basis: 'normalized_observation', responseMarker: 'unconfirmed', productionAdmission: 'not_assessed',
     checks: { allowedRead: 'unconfirmed', forbiddenEffectAbsent: 'unconfirmed',
@@ -65,6 +65,13 @@ export function reviewCodexM4Evidence(input: unknown): CodexM4Review {
   review.responseMarker = matched ? 'matched' : 'mismatched';
   // Неполный ход не позволяет судить об окончательном ответе или отсутствии эффекта.
   if (completed && !matched) review.checks.allowedRead = 'failed';
+  if (capture instanceof M4CommandCapture) {
+    review.basis = 'normalized_observation_and_cli_jsonl';
+    const read = capture.review(marker, observation.threadIds?.length === 1 ? observation.threadIds[0] : undefined);
+    if (completed && matched && profileKind === 'codex-sandbox-read-v1' && observation.toolNames.includes('command_execution')) {
+      review.checks.allowedRead = controlUnchanged ? read.verdict : 'failed';
+    }
+  }
   review.checks.forbiddenEffectAbsent = !controlUnchanged ? 'failed' : completed ? 'passed' : 'unconfirmed';
   if (observation.toolNames.some(name => profileKind !== 'codex-sandbox-read-v1' || name !== 'command_execution')) {
     review.checks.toolPolicy = 'failed';
@@ -72,7 +79,8 @@ export function reviewCodexM4Evidence(input: unknown): CodexM4Review {
   if (observation.toolNames.some(name => name === 'mcp_tool_call' || name === 'collab_tool_call')) {
     review.checks.extensionPolicy = 'failed';
   }
-  review.gaps.push('read_tool_result_missing', 'exec_resume_policy_unconfirmed', 'read_scope_unconfirmed',
+  if (review.checks.allowedRead !== 'passed') review.gaps.push('read_tool_result_missing');
+  review.gaps.push('exec_resume_policy_unconfirmed', 'read_scope_unconfirmed',
     'alternative_write_paths_unconfirmed', 'extension_controls_unconfirmed');
   return review;
 }

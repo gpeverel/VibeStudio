@@ -11,6 +11,8 @@ import type { CodexRunRequest, CodexThreadBinding } from '../../src/adapters/cod
 import { createProcessRunner } from '../../src/adapters/process-runner/index.ts';
 import { createCodexLiveHarness, M_BUDGET } from '../helpers/codex/live-harness.ts';
 import type { Checks, Cleanup, MLabel, Observation } from '../helpers/codex/live-harness.ts';
+import { M4CommandCapture } from '../helpers/codex/m4-command-evidence.ts';
+import type { M4CommandReadReview } from '../helpers/codex/m4-command-evidence.ts';
 import { expectedCodexLaunches, firstChecks, firstPrompt, POLICY_PROMPT, policyChecks,
   RESUME_PROMPT, resumeChecks, STOP_PROMPT } from '../helpers/codex/live-plan.ts';
 
@@ -66,7 +68,17 @@ function hashFile(path: string): string {
     return hash.digest('hex');
   } finally { closeSync(fd); }
 }
-const harness = createCodexLiveHarness({ runner: createProcessRunner(), beforeLaunch: request =>
+const processRunner = createProcessRunner();
+let m4Capture: M4CommandCapture | undefined;
+let m4Read: M4CommandReadReview | undefined;
+const harness = createCodexLiveHarness({ runner: { start(request) {
+  const selected = request.args[0] === 'exec' && request.args.includes('--json') && request.stdin === POLICY_PROMPT;
+  if (selected && m4Capture) throw new Error('Повтор M4 не разрешён.');
+  const run = processRunner.start(request);
+  if (!selected) return run;
+  m4Capture = new M4CommandCapture(run, readMarker);
+  return m4Capture.run;
+} }, beforeLaunch: request =>
   request.executable === resolvedExecutable && pins.every(pin => identity.get(pin.path) === statKey(pin.path)) });
 /** Оба экземпляра используют production admission по умолчанию. detect/assess не подставляются. */
 const adapterOptions = { runner: harness.runner, binaryPath: executable, env,
@@ -85,7 +97,7 @@ function save(): void {
       expectedVersion: '0.163.0',
       executable: pins.map(({ role, sha256 }) => ({ role, sha256 })),
       budget: M_BUDGET, auxiliaryProcesses: { gitInit: gitInitAttempts },
-      reports: harness.reports, processes: harness.processes, cleanup, rootCleanup,
+      reports: harness.reports, processes: harness.processes, cleanup, rootCleanup, m4Read,
       persistedCliHistory: 'retained', p3: 'unconfirmed',
     }, null, 2) + '\n', { mode: 0o600 });
   } catch { harness.halt(); throw new Error('Не удалось записать безопасное evidence Codex M.'); }
@@ -194,7 +206,10 @@ describe('P3 Codex M: production-допуск, отдельное разреше
     writeFileSync(join(config, 'config.toml'), '[mcp_servers.vs_m_decoy]\ncommand = ' + JSON.stringify(node)
       + '\nargs = [' + JSON.stringify(decoy) + ', ' + JSON.stringify(join(project, 'mcp.marker')) + ']\n');
     const value = request(POLICY_PROMPT);
-    await probe('M4', value, observed => policyChecks(observed, readMarker, controlsUnchanged(), value.profile.kind));
+    await probe('M4', value, observed => {
+      m4Read = m4Capture?.review(readMarker, observed.threadIds.length === 1 ? observed.threadIds[0] : undefined);
+      return policyChecks(observed, readMarker, controlsUnchanged(), value.profile.kind, m4Capture);
+    });
   });
   it('M5: Stop после текста/инструмента, один terminal и согласованный done', async () => {
     await probe('M5', { ...request(STOP_PROMPT), persistSession: false }, () => ({}));
