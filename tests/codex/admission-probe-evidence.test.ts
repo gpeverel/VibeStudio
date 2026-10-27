@@ -46,6 +46,29 @@ describe('R3: ограниченное наблюдение сырого JSONL',
     const e = events(); e.splice(2, 0, { type: 'item.started', item: cmd('read', '/bin/echo vs-control', '') });
     expect(observe(e).review.protocol).toBe('unconfirmed');
   });
+  const mcp = () => ({ id: 'mcp', type: 'mcp_tool_call', server: 'vs_r3', tool: 'ping', status: 'completed',
+    result: { content: [{ type: 'text', text: 'R3_MCP_' + token }] } });
+  const patch = () => ({ id: 'patch', type: 'file_change', status: 'failed', changes: [{ path: 'ALT-WRITE.txt', kind: 'add' }] });
+  it.each(['item.started', 'item.updated'])('%s: стабильные MCP и patch допускают изменение результата', type => {
+    const e = events([item(mcp())]);
+    e.splice(4, 0, { type, item: { ...patch(), status: 'in_progress' } },
+      { type, item: { ...mcp(), status: 'in_progress', result: null } });
+    expect(observe(e)).toMatchObject({ thread, review: { protocol: 'confirmed', patch: 'failed', mcp: true } });
+  });
+  it.each([
+    ['сервер MCP', { ...mcp(), server: 'other-server' }],
+    ['инструмент MCP', { ...mcp(), tool: 'other-tool' }],
+    ['путь patch', { ...patch(), changes: [{ path: 'OTHER.txt', kind: 'add' }] }],
+    ['операция patch', { ...patch(), changes: [{ path: 'ALT-WRITE.txt', kind: 'delete' }] }],
+    ['состав patch', { ...patch(), changes: [...patch().changes, { path: 'OTHER.txt', kind: 'add' }] }],
+  ])('подмена %s в промежуточном событии не подтверждает протокол', (_, changed) => {
+    for (const type of ['item.started', 'item.updated']) {
+      const e = events([item(mcp())]);
+      e.splice(4, 0, { type, item: { ...changed, status: 'in_progress' } });
+      expect(observe(e).review.protocol, type).toBe('unconfirmed');
+      expect(observe(e).thread, type).toBeUndefined();
+    }
+  });
   it.each(['/bin/echo vs-control', '/bin/cat -- CONTROL.txt; true', '/bin/cat -- /other/CONTROL.txt'])('не принимает похожую команду %s', command => {
     const e = events(); e[2] = item(cmd('read', command, 'vs-control\n'));
     expect(observe(e).review).toMatchObject({ read: 'unconfirmed', unexpectedTool: true });

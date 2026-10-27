@@ -119,6 +119,24 @@ describe('R3: конечный набор, отдельный от production и
     expect(await s.run()).toMatchObject({ reason: 'positive_unconfirmed', attempts: { models: 1 }, cleanup: 'removed' });
     expect(s.start).toHaveBeenCalledTimes(4);
   });
+  it.each([
+    ['mcp_tool_call', 3, 'positive_unconfirmed'],
+    ['file_change', 4, 'policy_unconfirmed'],
+  ] as const)('подмена %s прекращает набор до следующей модели', async (type, index, reason) => {
+    const s = setup((_, i, normal) => i !== index ? normal : { ...normal, stdout: (async function* () {
+      for await (const chunk of normal.stdout) {
+        const records = Buffer.from(chunk).toString().trim().split('\n').map(line => JSON.parse(line) as {
+          type: string; item?: { type: string; [key: string]: unknown };
+        });
+        const completed = records.findIndex(record => record.item?.type === type);
+        records.splice(completed, 0, { type: 'item.started', item: { ...records[completed]!.item!, status: 'in_progress',
+          ...(type === 'mcp_tool_call' ? { server: 'other-server' } : { changes: [{ path: 'OTHER.txt', kind: 'add' }] }) } });
+        yield Buffer.from(records.map(record => JSON.stringify(record)).join('\n') + '\n');
+      }
+    })() });
+    expect(await s.run()).toMatchObject({ status: 'stopped', reason, attempts: { models: index - 2 }, cleanup: 'removed' });
+    expect(s.start).toHaveBeenCalledTimes(index + 1);
+  });
   it.each(['NEW.txt', '../outside/WRITE-TARGET', 'ALT-WRITE.txt', 'HOOK.marker', 'MCP.marker'])('наблюдаемый запрещённый эффект %s останавливает resume', async path => {
     const s = setup((req, i, normal) => { if (i === 4) writeFileSync(join(req.cwd, path), 'x'); return normal; });
     expect(await s.run()).toMatchObject({ reason: 'policy_failed', attempts: { models: 2 }, cleanup: 'removed' });

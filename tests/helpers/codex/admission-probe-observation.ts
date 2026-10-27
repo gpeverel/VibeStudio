@@ -17,6 +17,27 @@ const sameCommand = (actual: unknown, expected: string): boolean => typeof actua
   && [expected, ...['/bin/zsh', '/bin/bash', '/bin/sh'].flatMap(shell =>
     ['-c', '-lc'].map(flag => `${shell} ${flag} '${expected}'`))].includes(actual);
 
+/** Идентичность операции неизменна между started/updated/completed; статус и результат могут обновляться. */
+function toolIdentity(item: Record<string, unknown>): string | undefined {
+  if (item.type === 'command_execution') {
+    if (typeof item.command !== 'string' || !item.command) throw new Error('command');
+    return sha256(item.command);
+  }
+  if (item.type === 'mcp_tool_call') {
+    if (typeof item.server !== 'string' || !item.server || typeof item.tool !== 'string' || !item.tool) throw new Error('mcp');
+    return sha256(JSON.stringify([item.server, item.tool]));
+  }
+  if (item.type === 'file_change') {
+    if (!Array.isArray(item.changes)) throw new Error('changes');
+    return sha256(JSON.stringify(item.changes.map(value => {
+      const change = obj(value);
+      if (!change || typeof change.path !== 'string' || !change.path || typeof change.kind !== 'string') throw new Error('change');
+      return [change.path, change.kind];
+    })));
+  }
+  return undefined;
+}
+
 /** Bounded raw CLI result observation, not model prose or independent syscalls.
  * The raw thread ID is returned for the owned resume only; it is never exported. */
 export function observeR3(bytes: Uint8Array, project: string, token: string, expectedThread?: string):
@@ -26,7 +47,7 @@ export function observeR3(bytes: Uint8Array, project: string, token: string, exp
   let thread: string | undefined;
   let turn = false; let terminal = false;
   let reads = 0; let probes = 0; let patches = 0; let mcpCalls = 0;
-  const items = new Map<string, { type: string; command?: string; complete?: string }>();
+  const items = new Map<string, { type: string; identity?: string; complete?: string }>();
   try {
     if (bytes.byteLength > R3_BUDGET.outputBytes) return { review };
     for (const line of new TextDecoder('utf-8', { fatal: true }).decode(bytes).split('\n')) {
@@ -51,13 +72,12 @@ export function observeR3(bytes: Uint8Array, project: string, token: string, exp
         review.unexpectedTool = true; throw new Error('inventory');
       }
       const previous = items.get(item.id);
-      const command = item.type === 'command_execution' && typeof item.command === 'string' ? sha256(item.command) : undefined;
-      if (item.type === 'command_execution' && !command) throw new Error('command');
-      if (previous && (previous.type !== item.type || previous.command !== command)) throw new Error('changed');
+      const identity = toolIdentity(item);
+      if (previous && (previous.type !== item.type || previous.identity !== identity)) throw new Error('changed');
       const complete = event.type === 'item.completed' ? sha256(JSON.stringify(item)) : undefined;
       if (previous?.complete) { if (complete !== previous.complete) throw new Error('conflict'); else continue; }
       if (!previous && items.size >= 256) throw new Error('limit');
-      items.set(item.id, { type: item.type, command, complete });
+      items.set(item.id, { type: item.type, identity, complete });
       if (!complete) continue;
       if (item.type === 'command_execution') {
         if (sameCommand(item.command, R3_READ)) {
