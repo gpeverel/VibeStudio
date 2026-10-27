@@ -497,3 +497,49 @@ let rejects_sandbox_approval = matches!(policy, AskForApproval::Never) || ...;
 3. Для будущей положительной ветви допуска единственное, что реализовано в самой CLI общим кодом для `sandbox` и `exec`, — генерация Seatbelt-политики из `(file_system_sandbox_policy, network_sandbox_policy)`: `debug_sandbox.rs` вызывает `create_seatbelt_command_args`, core — `SandboxManager` (`sandboxing/src/manager.rs:441-447`) через `create_seatbelt_command_args_with_profile` в том же `sandboxing/src/seatbelt.rs`. Поэтому результат R2 информативен для ОС-преобразования заданного профиля; он не информативен для того, какой профиль даст **слияние конфигурации** в `exec`/`resume` (разные загрузчики, раздел 16 строка 10). Это source-вывод; допуск на нём не строится.
 
 **Не рецензировалось мной:** `parser.ts`, остальная часть `index.ts`, тесты A и C (`policy-probe-evidence.ts`, `sandbox-read-profile.test.ts` — отзыв по ним принадлежит A).
+
+## 19. R3: источниковое ревью и журнал расхода (B, 2026-10-27)
+
+**Итог: R3 не запускался. Расход 0 из 3 моделей + 3 вспомогательных. Найдено четыре блокирующих дефекта положительного контроля в редакции manifest `1ecabdba…3872`; запуск остановлен до их исправления и повторного ревью.** Решение пользователя «Разрешить R3 для B» сохраняется, бюджет не тронут, `.tmp/p3-r3-attempt.json` не создавался.
+
+| Поле | Значение |
+|---|---|
+| Исполнитель | B — фактически запущенный Claude Code (Sonnet 5.5), не GPT-подагент |
+| Копия | `…/0712ff57-4c40-4d55-b797-62e225b94a6a/session`, ветка `vf/prodolzhite-vibestudio-s-sohrane`, HEAD `9b4320f77fe014723b2f8c7853c420ad1e32fbf1`, `git status` чистый до и после ревью (изменён только этот документ) |
+| Аудит попытки R3 | Нет `.tmp/p3-r3-attempt.json` (в `.tmp` только `npm-cache`, `r3-node.log`, `r3-vitest.log` от тестов C); нет `vs-codex-R3-*` в `$TMPDIR`; процессов `admission-probe`/`r3-mcp`/`fs-probe` нет. Присутствуют лишь рабочие сессии коллег (`/opt/homebrew/…/codex exec resume`, версия 0.162.0) — это не R3 и не закреплённая установка. Я сам не запускал Codex, Node-entrypoint R3 и не вызывал `--version`/`--help`/auth. Отсутствие файла — не единственное основание: нет и остальных следов |
+| Идентичность | Скрипт чтения (без CLI): 22 файла `identity.files` и 3 executable (wrapper `61b0194f…cf70`, native `88133672…ee31`, Node `3200fbd9…fe32`) совпали с manifest (25/25); `manifest.cwd` равен cwd; SHA manifest `1ecabdba…3872`, entrypoint `335d3abc…e6f3`, надзор `62fcf9ef…9ba5` совпали с заданием. Источник — архив `codeload` тега `rust-v0.163.0`; SHA gzip-файла не совпал с записью §14 (`e57f1d4f…`), потому что упаковка codeload не побайтово стабильна, но коммит в pax-заголовке — `83086188ae0614bd882818ff1aa23f3194962012`, как в §14. Распакован в собственный tmp, не собирался и не исполнялся |
+| Отзывы A/C | C подготовил и проверил стенд (его запись в `STAGE-0C-REPORT.md`). Положительного отзыва A на эту редакцию в дереве **нет** (live-план: «получение пока не подтверждено»). Прежние отзывы R2 на R3 не переносятся. Это второе, независимое от дефектов, препятствие запуску |
+
+### Что подтверждено по исходнику (совпадает с R3)
+
+| Элемент | Источник | Статус |
+|---|---|---|
+| Состояние доверия хука читается только из слоёв User и SessionFlags; Project/managed/plugin слои состояние не пишут | `hooks/src/config_rules.rs:6-37` | source; замысел «доверие через `-c`» верен |
+| Ключ хука `{путь hooks.json}:{метка события}:{группа}:{обработчик}`, метка `user_prompt_submit` | `hooks/src/lib.rs:95-124`, `engine/discovery.rs:667` (`key_source = source_path.display()`) | source |
+| Нормализация обработчика: `timeout=2` остаётся `Some(2)`, `async=false`, `commandWindows`/`statusMessage`/`additionalContextLimit` при `None` не сериализуются, `type="command"` | `config/src/hook_config.rs:163-185`, `discovery.rs:504-570` | source |
+| Хеш: JSON с отсортированными ключами → SHA-256 → `sha256:<hex>` | `config/src/fingerprint.rs:67-79` (`version_for_toml`) | source |
+| `skills.config=[{path=…,enabled=true}]` (абсолютный `path`) допустимо | `config/src/skills_config.rs:19-29,53-54` | source |
+| Проектный `.codex/config.toml` с `[mcp_servers.*]` не вырезается; denylist: `openai_base_url`, `chatgpt_base_url`, `apps_mcp_product_sku`, `responses_api_metadata`, `model_provider(s)`, `notify`, `profile(s)`, `experimental_realtime_*`, `otel` | `config/src/loader/mod.rs:89-102,1164-1180` | source |
+| Форма JSONL `mcp_tool_call` (`server`, `tool`, `result.content[]`, `error`, `status`) и `file_change` (`changes[{path,kind}]`, `status`) совпадает с наблюдателем | `exec/src/exec_events.rs:170-198,261-294` | source |
+| Доверие проекту вычисляется по merged-конфигу, в который входит слой `-c` | `config/src/loader/mod.rs:342-348,1287-1305` | source; замысел верен |
+| Argv first/resume — production-argv именованного профиля (`--strict-config`, без `--sandbox`/`sandbox_mode`), сверка с manifest до `start` | `args.ts`, `admission-probe-scenario.ts:60-64` | согласуется с §§16, 18 |
+
+### Блокирующие замечания (владелец исправления — C; B код сценария не менял)
+
+**B1. Хеш хука считается по неверной раскладке.** `ownHook` (`admission-probe-scenario.ts:30-36`) хеширует `{"event_name":…,"group":{"hooks":[…]}}`. В исходнике `NormalizedHookIdentity` объявляет группу как `#[serde(flatten)] group: MatcherGroup` (`hooks/src/engine/discovery.rs:768-775`), поэтому ключа `group` нет: сериализуется `{"event_name":"user_prompt_submit","hooks":[{"async":false,"command":…,"timeout":2,"type":"command"}]}` (`matcher=None` пропускается). Для одной и той же команды хеши различаются (проверено расчётом: `sha256:d967ed34…` у вложенной формы против `sha256:4c991575…` у плоской). Несовпадение даёт `HookTrustStatus::Modified` (`discovery.rs:796-812`), хук не доверен, `HOOK.marker` не появится, шаг R3-positive завершится `positive_unconfirmed` после траты модельного запуска и одноразового latch. Тест `admission-probe.test.ts:82-85` проверяет только формат `sha256:<64 hex>` и зависимость от команды, поэтому дефект не ловит.
+
+**B2. Ключ `projects."<путь>".trust_level` не применяется.** Обработчик `-c` делит путь ключа обычным `path.split('.')` без разбора кавычек (`config/src/overrides.rs:18-27`; значение справа от первого `=` разбирается как TOML, `utils/cli/src/config_override.rs:46-80`). Строка `projects."/private/…/project".trust_level="trusted"` создаёт ключ с буквальными кавычками, не равный реальному пути проекта; доверие не установится, проектный слой (hooks.json, config.toml с MCP) остаётся выключенным. Корректная форма — целое значение-таблица: `-c 'projects={"<realpath проекта>"={trust_level="trusted"}}'`.
+
+**B3. Ключ `hooks.state."<ключ хука>"` ломается так же и сильнее.** Ключ хука содержит точки (`…/.codex/hooks.json:…`), `split('.')` разрежет его на несколько сегментов. Корректная форма: `-c 'hooks.state={"<ключ хука>"={enabled=true,trusted_hash="sha256:<hex>"}}'`; слой SessionFlags читается (`config_rules.rs:6-37`), ключ берётся как строка таблицы без разбора.
+
+**B4. MCP-инструмент `ping` будет отклонён политикой одобрения.** В `r3-mcp.mjs:25-26` инструмент объявлен без `annotations`. При `approval_policy=never` и профиле `Managed` без полной записи автоодобрение не включается (`codex-mcp/src/mcp/mod.rs:91-110`); отсутствие аннотаций означает «требует одобрения» (`core/src/mcp_tool_call.rs:2448-2465`: при `destructive_hint=None` и `read_only_hint=None` результат `true`); далее `maybe_request_mcp_tool_approval` при `Never` возвращает `denied("MCP tool call requires approval, but approval policy is never")` (`mcp_tool_call.rs:1495-1507,1602-1606`). Вызов не дойдёт до `MCP.marker`. Минимальное исправление — объявить `annotations: { readOnlyHint: true }` в `tools/list` (тогда `requires_mcp_tool_approval` даёт `false`); альтернатива — режим `approve` для сервера, но он менее прозрачен.
+
+### Остаточные риски (не блокируют, но влияют на трактовку)
+
+1. Формула хеша остаётся **source-derived**: оракула нет (в среде нет Rust-toolchain, прогон `codex hooks list` и любые дополнительные запуски CLI запрещены). После исправления B1 ошибка в деталях (например, нормализация пути) всё равно проявится как `positive_unconfirmed` и потратит единственную попытку; эту неопределённость пользователю нужно держать в виду.
+2. `--include-managed-config` в R3 не используется; `exec` может загрузить облачные требования учётной записи (`allow_managed_hooks_only`, список разрешённых профилей). Это неизвестно по `login status`; отказ положительного контроля по этой причине был бы корректным `unconfirmed`, не дефектом стенда.
+3. В first/resume проектное доверие не задаётся (production-argv его не содержит), поэтому «hook/MCP не сработали» означает «приманки не загружены при неустановленном доверии», а не «каналы выключены». Навыки репозитория `.agents/skills` по §16 строка 7 добавляются без видимой проверки доверия: если навык загрузится, first даст `policy_failed` — это будет реальное наблюдение, не повод повторять.
+4. Доступность `apply_patch` как отдельного инструмента зависит от модели; отсутствие `file_change` даёт `policy_unconfirmed`, не успех.
+5. Любое исправление меняет SHA сценария и manifest; `CODEX_R3_REVIEW` должен быть пересчитан, ревью A и моё — повторены для затронутых файлов. Старые значения `335d3abc…`/`62fcf9ef…`/`1ecabdba…` перестанут быть текущими.
+
+**Условия запуска после исправления:** (1) C устраняет B1–B4 и тестами фиксирует форму `-c`/хеша/аннотаций по этим источникам; (2) новый manifest, пересверка 25/25; (3) положительный отзыв A на новую редакцию; (4) моё короткое повторное ревью затронутых мест; (5) мой повторный аудит отсутствия попытки. Только затем — одна команда из live-плана. Согласие пользователя при тех же условиях не требует нового вопроса. Это ревью — не наблюдение политики установленной CLI и не разрешение M.
