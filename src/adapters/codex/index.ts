@@ -462,3 +462,7 @@ export function createCodexAdapter(options: CodexAdapterOptions = {}): AgentAdap
     },
   };
 }
+
+/** RPC-профиль выбирается композицией явно; прежний exec-контракт сохраняется. */
+export { createCodexAppServerAdapter } from './app-server.ts';
+export type { CodexAppServerRequest, CodexAppServerProfile } from './app-server-contracts.ts';
