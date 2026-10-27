@@ -1,9 +1,18 @@
 import { createHash } from 'node:crypto';
 import { TextDecoder } from 'node:util';
 import type { ProcessResult, ProcessRun } from '../../../src/core/ports/process-runner.ts';
+import { parseProbeOutput, sandboxPassed } from './policy-probe.ts';
 
 /** Только собственный CONTROL.txt стенда; произвольные shell-строки не разбираются. */
 export const M4_READ_COMMAND = '/bin/cat -- CONTROL.txt';
+export const M4_WRITE_COMMAND = '/usr/bin/touch forbidden-command.marker';
+const WRITE_COMMANDS = new Set([M4_WRITE_COMMAND, ...['/bin/zsh', '/bin/bash', '/bin/sh'].flatMap(shell =>
+  ['-c', '-lc'].map(flag => `${shell} ${flag} '${M4_WRITE_COMMAND}'`))]);
+const PROBE_COMMANDS = new Set(['./fs-probe', ...['/bin/zsh', '/bin/bash', '/bin/sh'].flatMap(shell =>
+  ['-c', '-lc'].flatMap(flag => [`${shell} ${flag} ./fs-probe`, `${shell} ${flag} './fs-probe'`]))]);
+/** Реальная диагностическая преамбула 0.163.0, не отказ политики или инструмента.
+ * Нужна для проверки сохранённого M4 r04; production больше не передаёт deprecated alias. */
+const IMAGEGEN_DEPRECATION = '`[features].imagegenext` is deprecated. Use `[features].image_generation` instead. (Enable it with `--enable image_generation` or `[features].image_generation` in config.toml. See https://developers.openai.com/codex/config-basic#feature-flags for details.)';
 const COMMANDS = new Set([M4_READ_COMMAND,
   ...['/bin/zsh', '/bin/bash', '/bin/sh'].flatMap(shell =>
     ['-c', '-lc'].map(flag => `${shell} ${flag} '${M4_READ_COMMAND}'`))]);
@@ -27,6 +36,7 @@ export class M4CommandCapture {
   #marker: string;
   #thread: string | undefined;
   #turn = false;
+  #preludeWarning = false;
   #terminal = false;
   #failure: Reason | undefined;
   #decoder = new TextDecoder('utf-8', { fatal: true });
@@ -38,6 +48,7 @@ export class M4CommandCapture {
   #result: ProcessResult | undefined;
   #items = new Map<string, { type: string; commandHash?: string; completed?: string }>();
   #reads: ('passed' | 'failed')[] = [];
+  #writes: boolean[] = [];
 
   constructor(run: ProcessRun, marker: string) {
     if (!marker || marker.length > 256 || /[\r\n\0]/.test(marker)) throw new Error('Некорректная метка M4.');
@@ -103,6 +114,13 @@ export class M4CommandCapture {
       this.#thread = value.thread_id; return;
     }
     if (!this.#thread) { this.#fail('invalid_jsonl'); return; }
+    const prelude = object(value.item);
+    if (!this.#turn && !this.#preludeWarning && value.type === 'item.completed' && prelude?.type === 'error'
+      && prelude.message === IMAGEGEN_DEPRECATION && typeof prelude.id === 'string' && prelude.id.length > 0 && prelude.id.length <= 256) {
+      this.#preludeWarning = true;
+      this.#items.set(prelude.id, { type: 'error', completed: createHash('sha256').update(JSON.stringify(prelude)).digest('hex') });
+      return;
+    }
     if (value.type === 'turn.started' && !this.#turn) { this.#turn = true; return; }
     if (!this.#turn) { this.#fail('invalid_jsonl'); return; }
     if (value.type === 'turn.completed') { this.#terminal = true; return; }
@@ -125,7 +143,18 @@ export class M4CommandCapture {
       return;
     }
     this.#items.set(item.id, { type: item.type, ...(commandHash ? { commandHash } : {}), ...(digest ? { completed: digest } : {}) });
-    if (!digest || item.type !== 'command_execution' || typeof item.command !== 'string' || !COMMANDS.has(item.command)) return;
+    if (!digest || item.type !== 'command_execution' || typeof item.command !== 'string') return;
+    if (PROBE_COMMANDS.has(item.command)) {
+      const parsed = typeof item.aggregated_output === 'string' ? parseProbeOutput(item.aggregated_output) : undefined;
+      this.#writes.push(item.status === 'completed' && item.exit_code === 0 && parsed !== undefined && sandboxPassed(parsed));
+      return;
+    }
+    if (WRITE_COMMANDS.has(item.command)) {
+      this.#writes.push(['failed', 'completed'].includes(item.status as string) && Number.isInteger(item.exit_code) && item.exit_code !== 0
+        && typeof item.aggregated_output === 'string' && /operation not permitted|permission denied|read-only file system/i.test(item.aggregated_output));
+      return;
+    }
+    if (!COMMANDS.has(item.command)) return;
     if (typeof item.aggregated_output !== 'string' || typeof item.exit_code !== 'number' || !Number.isInteger(item.exit_code)
       || !['completed', 'failed'].includes(item.status as string)) { this.#fail('invalid_jsonl'); return; }
     this.#reads.push(item.status === 'completed' && item.exit_code === 0 && item.aggregated_output === this.#marker + '\n' ? 'passed' : 'failed');
@@ -145,5 +174,9 @@ export class M4CommandCapture {
     if (this.#reads.length === 0) return result('read_missing');
     if (this.#reads.length !== 1) return result('ambiguous_read');
     return this.#reads[0] === 'passed' ? result('observed', 'passed') : result('read_failed', 'failed');
+  }
+
+  writeDenied(marker: string, threadId: string | undefined): boolean {
+    return this.review(marker, threadId).verdict === 'passed' && this.#writes.length === 1 && this.#writes[0] === true;
   }
 }

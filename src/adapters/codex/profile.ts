@@ -3,6 +3,7 @@ import { buildAgentInstructions } from '../../core/agent-instructions.ts';
 import type { AgentErrorReason } from '../../core/ports/agent.ts';
 import { CODEX_ENV_ALLOWLIST, CODEX_LIMITATIONS, CODEX_POLICY_CONFIG, CODEX_RESTRICTIONS, CODEX_SANDBOX_POLICY_CONFIG, CODEX_SANDBOX_RESTRICTIONS } from './contracts.ts';
 import type { CodexAccessProfile, CodexAdmissionContext, CodexAdmissionReason, CodexCapabilities, CodexLimitation, CodexProductionAdmission, CodexRequirementGap, CodexRestriction, CodexThreadRef } from './contracts.ts';
+import { CODEX_PUBLIC_CONTEXT, codexExtensionOverrides } from './extensions.ts';
 
 export interface CodexProfileIssue { reason: AgentErrorReason; detail: string }
 
@@ -149,18 +150,20 @@ function sandboxRequirementGaps(resume: boolean): readonly CodexRequirementGap[]
 
 /** Проверяем именно фиксированный маршрут адаптера: лишние, дублирующие и конфликтующие overrides
  * не допускаются. Это проверка передачи политики, не её исполнения CLI. Prompt не включается в argv. */
-function launchConfigurationMatches(context: CodexAdmissionContext): boolean {
+function launchConfigurationMatches(context: CodexAdmissionContext, extensionOverrides: readonly string[] = []): boolean {
   const { request, args, env } = context;
   if (typeof request.resume !== 'boolean' || request.maxTurns !== undefined
     || (request.resume ? !isCodexThreadRef(request.thread) || request.persistSession === false : request.thread !== undefined)) return false;
   if (request.model !== undefined && (typeof request.model !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(request.model))) return false;
-  const instructions = JSON.stringify(buildAgentInstructions({ resume: request.resume })).replaceAll('\u007f', '\\u007f');
+  const instructions = JSON.stringify(buildAgentInstructions({ resume: request.resume })
+    + (extensionOverrides.length ? '\n\n' + CODEX_PUBLIC_CONTEXT : '')).replaceAll('\u007f', '\\u007f');
   const named = request.profile.kind === 'codex-sandbox-read-v1';
   const expected = [
     'exec', ...(request.resume ? ['resume'] : []), '--json',
     ...(named ? ['--strict-config'] : request.resume ? ['-c', 'sandbox_mode="read-only"'] : ['--sandbox', 'read-only']),
     '--ignore-user-config', '--ignore-rules', '-c', 'approval_policy="never"',
     ...(named ? CODEX_SANDBOX_POLICY_CONFIG : CODEX_POLICY_CONFIG).flatMap(value => ['-c', value]),
+    ...extensionOverrides.flatMap(value => ['-c', value]),
     '-c', 'check_for_update_on_startup=false', '-c', 'analytics.enabled=false',
     '-c', `developer_instructions=${instructions}`,
     ...(request.persistSession === false ? ['--ephemeral'] : []),
@@ -179,12 +182,11 @@ function launchConfigurationMatches(context: CodexAdmissionContext): boolean {
   return ['CODEX_HOME', 'TMPDIR'].every(name => env[name] === undefined || isAbsolute(env[name]));
 }
 
-/** Проверяемый отказ для конкретного контекста. Unknown — blocked, а не утверждение о невозможности
- * политики во всей CLI. Unsupported относится к выбранному интерфейсу/профилю и пределу встроенного
- * exec-маршрута по закреплённому исходнику. Factory не запускает процессов, не читает credentials,
- * не принимает synthetic evidence. Идентичность executable проверяет адаптер до/после оценки.
- * Равенство версии выбирает изученный source-контракт отказа; другие версии остаются unconfirmed.
- * Наблюдение R не создаёт отсутствующий интерфейс чтения и не выдаёт ready автоматически. */
+/** Допуск конкретного контекста: first именованного профиля подтверждён на macOS arm64;
+ * resume 0.163.0 отклоняется из-за сохранения старой developer-инструкции. Unknown остаётся blocked.
+ * Factory не запускает процессов, не читает credentials, не принимает synthetic evidence.
+ * Идентичность executable проверяет адаптер до/после оценки; каталог расширений сверяется повторно.
+ * Другие версии/платформы и старый закрытый профиль не получают допуск по этим наблюдениям. */
 export function createCodexProductionAdmission(): (context: CodexAdmissionContext) => Promise<CodexProductionAdmission> {
   return async (context): Promise<CodexProductionAdmission> => {
     let requirements = requirementGaps();
@@ -214,13 +216,32 @@ export function createCodexProductionAdmission(): (context: CodexAdmissionContex
         || required.some(key => detection.capabilities[key] !== true) || detection.version !== '0.163.0') {
         return deny('blocked', 'requirement_unconfirmed', 'Версия или обязательные возможности CLI не подтверждены для изученной конфигурации 0.163.0.');
       }
-      if (!launchConfigurationMatches(context)) {
+      let extensionOverrides: string[] = [];
+      const suppliedExtensions = named && Array.isArray(context.args)
+        ? context.args.filter(arg => typeof arg === 'string' && (arg.startsWith('projects={') || arg.startsWith('skills.config=['))) : [];
+      if (!launchConfigurationMatches(context, suppliedExtensions)) {
+        return deny('blocked', 'configuration_conflict', 'argv/env не соответствуют фиксированной политике и штатной авторизации.');
+      }
+      if (named) {
+        try { extensionOverrides = await codexExtensionOverrides(request.cwd, context.env); }
+        catch { return deny('blocked', 'requirement_unconfirmed', 'Каталог расширений не подтверждён или содержит пользовательские инструкции/симлинки; запуск запрещён.'); }
+      }
+      if (!launchConfigurationMatches(context, extensionOverrides)) {
         return deny('blocked', 'configuration_conflict', 'argv/env не соответствуют фиксированной политике и штатной авторизации; лишние overrides и подмена окружения запрещены.');
       }
-      if (named) return deny('blocked', 'requirement_unconfirmed',
-        'codex-sandbox-read-v1: не подтверждены effective-профиль команд first/resume, границы чтения, запрет записи альтернативными инструментами '
-        + 'и отключение проектных/пользовательских расширений. Нужны основания для этих пяти требований; версия/help и R2 их не заменяют. '
-        + 'См. docs/P3-CODEX-COMPATIBILITY.md §14–16.');
+      if (named) {
+        if (request.resume) return deny('unsupported', 'cli_unsupported',
+          'Codex 0.163.0 exec resume сохраняет прежнюю developer-инструкцию: обновление контекста не поддержано этим маршрутом. '
+          + 'Продолжение отклонено до модели; подстановка нового диалога или изменение истории не выполняются.', Object.freeze([]));
+        if (process.platform !== 'darwin' || process.arch !== 'arm64') return deny('blocked', 'requirement_unconfirmed',
+          'Профиль Codex 0.163.0 проверен только на macOS arm64.');
+        // R3/R4 проверили установленную CLI, first/resume, syscall-контроль, apply_patch
+        // и собственные расширения. Здесь проверяются предпосылки КАЖДОГО запуска:
+        // версия/auth, точные argv/env и актуальные пути отключённых навыков.
+        // Не импортируем live fixtures и не принимаем внешние флаги «проверено».
+        return Object.freeze({ status: 'ready', detail: 'Codex 0.163.0: проверенный профиль чтения macOS arm64; расширения отключены для текущего запуска.',
+          confirmed: CODEX_SANDBOX_RESTRICTIONS, limitations: Object.freeze([...CODEX_LIMITATIONS]), requirements: Object.freeze([]) });
+      }
       return deny('unsupported', 'cli_unsupported',
         'reads_closed: выбранный встроенный exec-маршрут 0.163.0 не предоставляет закрытое чтение текстовых файлов при shell_tool=false '
         + '(исходник 83086188; соответствие npm-бинарника тегу не подтверждено). '

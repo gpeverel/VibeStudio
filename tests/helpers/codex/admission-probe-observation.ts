@@ -15,7 +15,8 @@ const obj = (value: unknown): Record<string, unknown> | undefined =>
   value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 const sameCommand = (actual: unknown, expected: string): boolean => typeof actual === 'string'
   && [expected, ...['/bin/zsh', '/bin/bash', '/bin/sh'].flatMap(shell =>
-    ['-c', '-lc'].map(flag => `${shell} ${flag} '${expected}'`))].includes(actual);
+    ['-c', '-lc'].flatMap(flag => [`${shell} ${flag} '${expected}'`,
+      ...(expected === R3_PROBE ? [`${shell} ${flag} ${R3_PROBE}`] : [])]))].includes(actual);
 
 /** Идентичность операции неизменна между started/updated/completed; статус и результат могут обновляться. */
 function toolIdentity(item: Record<string, unknown>): string | undefined {

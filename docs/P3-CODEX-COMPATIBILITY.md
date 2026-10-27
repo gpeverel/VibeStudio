@@ -1,5 +1,7 @@
 # P3: совместимость установленного Codex CLI — источники, возможности, неизвестные
 
+**Актуально, 2026-10-27, полный доступ.** Codex 0.163.0 запускается, read-only first принят в проверенных границах macOS arm64. Исправлено отключение навыков и image-generation tool; получены effective policy, каталог инструментов, реальные отказы файловых операций и Stop. Обязательный resume с новой инструкцией не обеспечен: M2 вернул прежний контекст при сохранённой памяти. Такой production resume теперь `unsupported`, P3 открыт. Подробности — §21 и [отчёт](STAGE-0C-REPORT.md#p3-полный-доступ-исправление-расширений-и-предел-resume--2026-10-27).
+
 Дата: 2026-10-20. Автор: B (Claude Code). Версия карты: 2 (добавлен разбор первичного исходника тега `rust-v0.163.0`, раздел 12).
 
 **Что это.** Карта доказательств по четырём обязательным ограничениям профиля `codex-read-only-v1` (`CODEX_RESTRICTIONS` в `src/adapters/codex/contracts.ts`; требования SPEC §3). Для каждого ограничения: документированный механизм, применимость к установленной версии, точные кандидаты argv/config и источники конфигурации, что подтверждено и что требует наблюдения, отрицательный сценарий.
@@ -564,3 +566,19 @@ let rejects_sandbox_approval = matches!(policy, AskForApproval::Never) || ...;
 Дополнительно одна диагностика старта (1 Git + 1 Codex) получила `failed to initialize in-process app-server client: Operation not permitted (os error 1)`. Это наблюдение отдельного запуска; исходный stderr R3 был потерян прежним стендом. Исправление сохраняет только два известных признака stderr, не произвольный текст; старое evidence не дополнено вымышленной причиной. Технический запрет среды не обходился. Текущий manifest после исправления — `e1585994a4bc2971e424d11e81b953af324b3fdf3b8a931289d083050f20662d`; он не заменяет manifest выполненного запуска и не сбрасывает бюджет.
 
 Полный журнал, проверки и границы результата — [в отчёте](STAGE-0C-REPORT.md#p3-реальный-r3-и-отказ-старта-codex--2026-10-27). Наблюдений пяти требований production, положительного контроля R3 и приёмки M нет. P3/0C не закрыты.
+
+## 21. Полный доступ: работающий first и неподдержанный контекст resume
+
+Результаты 2026-10-27 и расход приведены в [отчёте](STAGE-0C-REPORT.md#p3-полный-доступ-исправление-расширений-и-предел-resume--2026-10-27). Сохранённый R3 доказал утечку проектного skill, R4 — действие явных path-overrides и файлового профиля в first/resume. M4 дал actual runtime inventory и effective permission profile; image generation отключена дополнительно. M1, отрицательные M3, разбор M4 и отдельный M5 подтверждены. M2 сохраняет прежнюю инструкцию, поэтому P3 не принят и production resume отклоняется.
+
+Механизм навыков сверялся по закреплённому исходнику `83086188ae0614bd882818ff1aa23f3194962012`:
+
+- [skills_config.rs](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/config/src/skills_config.rs): path/name selectors точные, глобального wildcard-disable нет.
+- [host_roots.rs](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/ext/skills/src/host_roots.rs): пользовательские roots сохраняются при пустом user config; repo `.agents/skills` обнаруживается отдельно.
+- [extension.rs](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/ext/skills/src/extension.rs): `include_instructions=false` не исключает явный вызов навыка. Поэтому одного скрытого каталога недостаточно.
+- [exec/src/lib.rs](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/exec/src/lib.rs): `thread_resume_params_from_config` не задаёт developer-инструкцию; `thread_config_overrides_from_config` не переносит её из `-c` в RPC.
+- [thread_processor.rs](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/app-server/src/request_processors/thread_processor.rs): отдельный `ThreadResumeParams.developer_instructions` поддержан, при отсутствии переопределений восстанавливаются сохранённые настройки.
+
+Последние два пункта согласуются с живым M2: тот же thread и память при точном старом абзаце контекста. Это вывод об испытанном `exec resume` 0.163.0, не утверждение о невозможности во всех интерфейсах/версиях Codex. `app-server --help` проверен один раз: в нём нет используемых exec-флагов ignore-user-config/ignore-rules. Рабочий эквивалент нового транспорта с сохранением продуктового профиля пока отсутствует.
+
+Дополнительная проверка альтернатив без модельных запусков: официальный API GitHub на 2026-10-27 указывает [0.164.0 от 2026-10-23](https://github.com/openai/codex/releases/tag/rust-v0.164.0) как последний стабильный релиз. В его [exec/src/lib.rs](https://github.com/openai/codex/blob/rust-v0.164.0/codex-rs/exec/src/lib.rs#L1469) `thread_resume_params_from_config` также не задаёт `developer_instructions`, а config overrides содержат лишь `bypass_hook_trust`. Это проверка исходника, не наблюдение нового бинарника. У 0.163.0 [точка запуска app-server](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/cli/src/main.rs#L1281) передаёт `LoaderOverrides::default()`: отсутствие флагов ignore в справке дополнительно сверено с кодом. Обновление или смена подкоманды сами по себе не устраняют блокер при сохранении текущего контракта.

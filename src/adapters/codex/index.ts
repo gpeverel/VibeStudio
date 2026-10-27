@@ -8,6 +8,7 @@ import { buildCodexArgs, buildCodexEnv, forbiddenEnvNames } from './args.ts';
 import { CODEX_LIMITATIONS } from './contracts.ts';
 import type { CodexAdmissionContext, CodexAdmissionEvaluator, CodexCapabilities, CodexDetection, CodexRunRequest, CodexThreadBinding } from './contracts.ts';
 import { detectCodex } from './detect.ts';
+import { addCodexExtensionOverrides, codexExtensionOverrides } from './extensions.ts';
 import { CodexStreamParser } from './parser.ts';
 import type { CodexParserOptions } from './parser.ts';
 import { checkCodexAdmission, createCodexProductionAdmission, validateCodexProfile } from './profile.ts';
@@ -19,7 +20,7 @@ export interface CodexAdapterOptions {
   /** Только доверенная композиция/тестовый стенд. Никогда не принимать через IPC. */
   detect?: (options: AgentDetectOptions) => Promise<CodexDetection>;
   /** Только доверенная композиция/тестовый стенд, никогда не IPC и не config. Без неё работает
-   * production-оценщик, который отказывает: продуктовый read-only Codex не подтверждён (profile.ts).
+   * production-оценщик с проверкой фиксированной политики и каталога расширений (profile.ts).
    * Реальная продуктовая приёмка M не использует подстановку допуска. */
   assessAdmission?: CodexAdmissionEvaluator;
   /** Доверенное хранилище композиции: подтверждает привязку сохранённого thread_id к session/participant/workspace/cwd
@@ -339,6 +340,11 @@ export function createCodexAdapter(options: CodexAdapterOptions = {}): AgentAdap
           if (!identity) { await end({ kind: 'error', reason: 'practical_admission_blocked', detail: 'Допуск не выдан (assessment_failed): идентичность executable не установлена' }); return; }
           const frozenDetection = snapshot(detection);
           if (!frozenDetection) { await end({ kind: 'error', reason: 'practical_admission_blocked', detail: 'Допуск не выдан (assessment_failed): диагностика CLI не зафиксирована' }); return; }
+          if (!options.assessAdmission && request.profile.kind === 'codex-sandbox-read-v1') {
+            try { built.args = addCodexExtensionOverrides(built.args, await codexExtensionOverrides(request.cwd, built.env)); }
+            catch { await end({ kind: 'error', reason: 'practical_admission_blocked', detail: 'Не удалось подтвердить отключение расширений Codex: проверьте каталоги навыков и пользовательские AGENTS.md' }); return; }
+            if (aborted()) { await end({ kind: 'interrupted' }); return; }
+          }
           const launchArgs = deepFreeze(built.args);
           const launchEnv = deepFreeze(built.env);
           const context = deepFreeze({ detection: frozenDetection, request, args: launchArgs, env: launchEnv }) as CodexAdmissionContext;

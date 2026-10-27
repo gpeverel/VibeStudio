@@ -86,6 +86,11 @@ export const CODEX_SANDBOX_POLICY_CONFIG = Object.freeze([
   'features.view_image=false',
   'web_search="disabled"',
   'project_doc_max_bytes=0',
+  'skills.include_instructions=false',
+  'skills.bundled.enabled=false',
+  'cloud.skills.enabled=false',
+  'features.image_generation=false',
+  'features.goals=false',
 ] as const);
 
 /** Профиль Codex не наследует Read/Glob/Grep Claude: такой набор у Codex пока не подтверждён.
@@ -185,10 +190,9 @@ export interface CodexRequirementGap {
   };
 }
 
-/** На текущих доказательствах production не имеет положительной ветви.
- * Factory не принимает внешние facts/evidence и не позволяет выдать ready по synthetic-флагам.
- * Поддержка будущего механизма требует реализации и независимой приёмки, не смены этой константы. */
-export type CodexProductionAdmission = Exclude<CodexAdmission, { status: 'ready' }> & {
+/** Factory проверяет фиксированный профиль и актуальные пути расширений.
+ * Внешние facts/evidence и synthetic-флаги не предоставляют production-допуск. */
+export type CodexProductionAdmission = CodexAdmission & {
   readonly requirements: readonly CodexRequirementGap[];
 };
 

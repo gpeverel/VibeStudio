@@ -175,7 +175,8 @@ describe('R3: независимый инспектор экспорта', () =>
     expect(Object.keys(manifest.identity.files).sort()).toEqual([...R3_IDENTITY_PATHS].sort());
     for (const path of R3_IDENTITY_PATHS) {
       const bytes = readFileSync(new URL('../../' + path, import.meta.url));
-      expect(createHash('sha256').update(bytes).digest('hex'), path).toBe(manifest.identity.files[path]);
+      const hashes: Readonly<Record<string, string>> = manifest.identity.files;
+      expect(createHash('sha256').update(bytes).digest('hex'), path).toBe(hashes[path]);
     }
     expect(manifest.identity.executable).toEqual({ wrapper: '61b0194f3bb6534439c8d26a3ed57d0805f84b884588b761795323eeb92fcf70',
       native: '8813367285524ac798dd96d1b071aea30d58708c7226fd236cd275cf1cfdee31', node: '3200fbd9f7fd4410426dd541e10d1ab829d3472f270d743c7fabd1696c03fe32' });

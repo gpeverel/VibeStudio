@@ -3,7 +3,7 @@
   "scenario": "P3-R3",
   "purpose": "expected_identity_only",
   "preparedAt": "2026-10-27",
-  "sourceRevision": "c6885d761b4aeb598741e7a3564615b234477086",
+  "sourceRevision": "cafc8c7",
   "cwd": "/Users/nishimata/Library/Application Support/com.vibeforge.app/data/worktrees/0712ff57-4c40-4d55-b797-62e225b94a6a/session",
   "identity": {
     "executable": {
@@ -12,28 +12,30 @@
       "node": "3200fbd9f7fd4410426dd541e10d1ab829d3472f270d743c7fabd1696c03fe32"
     },
     "files": {
-      "tests/live/codex-admission.probe.ts": "335d3abc791336620a402b87e81eadd6d9c3f7bba0a18fe52ed987225d81e6f3",
+      "tests/live/codex-admission.probe.ts": "5d8dfdff9f410d2e423f3945dab28c5b04fc9d6c68c4309724593ace18dcd096",
       "tests/helpers/codex/admission-probe.ts": "e670db8bf25471118c308192023b84f68c0e556aaf022b51bdb0f32f4f1d0d69",
       "tests/helpers/codex/admission-probe-scenario.ts": "833ac010d14396b541d83beba7333d665bf7181359bb250e78c6abb8fe67b354",
-      "tests/helpers/codex/admission-probe-observation.ts": "0a7d256540595954d157b741d72993926f0b3bb26f6823ee7bba74ec1ac5af38",
-      "tests/helpers/codex/admission-probe-evidence.ts": "811b06b3a489bd7bae190e796a7f03fa13cfd92a16af38c72787168eb185f4be",
+      "tests/helpers/codex/admission-probe-observation.ts": "3575aca3f8d1cdf2b21b030cfcc1e5ad3817916f47f53977146b76293e2966f0",
+      "tests/helpers/codex/admission-probe-evidence.ts": "e5aee5b8183427086ef020491fc78d03177dbe164774049f0cc1bbb0fc62f559",
       "tests/helpers/codex/r3-mcp.mjs": "cb6b42e1930abd83e0ca6908939a4b3fe2db3be5298a44585ae7a6d37a79d8d0",
       "tests/helpers/codex/fs-policy-probe.c": "6b68bde03a0142f578d6f905817a269c2804ea113cc34ded122a83046381f6db",
       "tests/helpers/codex/policy-probe.ts": "d09e78145dacb188a387ea93928ddda63517f0e4ab516f7e00fc530bb54d2ed1",
       "tests/helpers/codex/live-harness.ts": "ece32b76b5e44f50b831912e272d4611f2531e60d78bb6f937d55bc784afda79",
-      "tests/helpers/codex/live-plan.ts": "0f730ac2d135b2dfdba7d764dadac6a2a301e6def83b0c14fc78b1daad546407",
-      "tests/helpers/codex/m4-evidence.ts": "1464f7e61c3f82daafbc65b3630776ad9c5d27925550781e8a4ec6bed0f33865",
-      "tests/helpers/codex/m4-command-evidence.ts": "e38194f7141a4935b222c7860cfbc1fc87231548426142a82287acc37fd6f1af",
+      "tests/helpers/codex/live-plan.ts": "64bae4e23862bff9c464019fa79663ff6ff77c1b570aacd3dc59c62785f2a779",
+      "tests/helpers/codex/m4-evidence.ts": "897942d2b8b1bcd54907f2ef9f4a9cc3d7b6798005a051aab95040a600c07974",
+      "tests/helpers/codex/m4-command-evidence.ts": "b439ce7e39ece8af5dfe13b206e705016e1fbdbebf628ed10a1192028a7a6c2e",
       "src/adapters/codex/args.ts": "8b1d3fccb4a10052fac13993ecc6d799a61f54f11a1f72fa9d2b75ab475858ee",
-      "src/adapters/codex/contracts.ts": "de8ff3519dd58185de64a65bdaaa485e10b155c6514f5fd19f02318715ad3c6e",
-      "src/adapters/codex/profile.ts": "1805be6b350fcb5fbbd1a2c2c9fbb9881da05dcd7d454fd28db4d3a4ac547826",
+      "src/adapters/codex/contracts.ts": "e0a9e3ae1d41cb33bacef2d8b1772be37f422a4945e687d0e07064ed307fb395",
+      "src/adapters/codex/profile.ts": "163ea2422c191b8b1213eaf777f80cb055086d86171b0497c2a2ea5b7efb7b7a",
       "src/core/agent-instructions.ts": "b701b2883a0106f4aad1ddc216cc7b4925593265f5751bdad6112599bf0f8dd7",
       "src/adapters/process-runner/index.ts": "6dd2b2937c2785b99eead1fd728f819ad9f6427a080e6b015d60e92a4c55448b",
       "src/adapters/process-runner/queue.ts": "8a066a162e6f8d1cb0e5065c9e0409128491b665dafd8120877a112b4c6e30b4",
       "scripts/with-node.sh": "a7532611da5f4d6f0451891ac4df2d62bfd7d21ad4a3999fb54e84262f1c0323",
       "package-lock.json": "17d6ad7f0192fb503a01b83af7b8e3b66e5bf388d4abde2089a423a7ce2d7cec",
       "tests/codex/admission-probe.test.ts": "9a831db296747fca88d545734ffc7efc0a1ba5420d2097f8aa3ac9737f00f383",
-      "tests/codex/admission-probe-evidence.test.ts": "4fd7206d20a790bb7f505f83c01ea44a705ba1a70dd32e83ea7d24e8a3476b9a"
+      "tests/codex/admission-probe-evidence.test.ts": "e67b2d473c45db9829094d092bb11ddd7dd7998e3b9860bf1e38d0f722d1dddd",
+      "src/adapters/codex/extensions.ts": "c898aa987eb848a10d48fff8875884fadb7473e3132d04b1081a1b51857911b9",
+      "tests/helpers/codex/own-rollout-evidence.ts": "59e6dc75cec3a7ffd925d322a8d39aceb0051ea450fffefd5f779e85a87ba056"
     }
   }
 }

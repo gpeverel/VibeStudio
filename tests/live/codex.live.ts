@@ -1,24 +1,29 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync,
-  realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync,
+  readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCodexAdapter } from '../../src/adapters/codex/index.ts';
 import { buildCodexEnv } from '../../src/adapters/codex/args.ts';
+import { codexExtensionOverrides } from '../../src/adapters/codex/extensions.ts';
 import type { CodexRunRequest, CodexThreadBinding } from '../../src/adapters/codex/contracts.ts';
 import { createProcessRunner } from '../../src/adapters/process-runner/index.ts';
-import { createCodexLiveHarness, M_BUDGET } from '../helpers/codex/live-harness.ts';
+import { createCodexLiveHarness, M_BUDGET } from '../helpers/codex/scoped-live-harness.ts';
 import type { Checks, Cleanup, MLabel, Observation } from '../helpers/codex/live-harness.ts';
 import { M4CommandCapture } from '../helpers/codex/m4-command-evidence.ts';
 import type { M4CommandReadReview } from '../helpers/codex/m4-command-evidence.ts';
+import { readOwnRollout } from '../helpers/codex/own-rollout-evidence.ts';
+import type { OwnRolloutReview } from '../helpers/codex/own-rollout-evidence.ts';
+import { ownDecoys } from '../helpers/codex/admission-probe-scenario.ts';
+import { baselinePassed, parseProbeOutput } from '../helpers/codex/policy-probe.ts';
 import { expectedCodexLaunches, firstChecks, firstPrompt, POLICY_PROMPT, policyChecks,
   RESUME_PROMPT, resumeChecks, STOP_PROMPT } from '../helpers/codex/live-plan.ts';
 
-/** Opt-in не является разрешением пользователя. Реальную команду исполняет только назначенный B. */
+/** Opt-in не является разрешением пользователя. Текущее поручение: solo Codex, 2026-10-27. */
 if (process.env.LIVE !== '1' || process.env.CODEX_LIVE !== '1' || process.env.CODEX_LIVE_PLAN !== 'P3-M-2026-10-20') {
-  throw new Error('Codex M отключён: нужны отдельное разрешение B и LIVE=1 CODEX_LIVE=1 CODEX_LIVE_PLAN=P3-M-2026-10-20.');
+  throw new Error('Codex M отключён: нужны согласованный запуск и LIVE=1 CODEX_LIVE=1 CODEX_LIVE_PLAN=P3-M-2026-10-20.');
 }
 const executable = '/Users/nishimata/.nvm/versions/node/v24.15.0/bin/codex';
 const native = '/Users/nishimata/.nvm/versions/node/v24.15.0/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex';
@@ -41,6 +46,9 @@ let rootCleanup: 'pending' | 'removed' | 'retained' | 'failed' = 'pending';
 let cleanup: Cleanup | undefined;
 let resolvedExecutable: string;
 let gitInitAttempts = 0;
+let compileAttempts = 0;
+let baselineAttempts = 0;
+let m4ProbeSha256: string | undefined;
 let thread: CodexThreadBinding | undefined;
 let firstObserved = false;
 const sessionId = randomUUID();
@@ -71,10 +79,28 @@ function hashFile(path: string): string {
 const processRunner = createProcessRunner();
 let m4Capture: M4CommandCapture | undefined;
 let m4Read: M4CommandReadReview | undefined;
-const harness = createCodexLiveHarness({ runner: { start(request) {
+let m4Runtime: OwnRolloutReview | undefined;
+const m4SkillToken = randomUUID().replaceAll('-', '');
+let modelLog = 0;
+const remaining = ['remaining-r03', 'remaining-r04'].includes(process.env.CODEX_M_REVISION ?? '');
+const stopOnly = process.env.CODEX_M_REVISION === 'stop-r05';
+const scope = stopOnly ? 'stop-only' : remaining ? 'without-resume' : 'full';
+const harness = createCodexLiveHarness({ scope, runner: { start(request) {
   const selected = request.args[0] === 'exec' && request.args.includes('--json') && request.stdin === POLICY_PROMPT;
   if (selected && m4Capture) throw new Error('Повтор M4 не разрешён.');
-  const run = processRunner.start(request);
+  let run = processRunner.start(request);
+  if (request.args[0] === 'exec' && request.args.includes('--json') && evidence) {
+    const index = ++modelLog;
+    const capture = async function* (stream: AsyncIterable<Uint8Array>, name: string): AsyncIterable<Uint8Array> {
+      const path = join(dirname(evidence!), `model-${index}-${name}.log`);
+      writeFileSync(path, '', { mode: 0o600, flag: 'wx' }); let bytes = 0;
+      for await (const chunk of stream) {
+        const kept = chunk.subarray(0, Math.max(0, 1_048_576 - bytes));
+        appendFileSync(path, kept); bytes += kept.length; yield chunk;
+      }
+    };
+    run = { ...run, stdout: capture(run.stdout, 'stdout'), stderr: capture(run.stderr, 'stderr') };
+  }
   if (!selected) return run;
   m4Capture = new M4CommandCapture(run, readMarker);
   return m4Capture.run;
@@ -93,11 +119,11 @@ function save(): void {
   if (!evidence) return;
   try {
     writeFileSync(evidence, JSON.stringify({
-      schemaVersion: 1, scenario: 'P3-M', provenance: 'live', admission: 'production', profile: 'codex-sandbox-read-v1',
+      schemaVersion: 1, scenario: 'P3-M', scope, provenance: 'live', admission: 'production', profile: 'codex-sandbox-read-v1',
       expectedVersion: '0.163.0',
       executable: pins.map(({ role, sha256 }) => ({ role, sha256 })),
-      budget: M_BUDGET, auxiliaryProcesses: { gitInit: gitInitAttempts },
-      reports: harness.reports, processes: harness.processes, cleanup, rootCleanup, m4Read,
+      budget: M_BUDGET, auxiliaryProcesses: { gitInit: gitInitAttempts, compile: compileAttempts, baseline: baselineAttempts }, m4ProbeSha256,
+      reports: harness.reports, processes: harness.processes, cleanup, rootCleanup, m4Read, m4Runtime,
       persistedCliHistory: 'retained', p3: 'unconfirmed',
     }, null, 2) + '\n', { mode: 0o600 });
   } catch { harness.halt(); throw new Error('Не удалось записать безопасное evidence Codex M.'); }
@@ -114,7 +140,8 @@ function resumed(prompt: string): CodexRunRequest {
   return { ...request(prompt), resume: true, thread: { adapter: 'codex', threadId: thread.threadId } };
 }
 async function probe(label: MLabel, value: CodexRunRequest, inspect: (observed: Observation) => Checks): Promise<void> {
-  const report = await harness.runScenario({ label, expected: label.startsWith('M3-') ? [] : expectedCodexLaunches(resolvedExecutable, value),
+  const report = await harness.runScenario({ label, expected: label.startsWith('M3-') ? [] : expectedCodexLaunches(resolvedExecutable, value,
+    await codexExtensionOverrides(value.cwd, env)),
     start: () => (label === 'M1' ? firstAdapter : resumedAdapter).start(value), inspect });
   save();
   expect(report.outcome, `Codex ${label}: ${report.reason ?? report.outcome}`).toBe('passed');
@@ -128,11 +155,23 @@ function controlsUnchanged(): boolean {
     const opened = fstatSync(fd);
     return opened.dev === st.dev && opened.ino === st.ino && opened.size === st.size
       && readFileSync(fd, 'utf8') === readMarker + '\n'
-      && !['forbidden-command.marker', 'hook.marker', 'mcp.marker'].some(name => existsSync(join(project, name)));
+      && !['forbidden-command.marker', 'hook.marker', 'mcp.marker', 'HOOK.marker', 'MCP.marker', 'NEW.txt'].some(name => existsSync(join(project, name)))
+      && (!m4ProbeSha256 || hashFile(join(project, 'fs-probe')) === m4ProbeSha256
+        && !existsSync(join(project, '../outside/WRITE-TARGET'))
+        && readFileSync(join(project, '../outside/OUTSIDE.txt'), 'utf8') === 'vs-outside\n'
+        && readlinkSync(join(project, 'OUTSIDE-LINK')) === '../outside/OUTSIDE.txt');
   } finally { closeSync(fd); }
 }
 
 beforeAll(() => {
+  mkdirSync(join(process.cwd(), '.tmp'), { recursive: true });
+  const correction = process.env.CODEX_M_REVISION === 'public-context-r02';
+  if (process.env.CODEX_M_REVISION !== undefined && !correction && !remaining && !stopOnly) throw new Error('Неизвестная редакция M');
+  writeFileSync(join(process.cwd(), stopOnly ? '.tmp/p3-m-attempt-2026-10-27-r05.json'
+    : process.env.CODEX_M_REVISION === 'remaining-r04' ? '.tmp/p3-m-attempt-2026-10-27-r04.json'
+    : remaining ? '.tmp/p3-m-attempt-2026-10-27-r03.json'
+    : correction ? '.tmp/p3-m-attempt-2026-10-27-r02.json' : '.tmp/p3-m-attempt-2026-10-27.json'),
+    JSON.stringify({ scenario: 'P3-M', startedAt: new Date().toISOString(), budget: M_BUDGET }) + '\n', { flag: 'wx', mode: 0o600 });
   for (const pin of pins) {
     const before = statKey(pin.path);
     if (hashFile(pin.path) !== pin.sha256 || before !== statKey(pin.path)) throw new Error('Идентичность CLI отличается от D02.');
@@ -172,6 +211,7 @@ afterAll(async () => {
 });
 
 describe('P3 Codex M: production-допуск, отдельное разрешение, без повторов', () => {
+  if (!stopOnly) {
   it('M1: чтение, настоящий thread_id и первый контекст', async () => {
     await probe('M1', request(firstPrompt(memory)), observed => {
       const checks = firstChecks(observed, readMarker, memory);
@@ -181,7 +221,7 @@ describe('P3 Codex M: production-допуск, отдельное разреше
       return checks;
     });
   });
-  it('M2: новый экземпляр адаптера восстанавливает собственную историю и новый контекст', async () => {
+  if (!remaining) it('M2: новый экземпляр адаптера восстанавливает собственную историю и новый контекст', async () => {
     await probe('M2', resumed(RESUME_PROMPT), observed => resumeChecks(observed, thread!.threadId, memory, firstObserved));
   });
   it('M3: отсутствующий ID не создаёт новый диалог и не запускает detect', async () => {
@@ -196,21 +236,37 @@ describe('P3 Codex M: production-допуск, отдельное разреше
     await probe('M3-binding', { ...resumed('Недопустимый resume'), participantId: 'foreign-participant' }, () => ({}));
   });
   it('M4: чтение, запрещённое действие и проектные приманки без ложного вывода о политике', async () => {
-    const config = join(project, '.codex'); mkdirSync(config, { mode: 0o700 });
-    const decoy = join(project, 'extension-decoy.mjs');
-    writeFileSync(decoy, 'import { writeFileSync } from "node:fs"; writeFileSync(process.argv[2], "observed");\n');
-    const quote = (value: string): string => "'" + value.replaceAll("'", "'\\''") + "'";
-    writeFileSync(join(config, 'hooks.json'), JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{
-      type: 'command', command: [node, decoy, join(project, 'hook.marker')].map(quote).join(' '),
-    }] }] } }));
-    writeFileSync(join(config, 'config.toml'), '[mcp_servers.vs_m_decoy]\ncommand = ' + JSON.stringify(node)
-      + '\nargs = [' + JSON.stringify(decoy) + ', ' + JSON.stringify(join(project, 'mcp.marker')) + ']\n');
+    const files = { ...ownDecoys(project, node, m4SkillToken),
+      '.codex/r3-mcp.mjs': readFileSync(new URL('../helpers/codex/r3-mcp.mjs', import.meta.url), 'utf8') };
+    for (const [path, content] of Object.entries(files)) {
+      mkdirSync(dirname(join(project, path)), { recursive: true, mode: 0o700 });
+      writeFileSync(join(project, path), content, { mode: 0o600 });
+    }
+    // Программа R2 сохранена; только её собственная копия получает случайную метку M.
+    const source = readFileSync(new URL('../helpers/codex/fs-policy-probe.c', import.meta.url), 'utf8')
+      .replace('"vs-control\\n"', JSON.stringify(readMarker + '\n'));
+    const probeSource = join(project, 'fs-probe.c'); const probeBinary = join(project, 'fs-probe');
+    writeFileSync(probeSource, source, { mode: 0o600 });
+    mkdirSync(join(root!, 'outside')); writeFileSync(join(root!, 'outside/OUTSIDE.txt'), 'vs-outside\n');
+    symlinkSync('../outside/OUTSIDE.txt', join(project, 'OUTSIDE-LINK'));
+    compileAttempts++; save();
+    execFileSync('/usr/bin/cc', ['-std=c11', '-Wall', '-Wextra', '-Werror', '-O0', '-fno-modules', probeSource, '-o', probeBinary],
+      { cwd: project, env, timeout: 20_000, stdio: 'pipe', maxBuffer: 65_536 });
+    m4ProbeSha256 = hashFile(probeBinary); baselineAttempts++; save();
+    const baseline = parseProbeOutput(execFileSync(probeBinary, [], { cwd: project, env, timeout: 10_000, maxBuffer: 65_536 }).toString());
+    if (!baseline || !baselinePassed(baseline)) throw new Error('Не прошёл положительный контроль файловых операций M4');
+    for (const path of [join(project, 'NEW.txt'), join(root!, 'outside/WRITE-TARGET')]) {
+      if (readFileSync(path, 'utf8') !== 'x') throw new Error('Не совпал результат контрольной записи M4');
+      rmSync(path);
+    }
     const value = request(POLICY_PROMPT);
     await probe('M4', value, observed => {
       m4Read = m4Capture?.review(readMarker, observed.threadIds.length === 1 ? observed.threadIds[0] : undefined);
-      return policyChecks(observed, readMarker, controlsUnchanged(), value.profile.kind, m4Capture);
+      m4Runtime = readOwnRollout(env.CODEX_HOME ?? join(env.HOME!, '.codex'), observed.threadIds[0] ?? '', project, m4SkillToken);
+      return policyChecks(observed, readMarker, controlsUnchanged(), value.profile.kind, m4Capture, m4Runtime);
     });
   });
+  }
   it('M5: Stop после текста/инструмента, один terminal и согласованный done', async () => {
     await probe('M5', { ...request(STOP_PROMPT), persistSession: false }, () => ({}));
   });

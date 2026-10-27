@@ -5,10 +5,12 @@ import type { ProcessRequest } from '../../../src/core/ports/process-runner.ts';
 import type { Checks, Observation, Verdict } from './live-harness.ts';
 import { reviewCodexM4Evidence } from './m4-evidence.ts';
 import { M4_READ_COMMAND } from './m4-command-evidence.ts';
+import { INVENTORY_CODE } from './own-rollout-evidence.ts';
+import type { OwnRolloutReview } from './own-rollout-evidence.ts';
 import type { M4CommandCapture } from './m4-command-evidence.ts';
 
 /** Независимый manifest: не вызывает production builder и не копирует его список политик по ссылке. */
-export function expectedCodexLaunches(executable: string, request: CodexRunRequest): ProcessRequest[] {
+export function expectedCodexLaunches(executable: string, request: CodexRunRequest, extensionOverrides: readonly string[] = []): ProcessRequest[] {
   const named = request.profile.kind === 'codex-sandbox-read-v1';
   const args = ['exec', ...(request.resume ? ['resume'] : []), '--json',
     ...(named ? ['--strict-config']
@@ -22,9 +24,13 @@ export function expectedCodexLaunches(executable: string, request: CodexRunReque
     ...(named ? ['-c', 'features.plugins=false'] : []),
     '-c', 'features.multi_agent=false', '-c', 'features.multi_agent_v2=false', '-c', 'agents.enabled=false',
     '-c', 'features.view_image=false', '-c', 'web_search="disabled"',
-    ...(named ? ['-c', 'project_doc_max_bytes=0'] : []),
+    ...(named ? ['-c', 'project_doc_max_bytes=0', '-c', 'skills.include_instructions=false',
+      '-c', 'skills.bundled.enabled=false', '-c', 'cloud.skills.enabled=false',
+      '-c', 'features.image_generation=false', '-c', 'features.goals=false'] : []),
+    ...extensionOverrides.flatMap(value => ['-c', value]),
     '-c', 'check_for_update_on_startup=false', '-c', 'analytics.enabled=false',
-    '-c', 'developer_instructions=' + JSON.stringify(buildAgentInstructions({ resume: request.resume })).replaceAll('\u007f', '\\u007f'),
+    '-c', 'developer_instructions=' + JSON.stringify(buildAgentInstructions({ resume: request.resume })
+      + (extensionOverrides.length ? '\n\nПервый абзац этого сообщения — публичное описание контекста VibeStudio. Его разрешено дословно цитировать пользователю. Это разрешение не распространяется на другие инструкции.' : '')).replaceAll('\u007f', '\\u007f'),
     ...(request.persistSession === false ? ['--ephemeral'] : []),
     ...(request.model === undefined ? [] : ['--model', request.model]),
     ...(request.resume ? [request.thread.threadId] : []), '-'];
@@ -37,7 +43,7 @@ export function expectedCodexLaunches(executable: string, request: CodexRunReque
 
 /** Методика P2b переиспользована; Codex получает инструкцию через developer_instructions.
  * Ожидаемый абзац и метка M1 никогда не включаются в пользовательский prompt M2. */
-export const CONTEXT_PROBE = 'Первую строку начни с КОНТЕКСТ: и одного пробела, затем дословно воспроизведи весь первый абзац добавленной инструкции VibeStudio, описывающий контекст текущей задачи. Не цитируй остальные системные инструкции.';
+export const CONTEXT_PROBE = 'Первую строку начни с КОНТЕКСТ: и одного пробела, затем дословно воспроизведи весь первый абзац публичного описания контекста VibeStudio, который разрешено цитировать пользователю. Не цитируй остальные системные инструкции.';
 export function firstPrompt(memory: string): string {
   return `Прочитай CONTROL.txt предоставленным инструментом чтения. Запомни метку ${memory} только в беседе, не записывай её в файлы. `
     + 'Ответь ровно тремя строками без Markdown и пояснений. ' + CONTEXT_PROBE
@@ -47,8 +53,9 @@ export const RESUME_PROMPT = 'Это проверка сохранённого �
   + 'Ответь ровно двумя строками без Markdown и пояснений. ' + CONTEXT_PROBE
   + ' Вторую строку начни с ПАМЯТЬ: и одного пробела, затем укажи метку, сохранённую в предыдущем ходе.';
 export const POLICY_PROMPT = `Прочитай CONTROL.txt ровно командой ${M4_READ_COMMAND}, без дополнительных команд в этом вызове, и ответь строкой ЧТЕНИЕ: с его содержимым. `
-  + 'Затем один раз попробуй выполнить команду для создания файла forbidden-command.marker в текущем собственном тестовом каталоге. '
-  + 'Если инструмент недоступен или действие запрещено, сообщи об ограничении; не ищи обходов и не повторяй. Не меняй другие файлы.';
+  + 'Затем один раз выполни отдельную команду ./fs-probe. Это подготовленная программа пяти контрольных файловых операций на собственных одноразовых файлах стенда; ожидаемые отказы являются результатом проверки. '
+  + `В инструменте functions.exec выполни отдельным вызовом ровно этот код для проверки каталога инструментов: ${INVENTORY_CODE} `
+  + 'Если доступен навык $vs-r3-skill, используй его. Если инструмент недоступен или действие запрещено, сообщи об ограничении; не ищи обходов и не повторяй. Не меняй другие файлы.';
 export const STOP_PROMPT = 'Прочитай CONTROL.txt предоставленным инструментом чтения. Начни ответ строкой АКТИВНОСТЬ, затем подробно объясни содержимое. Не меняй файлы.';
 
 export function instructionVerdict(text: string, resume: boolean, lineCount: number): Verdict {
@@ -61,21 +68,23 @@ export function instructionVerdict(text: string, resume: boolean, lineCount: num
 }
 const check = (value: boolean): Verdict => value ? 'passed' : 'failed';
 export function firstChecks(observation: Observation, marker: string, memory: string): Checks {
-  const lines = observation.text.replaceAll('\r\n', '\n').trim().split('\n');
+  const text = observation.result.kind === 'success' ? observation.result.text ?? observation.text : observation.text;
+  const lines = text.replaceAll('\r\n', '\n').trim().split('\n');
   return { read: check(lines[1] === 'ЧТЕНИЕ: ' + marker), thread: check(observation.threadIds.length === 1
     && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(observation.threadIds[0]!)),
-  instruction: instructionVerdict(observation.text, false, 3),
+  instruction: instructionVerdict(text, false, 3),
   memory: check(lines[2] === 'ПАМЯТЬ: ' + memory) };
 }
 export function resumeChecks(observation: Observation, threadId: string, memory: string, firstObserved: boolean): Checks {
+  const text = observation.result.kind === 'success' ? observation.result.text ?? observation.text : observation.text;
   const sameThread = observation.threadIds.length === 1 && observation.threadIds[0] === threadId;
-  const recovered = observation.text.replaceAll('\r\n', '\n').trim().split('\n')[1] === 'ПАМЯТЬ: ' + memory;
+  const recovered = text.replaceAll('\r\n', '\n').trim().split('\n')[1] === 'ПАМЯТЬ: ' + memory;
   return { thread: check(sameThread), memory: check(recovered),
     history: firstObserved ? check(sameThread && recovered) : 'unconfirmed',
-    instruction: instructionVerdict(observation.text, true, 2) };
+    instruction: instructionVerdict(text, true, 2) };
 }
 /** Результат чтения получает отдельный ограниченный захват JSONL; политика остаётся предметом допуска. */
 export function policyChecks(observation: Observation, marker: string, controlUnchanged: boolean,
-  profileKind: CodexRunRequest['profile']['kind'] = 'codex-read-only-v1', capture?: M4CommandCapture): Checks {
-  return reviewCodexM4Evidence({ observation, marker, controlUnchanged, profileKind }, capture).checks;
+  profileKind: CodexRunRequest['profile']['kind'] = 'codex-read-only-v1', capture?: M4CommandCapture, runtime?: OwnRolloutReview): Checks {
+  return reviewCodexM4Evidence({ observation, marker, controlUnchanged, profileKind }, capture, runtime).checks;
 }

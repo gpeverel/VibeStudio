@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ProcessResult, ProcessRun } from '../../src/core/ports/process-runner.ts';
-import { M4CommandCapture, M4_READ_COMMAND, M4_READ_LIMITS } from '../helpers/codex/m4-command-evidence.ts';
+import { M4CommandCapture, M4_READ_COMMAND, M4_READ_LIMITS, M4_WRITE_COMMAND } from '../helpers/codex/m4-command-evidence.ts';
 import { reviewCodexM4Evidence } from '../helpers/codex/m4-evidence.ts';
 import { cleanCompletion, processResult } from '../helpers/codex/process-double.ts';
 
@@ -34,6 +34,35 @@ const normalized = () => ({
 
 // Только doubles, включая положительную ветвь; ни одного запуска CLI/модели.
 describe('M4: независимый результат команды чтения', () => {
+  const deniedWrite = (patch: Record<string, unknown> = {}) => command({ id: 'write', command: M4_WRITE_COMMAND,
+    aggregated_output: 'touch: forbidden-command.marker: Operation not permitted\n', exit_code: 1, status: 'failed', ...patch });
+  const runtime = { ownership: true, policy: true, inventory: 'confirmed' as const,
+    toolNames: ['exec_command', 'apply_patch'], unexpectedSkills: false };
+  it('отделяет отказ записи и собственный runtime inventory от модельного ответа', async () => {
+    const { observed } = await capture(transcript([command(), deniedWrite()]));
+    expect(observed.writeDenied(MARKER, THREAD)).toBe(true);
+    expect(reviewCodexM4Evidence(normalized(), observed, runtime)).toMatchObject({ gaps: [], checks: {
+      allowedRead: 'passed', forbiddenEffectAbsent: 'passed', toolPolicy: 'passed', extensionPolicy: 'passed',
+    } });
+  });
+  it.each([{ exit_code: 0 }, { exit_code: null }, { exit_code: '1' }, { status: 'in_progress' },
+    { aggregated_output: 'ошибка без причины' }, { command: M4_WRITE_COMMAND + '; true' }])(
+    'не считает произвольную ошибку доказанным отказом записи %j', async patch => {
+      const { observed } = await capture(transcript([command(), deniedWrite(patch)]));
+      expect(observed.writeDenied(MARKER, THREAD)).toBe(false);
+      expect(reviewCodexM4Evidence(normalized(), observed, runtime).checks.toolPolicy).toBe('unconfirmed');
+    });
+  it.each([{ ownership: false }, { policy: false }, { inventory: 'unconfirmed' as const },
+    { toolNames: ['exec_command', 'mcp__own__ping'] }, { unexpectedSkills: true }])(
+    'не закрывает M4 без всех runtime-свидетельств %j', async patch => {
+      const { observed } = await capture(transcript([command(), deniedWrite()]));
+      expect(reviewCodexM4Evidence(normalized(), observed, { ...runtime, ...patch }).checks.extensionPolicy).not.toBe('passed');
+    });
+  it('не принимает два отдельных запроса записи или чужую привязку', async () => {
+    const { observed } = await capture(transcript([command(), deniedWrite(), deniedWrite({ id: 'second' })]));
+    expect(observed.writeDenied(MARKER, THREAD)).toBe(false);
+    expect(observed.writeDenied(MARKER, undefined)).toBe(false);
+  });
   it('сохраняет потоки, pid, done и команды Stop без второго потребителя', async () => {
     const bytes = transcript(); const result = processResult(); const got = await capture(bytes, result);
     expect(got.stdout).toEqual(bytes); expect(got.stderr.toString()).toBe('SYNTHETIC-STDERR');

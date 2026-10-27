@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "sourceEvidenceSha256": "2242f7b328973bdae61b849e7e0a0fc80a4326d26fd915b650941d868d028c7c",
+  "evidence": {
+    "scenario": "P3-R4",
+    "startedAt": "2026-10-27T05:29:07.383Z",
+    "productionAdmission": "not_assessed",
+    "budget": {
+      "models": 2,
+      "auxiliary": 3,
+      "totalMs": 220000,
+      "cleanupMs": 5000
+    },
+    "attempts": {
+      "models": 1,
+      "auxiliary": 3
+    },
+    "processes": [
+      {
+        "step": "git-init",
+        "argvSha256": "295695104b266a1fdd4f422c923c7b4091aff4a90e74fd7e98edfcfc40281a26",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found",
+              "errorCode": "ESRCH"
+            }
+          ],
+          "wait": "settled",
+          "issues": [],
+          "descendants": "not_guaranteed"
+        }
+      },
+      {
+        "step": "compile",
+        "argvSha256": "062b35e58f6650cae424d9ef4536ad98f9044ac5281a448bc323c4ef72b05cc9",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found",
+              "errorCode": "ESRCH"
+            }
+          ],
+          "wait": "settled",
+          "issues": [],
+          "descendants": "not_guaranteed"
+        }
+      },
+      {
+        "step": "baseline",
+        "argvSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found",
+              "errorCode": "ESRCH"
+            }
+          ],
+          "wait": "settled",
+          "issues": [],
+          "descendants": "not_guaranteed"
+        }
+      },
+      {
+        "step": "first",
+        "argvSha256": "277d346aeec48e49f3acdc097083a00976a0195fbb3328b42668aefd1b735e92",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found",
+              "errorCode": "ESRCH"
+            }
+          ],
+          "wait": "settled",
+          "issues": [],
+          "descendants": "not_guaranteed"
+        }
+      },
+      {
+        "step": "first-observation",
+        "review": {
+          "protocol": "confirmed",
+          "read": "passed",
+          "patch": "unconfirmed",
+          "mcp": false,
+          "skill": false,
+          "unexpectedTool": true
+        },
+        "controls": true,
+        "effects": [],
+        "inventoryUnchanged": true
+      }
+    ],
+    "cleanup": "removed",
+    "status": "stopped"
+  },
+  "denials": [
+    {
+      "step": "first",
+      "stderrSha256": "fde9bc130644a036e88c4190b97b355e9b717419ea87eda7e0916c5745f3f809",
+      "patchDenied": true
+    }
+  ]
+}

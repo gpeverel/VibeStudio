@@ -48,10 +48,14 @@ async function main(): Promise<number> {
       }), productionAdmission: 'not_assessed' }, null, 2) + '\n');
     return 0;
   }
-  if (args.length !== 1 || args[0] !== '--run-p3-r3' || process.env.CODEX_R3_PLAN !== 'P3-R3-2026-10-25'
+  // Отдельное поручение пользователя после включения полного доступа, 2026-10-27.
+  // Прежний latch и расход остаются неизменными; новый набор также однократный.
+  const fullAccess = args[0] === '--run-p3-r3-full-access';
+  if (args.length !== 1 || (!fullAccess && args[0] !== '--run-p3-r3')
+    || process.env.CODEX_R3_PLAN !== (fullAccess ? 'P3-R3-FULL-ACCESS-2026-10-27' : 'P3-R3-2026-10-25')
     || process.env.CODEX_BIN !== paths.wrapper || process.env.CODEX_API_KEY !== undefined || process.platform !== 'darwin'
     || realpathSync(process.cwd()) !== cwd || !/^[a-f0-9]{64}$/.test(process.env.CODEX_R3_REVIEW ?? '')) throw new Error('opt-in');
-  const { fd: latch, startedAt } = claimR3Attempt(join(cwd, '.tmp'));
+  const { fd: latch, startedAt } = claimR3Attempt(join(cwd, '.tmp', ...(fullAccess ? ['p3-full-access-2026-10-27'] : [])));
   let evidence: string | undefined; let evidenceFd: number | undefined;
   const controller = new AbortController(); const stop = (): void => controller.abort();
   const saveLatch = (value: object): void => { ftruncateSync(latch, 0); writeSync(latch, JSON.stringify(value) + '\n', 0, 'utf8'); fsyncSync(latch); };
@@ -61,7 +65,7 @@ async function main(): Promise<number> {
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { purpose: string; cwd: string; identity: R3Identity };
     if (manifest.purpose !== 'expected_identity_only' || manifest.cwd !== cwd) throw new Error('manifest');
     const identity = manifest.identity;
-    if (Object.keys(identity.files).length !== R3_IDENTITY_PATHS.length || R3_IDENTITY_PATHS.some(path => !identity.files[path])) throw new Error('manifest');
+    if (Object.keys(identity.files).length !== R3_IDENTITY_PATHS.length || R3_IDENTITY_PATHS.some(path => !Object.hasOwn(identity.files, path))) throw new Error('manifest');
     const snapshots = new Map<string, string>();
     for (const role of ['wrapper', 'native', 'node'] as const) {
       const before = key(paths[role]);
@@ -83,7 +87,25 @@ async function main(): Promise<number> {
     evidence = join(mkdtempSync(join(tmpdir(), 'vs-codex-R3-evidence-')), 'results.json');
     evidenceFd = openSync(evidence, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW, 0o600);
     process.on('SIGINT', stop); process.on('SIGTERM', stop);
-    const report = await runAdmissionProbe({ runner: createProcessRunner(), executable: paths.wrapper, node: paths.node,
+    // Сырые потоки остаются только в собственном приватном evidence-каталоге.
+    // Они нужны для диагностики нового отказа и не входят в экспортируемый отчёт.
+    const runner = createProcessRunner(); let processIndex = 0;
+    const report = await runAdmissionProbe({ runner: { start(request) {
+      const index = processIndex++;
+      const run = runner.start(request);
+      const capture = async function* (stream: AsyncIterable<Uint8Array>, name: string): AsyncGenerator<Uint8Array> {
+        const fd = openSync(join(evidence!, '..', `${index}-${name}.log`), constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW, 0o600);
+        let bytes = 0;
+        try {
+          for await (const chunk of stream) {
+            const remaining = R3_BUDGET.outputBytes - bytes;
+            if (remaining > 0) { const kept = chunk.subarray(0, remaining); writeFileSync(fd, kept); bytes += kept.length; }
+            yield chunk;
+          }
+        } finally { closeSync(fd); }
+      };
+      return { ...run, stdout: capture(run.stdout, 'stdout'), stderr: capture(run.stderr, 'stderr') };
+    } }, executable: paths.wrapper, node: paths.node,
       provenance: 'live', env, signal: controller.signal,
       beforeStart: () => { try { return [...snapshots].every(([path, snapshot]) => key(path) === snapshot); } catch { return false; } },
       checkpoint: report => {

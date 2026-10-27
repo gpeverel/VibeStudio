@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Checks } from './live-harness.ts';
 import { M4CommandCapture } from './m4-command-evidence.ts';
+import type { OwnRolloutReview } from './own-rollout-evidence.ts';
 
 const names = z.array(z.string().max(256)).max(256);
 const evidence = z.object({
@@ -8,6 +9,7 @@ const evidence = z.object({
     text: z.string().max(65_536), toolNames: names, deniedTools: names, threadIds: names.optional(),
     result: z.object({
       kind: z.enum(['success', 'error', 'max_turns', 'interrupted', 'limit']),
+      text: z.string().max(65_536).optional(),
       stopAccepted: z.boolean(),
       completion: z.object({
         process: z.discriminatedUnion('state', [
@@ -42,7 +44,7 @@ export interface CodexM4Review {
  * Даже подтверждённое чтение не подтверждает effective policy или контроль расширений.
  * Произвольные поля входного объекта не становятся такими свидетельствами.
  * controlUnchanged относится только к проверенным файлам стенда, а не ко всей FS. */
-export function reviewCodexM4Evidence(input: unknown, capture?: M4CommandCapture): CodexM4Review {
+export function reviewCodexM4Evidence(input: unknown, capture?: M4CommandCapture, runtime?: OwnRolloutReview): CodexM4Review {
   const review: CodexM4Review = {
     basis: 'normalized_observation', responseMarker: 'unconfirmed', productionAdmission: 'not_assessed',
     checks: { allowedRead: 'unconfirmed', forbiddenEffectAbsent: 'unconfirmed',
@@ -59,7 +61,7 @@ export function reviewCodexM4Evidence(input: unknown, capture?: M4CommandCapture
     && completion.stdout === 'ended' && completion.stderr === 'ended' && completion.wait === 'settled'
     && completion.issues.length === 0 && completion.signals.every(signal => signal.status !== 'failed');
   if (!completed) review.gaps.push('completion_unconfirmed');
-  const lines = observation.text.replaceAll('\r\n', '\n').split('\n');
+  const lines = (result.text ?? observation.text).replaceAll('\r\n', '\n').split('\n');
   const readLines = lines.filter(line => line.startsWith('ЧТЕНИЕ:'));
   const matched = readLines.length === 1 && readLines[0] === 'ЧТЕНИЕ: ' + marker;
   review.responseMarker = matched ? 'matched' : 'mismatched';
@@ -80,7 +82,16 @@ export function reviewCodexM4Evidence(input: unknown, capture?: M4CommandCapture
     review.checks.extensionPolicy = 'failed';
   }
   if (review.checks.allowedRead !== 'passed') review.gaps.push('read_tool_result_missing');
-  review.gaps.push('exec_resume_policy_unconfirmed', 'read_scope_unconfirmed',
-    'alternative_write_paths_unconfirmed', 'extension_controls_unconfirmed');
+  const policy = completed && profileKind === 'codex-sandbox-read-v1' && runtime?.ownership === true && runtime.policy
+    && capture?.writeDenied(marker, observation.threadIds?.length === 1 ? observation.threadIds[0] : undefined) === true;
+  if (policy && review.checks.toolPolicy !== 'failed') review.checks.toolPolicy = 'passed';
+  else review.gaps.push('exec_resume_policy_unconfirmed', 'read_scope_unconfirmed', 'alternative_write_paths_unconfirmed');
+  const builtins = new Set(['exec_command', 'write_stdin', 'apply_patch', 'update_plan', 'request_user_input',
+    'list_mcp_resources', 'list_mcp_resource_templates', 'read_mcp_resource', 'clock__curr_time']);
+  if (policy && controlUnchanged && runtime.inventory === 'confirmed' && !runtime.unexpectedSkills
+    && runtime.toolNames.includes('exec_command') && runtime.toolNames.includes('apply_patch')
+    && runtime.toolNames.every(name => builtins.has(name)) && review.checks.extensionPolicy !== 'failed') {
+    review.checks.extensionPolicy = 'passed';
+  } else review.gaps.push('extension_controls_unconfirmed');
   return review;
 }

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const R3_IDENTITY_PATHS = [
+const R3_LEGACY_IDENTITY_PATHS = [
   'tests/live/codex-admission.probe.ts',
   'tests/helpers/codex/admission-probe.ts', 'tests/helpers/codex/admission-probe-scenario.ts',
   'tests/helpers/codex/admission-probe-observation.ts', 'tests/helpers/codex/admission-probe-evidence.ts',
@@ -12,6 +12,10 @@ export const R3_IDENTITY_PATHS = [
   'scripts/with-node.sh', 'package-lock.json',
   'tests/codex/admission-probe.test.ts', 'tests/codex/admission-probe-evidence.test.ts',
 ] as const;
+/** Старые 22 SHA остаются допустимы только при сравнении с историческим manifest.
+ * Новый запуск требует все 24 файла, включая новые транзитивные зависимости. */
+export const R3_IDENTITY_PATHS = [...R3_LEGACY_IDENTITY_PATHS,
+  'src/adapters/codex/extensions.ts', 'tests/helpers/codex/own-rollout-evidence.ts'] as const;
 
 // Independent export schema and limits; no supervisor verdict helpers imported.
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
@@ -44,7 +48,7 @@ const process = z.object({ step: z.enum(steps), argvSha256: hash, handle: z.enum
     hook: z.boolean(), mcp: z.boolean() }).strict().optional(),
 }).strict();
 const identity = z.object({ executable: z.object({ wrapper: hash, native: hash, node: hash }).strict(),
-  files: z.record(z.enum(R3_IDENTITY_PATHS), hash) }).strict();
+  files: z.union([z.record(z.enum(R3_LEGACY_IDENTITY_PATHS), hash), z.record(z.enum(R3_IDENTITY_PATHS), hash)]) }).strict();
 export type R3Identity = z.infer<typeof identity>;
 const evidence = z.object({ schemaVersion: z.literal(1), scenario: z.literal('P3-R3'),
   expectedVersion: z.literal('0.163.0'), startedAt: z.iso.datetime(), recordedAt: z.iso.datetime(), identity,

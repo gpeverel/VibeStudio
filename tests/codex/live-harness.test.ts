@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentEvent, AgentRun, AgentRunCompletion, NormalizedPayload, ProcessCompletion } from '../../src/core/ports/agent.ts';
 import type { ProcessRequest, ProcessRun } from '../../src/core/ports/process-runner.ts';
-import { createCodexLiveHarness, M_BUDGET, M_LABELS, safeCodexCompletion } from '../helpers/codex/live-harness.ts';
+import { createCodexLiveHarness as createLegacyHarness, M_BUDGET, M_LABELS, safeCodexCompletion } from '../helpers/codex/live-harness.ts';
+import { createCodexLiveHarness as createScopedHarness } from '../helpers/codex/scoped-live-harness.ts';
 import type { Checks, MLabel } from '../helpers/codex/live-harness.ts';
 import { cleanCompletion, deferred, processResult } from '../helpers/codex/process-double.ts';
 
@@ -24,7 +25,7 @@ function processStub(patch: Partial<ProcessRun> = {}): ProcessRun {
   return { stdout: bytes(), stderr: bytes(), done: Promise.resolve(processResult()),
     interrupt: vi.fn(async () => {}), kill: vi.fn(async () => {}), ...patch };
 }
-type Harness = ReturnType<typeof createCodexLiveHarness>;
+type Harness = ReturnType<typeof createLegacyHarness>;
 
 /** Портовая подстановка: никакой CLI/модели, все утверждения inspector явно synthetic. */
 function syntheticAgent(harness: Harness, label: MLabel, expected = manifest(), options: {
@@ -73,6 +74,7 @@ function syntheticAgent(harness: Harness, label: MLabel, expected = manifest(), 
     return run;
   };
 }
+function verifyHarness(name: string, createCodexLiveHarness: typeof createScopedHarness) {
 function setup(make: (request: ProcessRequest) => ProcessRun = () => processStub()) {
   const start = vi.fn(make);
   const harness = createCodexLiveHarness({ runner: { start }, scenarioTimeoutMs: 200, cleanupTimeoutMs: 10, stopTimeoutMs: 10 });
@@ -82,7 +84,7 @@ function setup(make: (request: ProcessRequest) => ProcessRun = () => processStub
   return { start, harness, scenario };
 }
 
-describe('Codex M: независимый надзор, только synthetic', () => {
+describe(name, () => {
   it('импорт/создание не запускают процессов; запуск вне сценария запрещён', () => {
     const { harness, start } = setup();
     expect(start).not.toHaveBeenCalled();
@@ -249,3 +251,6 @@ describe('Codex M: независимый надзор, только synthetic',
     expect(harness.reports[0]!.checks.instruction).toBe('passed');
   });
 });
+}
+verifyHarness('Codex M: исходный надзор R2, только synthetic', createLegacyHarness);
+verifyHarness('Codex M: надзор с выбором сценариев, только synthetic', createScopedHarness);

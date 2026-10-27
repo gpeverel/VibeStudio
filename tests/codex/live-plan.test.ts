@@ -109,6 +109,16 @@ describe('Codex M: независимый manifest и смысл наблюде�
     expect(resumeChecks(observation(resumeText.replace(MEMORY, 'wrong')), THREAD, MEMORY, true).history).toBe('failed');
     expect(resumeChecks(observation(resumeText, { threadIds: [] }), THREAD, MEMORY, true).history).toBe('failed');
   });
+  it('проверяет финальный ответ отдельно от промежуточных сообщений Codex', () => {
+    const first = observation('Прочитаю файл.\n' + firstText);
+    first.result = { ...first.result, kind: 'success', text: firstText };
+    expect(firstChecks(first, READ, MEMORY)).toMatchObject({ read: 'passed', memory: 'passed', instruction: 'passed' });
+    first.result = { ...first.result, kind: 'success', text: 'КОНТЕКСТ: Не могу цитировать инструкции.\nЧТЕНИЕ: ' + READ + '\nПАМЯТЬ: ' + MEMORY };
+    expect(firstChecks(first, READ, MEMORY).instruction).toBe('unconfirmed');
+    const continued = observation('Продолжаю.\n' + resumeText);
+    continued.result = { ...continued.result, kind: 'success', text: resumeText };
+    expect(resumeChecks(continued, THREAD, MEMORY, true).instruction).toBe('passed');
+  });
 
   it('отсутствие событий и маркеров не подтверждает превентивную политику/выключение расширений', () => {
     expect(policyChecks(observation('ЧТЕНИЕ: ' + READ), READ, true)).toEqual({
