@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "scenario": "P3-R2",
+  "purpose": "expected_identity_only",
+  "sourceRevision": "ce80a5cbd48742eaccabb1cbb3f9285134f34fd2",
+  "preparedOn": "2026-10-24",
+  "identity": {
+    "sourceSha256": "6b68bde03a0142f578d6f905817a269c2804ea113cc34ded122a83046381f6db",
+    "executable": {
+      "wrapper": "61b0194f3bb6534439c8d26a3ed57d0805f84b884588b761795323eeb92fcf70",
+      "native": "8813367285524ac798dd96d1b071aea30d58708c7226fd236cd275cf1cfdee31",
+      "node": "3200fbd9f7fd4410426dd541e10d1ab829d3472f270d743c7fabd1696c03fe32"
+    },
+    "implementation": {
+      "entry": "25fe9ffbf50a5e44c0afdb98635ed007a72a96ec5e17c833574aec53237943ba",
+      "supervisor": "d09e78145dacb188a387ea93928ddda63517f0e4ab516f7e00fc530bb54d2ed1",
+      "completion_export": "ece32b76b5e44f50b831912e272d4611f2531e60d78bb6f937d55bc784afda79",
+      "runner": "6dd2b2937c2785b99eead1fd728f819ad9f6427a080e6b015d60e92a4c55448b",
+      "queue": "8a066a162e6f8d1cb0e5065c9e0409128491b665dafd8120877a112b4c6e30b4",
+      "environment": "8b1d3fccb4a10052fac13993ecc6d799a61f54f11a1f72fa9d2b75ab475858ee"
+    }
+  }
+}

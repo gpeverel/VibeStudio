@@ -51,21 +51,29 @@ export type AgentAccessProfile = AccessProfile | PracticalLocalReadProfile;
 
 /** Значения принимаются только из документированного allowlist адаптера. */
 export type AgentEnvironment = Readonly<Record<string, string>>;
-export interface AgentRunRequest {
+/** Общие данные хода приложения. Профиль, форма CLI-ID и условия resume
+ * определяются конкретным адаптером; ID приложения не заменяют CLI-ID. */
+export interface AgentRunRequestBase {
   sessionId: string;
   turnId: string;
   participantId: string;
   workspaceId: string;
   cwd: string;
   prompt: string;
-  agentSessionId: string;
-  resume: boolean;
-  profile: AgentAccessProfile;
   model?: string;
   maxTurns?: number;
   env: AgentEnvironment;
   persistSession?: boolean;
 }
+/** Существующий запрос Claude: заранее выбранный CLI-ID и прежние профили.
+ * Другие адаптеры задают собственный запрос на основе AgentRunRequestBase. */
+export interface AgentRunRequest extends AgentRunRequestBase {
+  agentSessionId: string;
+  resume: boolean;
+  profile: AgentAccessProfile;
+}
+/** Существующий набор возможностей Claude, включая его конкретные флаги.
+ * Другие CLI передают свой тип в AgentDetection, без фиктивных значений. */
 export interface AgentCapabilities {
   streamJson: boolean;
   partialMessages: boolean;
@@ -82,13 +90,13 @@ export interface AgentCapabilities {
   /** Только legacy strict. Объявленные флаги и practical-допуск не дают verified. */
   readOnly: 'verified' | 'unverified' | 'unsupported';
 }
-export interface AgentDetection {
+export interface AgentDetection<TCapabilities = AgentCapabilities> {
   /** Готовность binary/interface/auth; не допуск конкретного профиля. */
   status: 'available' | 'unavailable';
   binaryPath: string | null;
   version: string | null;
   auth: 'authenticated' | 'unauthenticated' | 'unknown';
-  capabilities: AgentCapabilities;
+  capabilities: TCapabilities;
   unavailable: { reason: AgentErrorReason; detail: string }[];
 }
 export interface AgentDetectOptions { binaryPath?: string; env?: AgentEnvironment }
@@ -101,7 +109,10 @@ export interface AgentRun {
   done: Promise<AgentRunCompletion>;
   readonly diagnostics: readonly AgentDiagnostic[];
 }
-export interface AgentAdapter {
-  detect(options?: AgentDetectOptions): Promise<AgentDetection>;
-  start(request: AgentRunRequest): Promise<AgentRun>;
+/** Параметры по умолчанию сохраняют контракт прежнего Claude-потребителя.
+ * Конкретный адаптер связывает собственные запрос и возможности с общим
+ * контрактом событий/завершения; перенос истории между CLI не подразумевается. */
+export interface AgentAdapter<TRequest extends AgentRunRequestBase = AgentRunRequest, TCapabilities = AgentCapabilities> {
+  detect(options?: AgentDetectOptions): Promise<AgentDetection<TCapabilities>>;
+  start(request: TRequest): Promise<AgentRun>;
 }

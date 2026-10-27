@@ -1,0 +1,148 @@
+{
+  "provenance": "live",
+  "scope": "Исследования до production-приёмки; не заменяют M",
+  "configurationInspection": {
+    "cli": 1,
+    "models": 0,
+    "completed": true,
+    "exitCode": 0,
+    "cleanup": "removed"
+  },
+  "attempts": [
+    {
+      "name": "developer-field",
+      "models": 2,
+      "cli": 2,
+      "auxiliary": 1,
+      "originalSha256": "224e26af29efddc50caa90770515f19819ce2edd068dbce591f6581d0d073a0c",
+      "results": [
+        {
+          "resume": false,
+          "completion": {
+            "code": 0,
+            "signal": null,
+            "stderrBytes": 0
+          },
+          "status": "completed",
+          "failed": false,
+          "context": "passed",
+          "memory": true,
+          "read": true,
+          "sameThread": true,
+          "sandbox": {
+            "type": "readOnly",
+            "networkAccess": false
+          },
+          "roots": 1,
+          "instructionSources": 0
+        },
+        {
+          "resume": true,
+          "completion": {
+            "code": 0,
+            "signal": null,
+            "stderrBytes": 0
+          },
+          "status": "completed",
+          "failed": false,
+          "context": "failed",
+          "memory": true,
+          "read": null,
+          "sameThread": true,
+          "sandbox": {
+            "type": "readOnly",
+            "networkAccess": false
+          },
+          "roots": 1,
+          "instructionSources": 0
+        }
+      ],
+      "cleanup": "removed"
+    },
+    {
+      "name": "collaboration-mode",
+      "models": 1,
+      "cli": 1,
+      "auxiliary": 1,
+      "originalSha256": "a650d98e53f6ec4c07b2bed68c17bb2341c815d922f779e723938f37b58f05a1",
+      "results": [
+        {
+          "resume": false,
+          "completion": {
+            "code": 0,
+            "signal": null,
+            "stderrBytes": 0
+          },
+          "status": "completed",
+          "failed": false,
+          "context": "unconfirmed",
+          "memory": true,
+          "read": true,
+          "sameThread": true,
+          "sandbox": {
+            "type": "readOnly",
+            "networkAccess": false
+          },
+          "roots": 1,
+          "instructionSources": 0
+        }
+      ],
+      "cleanup": "removed"
+    },
+    {
+      "name": "developer-injection",
+      "models": 2,
+      "cli": 2,
+      "auxiliary": 1,
+      "originalSha256": "5f422ac7719f0bac9f9f4b18f757f455ee27d9a831bb09638798e6b946046602",
+      "results": [
+        {
+          "resume": false,
+          "completion": {
+            "code": 0,
+            "signal": null,
+            "stderrBytes": 0
+          },
+          "status": "completed",
+          "failed": false,
+          "context": "passed",
+          "memory": true,
+          "read": true,
+          "sameThread": true,
+          "sandbox": {
+            "type": "readOnly",
+            "networkAccess": false
+          },
+          "roots": 1,
+          "instructionSources": 0
+        },
+        {
+          "resume": true,
+          "completion": {
+            "code": 0,
+            "signal": null,
+            "stderrBytes": 0
+          },
+          "status": "completed",
+          "failed": false,
+          "context": "passed",
+          "memory": true,
+          "read": null,
+          "sameThread": true,
+          "sandbox": {
+            "type": "readOnly",
+            "networkAccess": false
+          },
+          "roots": 1,
+          "instructionSources": 0
+        }
+      ],
+      "cleanup": "removed"
+    }
+  ],
+  "totals": {
+    "models": 5,
+    "cli": 6,
+    "auxiliary": 3
+  }
+}
