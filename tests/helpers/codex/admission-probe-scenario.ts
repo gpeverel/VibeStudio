@@ -25,15 +25,33 @@ export const sha256 = (bytes: string | Uint8Array): string => createHash('sha256
 const quote = (text: string): string => JSON.stringify(text).replaceAll('\u007f', '\\u007f');
 const shellQuote = (text: string): string => "'" + text.replaceAll("'", "'\\''") + "'";
 
-/** rust-v0.163.0: discovery::hook_hash + fingerprint::version_for_toml.
- * TOML omits None fields; JSON object keys are recursively sorted. Trust one own hook only. */
+const compare = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
+/** serde_json::Value::sort_all_objects + to_vec: ключи объектов рекурсивно по порядку, вывод компактный. */
+export const canonicalJson = (value: unknown): string => JSON.stringify((function sort(item: unknown): unknown {
+  if (Array.isArray(item)) return item.map(sort);
+  if (item === null || typeof item !== 'object') return item;
+  return Object.fromEntries(Object.entries(item).sort(([a], [b]) => compare(a, b)).map(([key, inner]) => [key, sort(inner)]));
+})(value));
+
+/** rust-v0.163.0: discovery::NormalizedHookIdentity. Группа вложена через `#[serde(flatten)]`, поэтому ключа `group` нет:
+ * сериализуются `event_name` и поля MatcherGroup (`matcher=None` пропускается TOML, `hooks` остаётся). Поля обработчика
+ * `commandWindows`/`statusMessage`/`additionalContextLimit` при `None` не сериализуются; `timeout=2` остаётся `Some(2)`. */
+export function hookIdentityJson(command: string): string {
+  return canonicalJson({ event_name: 'user_prompt_submit', hooks: [{ async: false, command, timeout: 2, type: 'command' }] });
+}
+
+/** rust-v0.163.0: discovery::hook_hash + fingerprint::version_for_toml. Trust one own hook only. */
 export function ownHook(project: string, node: string): { command: string; key: string; hash: string } {
   const command = `${shellQuote(node)} ${shellQuote(join(project, '.codex', 'r3-hook.mjs'))}`;
-  const canonical = JSON.stringify({ event_name: 'user_prompt_submit', group: {
-    hooks: [{ async: false, command, timeout: 2, type: 'command' }],
-  } });
-  return { command, key: `${join(project, '.codex', 'hooks.json')}:user_prompt_submit:0:0`, hash: 'sha256:' + sha256(canonical) };
+  return { command, key: `${join(project, '.codex', 'hooks.json')}:user_prompt_submit:0:0`, hash: 'sha256:' + sha256(hookIdentityJson(command)) };
 }
+
+/** Значения-таблицы для `-c`: путь/ключ с точками и кавычками нельзя ставить в ключ переопределения.
+ * rust-v0.163.0 `config/src/overrides.rs` режет ключ `-c` по '.' без разбора кавычек, значение справа от
+ * первого '=' разбирается как TOML, поэтому целевой ключ берётся из ключа таблицы значения. */
+export const projectTrustOverride = (project: string): string => `projects={${quote(project)}={trust_level="trusted"}}`;
+export const hookTrustOverride = (hook: { key: string; hash: string }): string =>
+  `hooks.state={${quote(hook.key)}={enabled=true,trusted_hash=${quote(hook.hash)}}}`;
 
 export function researchRequest(project: string, env: Record<string, string>, thread?: string): CodexRunRequest {
   const common = { sessionId: 'r3-research', turnId: thread ? 'r3-resume' : 'r3-first', participantId: 'r3-codex',
@@ -65,9 +83,9 @@ export function r3Request(step: R3Step, executable: string, node: string, projec
   if (step === 'positive') {
     const hook = ownHook(project, node);
     args = [...args.slice(0, -1).map(arg => arg === 'features.hooks=false' ? 'features.hooks=true' : arg),
-      '-c', `projects.${quote(project)}.trust_level="trusted"`,
+      '-c', projectTrustOverride(project),
       '-c', `skills.config=[{path=${quote(join(project, '.agents/skills/vs-r3-skill/SKILL.md'))},enabled=true}]`,
-      '-c', `hooks.state.${quote(hook.key)}={enabled=true,trusted_hash=${quote(hook.hash)}}`, '-'];
+      '-c', hookTrustOverride(hook), '-'];
   }
   return { ...base, executable, args, stdin: step === 'positive' ? R3_POSITIVE_PROMPT : built.stdin, timeoutMs: R3_BUDGET.modelMs };
 }

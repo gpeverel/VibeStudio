@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { closeSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -5,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ProcessRequest, ProcessRun } from '../../src/core/ports/process-runner.ts';
 import { claimR3Attempt, runAdmissionProbe } from '../helpers/codex/admission-probe.ts';
 import type { R3Report } from '../helpers/codex/admission-probe.ts';
-import { ownDecoys, ownHook, R3_BUDGET, R3_STEPS, r3Request, researchRequest } from '../helpers/codex/admission-probe-scenario.ts';
+import { canonicalJson, hookIdentityJson, ownDecoys, ownHook, R3_BUDGET, R3_STEPS, r3Request, researchRequest } from '../helpers/codex/admission-probe-scenario.ts';
 import { buildCodexArgs } from '../../src/adapters/codex/args.ts';
 import { cleanCompletion, processResult } from '../helpers/codex/process-double.ts';
 import { createR3McpHandler } from '../helpers/codex/r3-mcp.mjs';
@@ -86,7 +87,7 @@ describe('R3: конечный набор, отдельный от production и
     const req = r3Request('positive', '/codex', '/node', project, {});
     expect(req.args).toContain('features.hooks=true'); expect(req.args).not.toContain('features.hooks=false');
     expect(req.args).not.toContain('--dangerously-bypass-hook-trust');
-    expect(req.args.filter(a => a.startsWith('hooks.state.'))).toHaveLength(1);
+    expect(req.args.filter(a => a.startsWith('hooks.state='))).toHaveLength(1);
     const files = ownDecoys(project, '/node', 'a'.repeat(32));
     expect(files['.codex/hooks.json']).toContain('UserPromptSubmit');
     expect(req.stdin).not.toContain('R3_SKILL_' + 'a'.repeat(32));
@@ -187,7 +188,67 @@ describe('R3: конечный набор, отдельный от production и
   });
 });
 
+/** Разбор `-c` по правилам rust-v0.163.0: utils/cli/src/config_override.rs делит по ПЕРВОМУ '=', ключ затем режется
+ * по '.' без разбора кавычек (config/src/overrides.rs). Значение-таблица с одним квотированным ключом читается как TOML basic string,
+ * для используемых символов он совпадает с JSON-строкой. */
+function parseOverride(arg: string): { path: string[]; table?: { key: string; inner: string } } {
+  const eq = arg.indexOf('=');
+  const value = arg.slice(eq + 1).trim();
+  const match = /^\{("(?:[^"\\]|\\.)*")=\{(.*)\}\}$/s.exec(value);
+  return { path: arg.slice(0, eq).trim().split('.'), ...(match ? { table: { key: JSON.parse(match[1]!) as string, inner: match[2]! } } : {}) };
+}
+
+describe('R3: формы положительного контроля по исходнику rust-v0.163.0', () => {
+  const cmd = "'/node' '/own/project/.codex/r3-hook.mjs'";
+  it('B1: canonical JSON сортирует ключи рекурсивно и воспроизводит вектор fingerprint_tests.rs Codex', () => {
+    const input = { rows: [{ z: 2, a: 1 }, { z: 4, a: 3 }], nested: { z: 'text', a: true } };
+    expect(canonicalJson(input)).toBe('{"nested":{"a":true,"z":"text"},"rows":[{"a":1,"z":2},{"a":3,"z":4}]}');
+    expect('sha256:' + createHash('sha256').update(canonicalJson(input)).digest('hex'))
+      .toBe('sha256:a5e4c8fbdbc75d185b0f2b5291bfb2de10e8c523d6c89248876fd78a97c83176');
+    expect(canonicalJson({ b: 1, a: { d: [{ y: 1, x: 2 }], c: null } })).toBe('{"a":{"c":null,"d":[{"x":2,"y":1}]},"b":1}');
+  });
+  it('B1: identity хука плоская — event_name и hooks на одном уровне, без ключа group', () => {
+    const json = hookIdentityJson(cmd);
+    expect(json).toBe(`{"event_name":"user_prompt_submit","hooks":[{"async":false,"command":${JSON.stringify(cmd)},"timeout":2,"type":"command"}]}`);
+    expect(json).not.toContain('"group"'); expect(json).not.toContain('matcher');
+    expect(json).not.toMatch(/commandWindows|statusMessage|additionalContextLimit/);
+    // Эталон посчитан независимо от кода: printf '%s' '<json>' | shasum -a 256
+    expect(ownHook('/own/project', '/node').hash).toBe('sha256:63278795aa3a37d684bed77d124a2d554bb06a8c09d43c28c8e05f9b72928ddf');
+    // Прежняя вложенная раскладка давала другой хеш и HookTrustStatus::Modified.
+    const nested = JSON.stringify({ event_name: 'user_prompt_submit', group: { hooks: [{ async: false, command: cmd, timeout: 2, type: 'command' }] } });
+    expect('sha256:' + createHash('sha256').update(nested).digest('hex')).not.toBe(ownHook('/own/project', '/node').hash);
+  });
+  it.each(["/own/project", "/tmp/own ' quoted/dir.with.dots", '/tmp/with "double" quote\\slash'])('B2/B3: доверие проекту и хуку передаётся значением-таблицей, путь %s не попадает в ключ', project => {
+    const hook = ownHook(project, '/node');
+    const args = r3Request('positive', '/codex', '/node', project, {}).args;
+    const overrides = args.map((arg, i) => args[i - 1] === '-c' ? arg : '').filter(Boolean);
+    const trust = parseOverride(overrides.find(arg => arg.startsWith('projects'))!);
+    expect(trust.path).toEqual(['projects']);
+    expect(trust.table).toEqual({ key: project, inner: 'trust_level="trusted"' });
+    const state = parseOverride(overrides.find(arg => arg.startsWith('hooks.state'))!);
+    expect(state.path).toEqual(['hooks', 'state']);
+    expect(state.table).toEqual({ key: hook.key, inner: `enabled=true,trusted_hash="${hook.hash}"` });
+    // Прежние формы с путём в ключе -c режутся по '.' и не применяются.
+    expect(overrides.filter(arg => /^(projects|hooks\.state)\./.test(arg))).toEqual([]);
+    for (const arg of overrides) expect(arg.slice(0, arg.indexOf('=')), arg).not.toContain('"');
+  });
+  it('B2/B3: доверие задаётся только в positive-шаге; production first/resume его не содержат', () => {
+    for (const step of ['first', 'resume'] as const) {
+      const args = r3Request(step, '/codex', '/node', '/project', {}, step === 'resume' ? THREAD : undefined).args;
+      expect(args.some(arg => /^(projects|hooks\.state)[.=]/.test(arg))).toBe(false);
+    }
+  });
+});
+
 describe('R3 MCP: настоящий обмен stdio без запуска CLI', () => {
+  it('B4: ping объявлен только для чтения, иначе approval_policy=never отклонит вызов', () => {
+    const handle = createR3McpHandler('a'.repeat(32), vi.fn());
+    handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } });
+    handle({ jsonrpc: '2.0', method: 'notifications/initialized' });
+    const listed = handle({ jsonrpc: '2.0', id: 2, method: 'tools/list' }) as { result: { tools: { name: string; annotations?: Record<string, unknown> }[] } };
+    expect(listed.result.tools).toHaveLength(1);
+    expect(listed.result.tools[0]!.annotations).toEqual({ readOnlyHint: true });
+  });
   it('initialize → initialized → tools/list → tools/call, маркер только при вызове инструмента', () => {
     const called = vi.fn(); const handle = createR3McpHandler('a'.repeat(32), called);
     expect(handle({ jsonrpc: '2.0', id: 0, method: 'tools/call', params: { name: 'ping' } })).toHaveProperty('error');

@@ -22,8 +22,10 @@ export function createR3McpHandler(token, called) {
     }
     if (message.method === 'ping' && initialized) return result({});
     if (!ready) return error();
+    // rust-v0.163.0 core/src/mcp_tool_call.rs: без annotations инструмент требует одобрения, а при approval_policy=never
+    // вызов отклоняется. readOnlyHint=true снимает требование (requires_mcp_tool_approval → false).
     if (message.method === 'tools/list') return result({ tools: [{ name: 'ping', description: 'Контроль R3 собственного стенда',
-      inputSchema: { type: 'object', properties: {}, additionalProperties: false } }] });
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true } }] });
     if (message.method === 'tools/call' && message.params?.name === 'ping'
       && Object.keys(message.params.arguments ?? {}).length === 0) {
       called();
