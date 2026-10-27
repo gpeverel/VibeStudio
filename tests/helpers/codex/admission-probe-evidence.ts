@@ -37,6 +37,8 @@ const observation = z.object({ protocol: z.enum(['confirmed', 'unconfirmed']), r
 const steps = ['git-init', 'compile', 'baseline', 'positive', 'first', 'resume'] as const;
 const process = z.object({ step: z.enum(steps), argvSha256: hash, handle: z.enum(['returned', 'unconfirmed']),
   stdoutBytes: count, stderrBytes: count, stdoutEnded: z.boolean(), stderrEnded: z.boolean(), completion: completion.nullable(),
+  stderrFindings: z.array(z.enum(['path_aliases_permission_denied', 'app_server_permission_denied']))
+    .min(1).max(2).refine(values => new Set(values).size === values.length).optional(),
   observation: observation.optional(), threadBinding: z.enum(['first_owned', 'resume_matched']).optional(),
   effects: z.object({ controls: z.boolean(), writeInside: z.boolean(), writeOutside: z.boolean(), alternativeWrite: z.boolean(),
     hook: z.boolean(), mcp: z.boolean() }).strict().optional(),

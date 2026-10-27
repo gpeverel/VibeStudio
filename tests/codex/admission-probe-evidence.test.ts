@@ -125,6 +125,17 @@ describe('R3: независимый инспектор экспорта', () =>
     const f = fixture(); expect(inspectR3Evidence(f.evidence, f.expected).review).toMatchObject({ consistent: true,
       provenance: 'synthetic', identity: 'matched', positive: true, first: true, resume: true, lifecycle: true, cleanup: true, p3: 'unconfirmed' });
   });
+  it('сохраняет известные признаки stderr, не превращая их в оценку политики', () => {
+    const f = fixture();
+    Object.assign(f.evidence.report.processes[3]!, { stderrFindings: ['app_server_permission_denied'] });
+    const result = inspectR3Evidence(f.evidence, f.expected);
+    expect(result.review).toMatchObject({ consistent: true, productionAdmission: 'not_assessed' });
+    expect(result.evidence?.report.processes[3]?.stderrFindings).toEqual(['app_server_permission_denied']);
+  });
+  it.each([[], ['SECRET'], ['app_server_permission_denied', 'app_server_permission_denied']].map(findings => ({ findings })))('неизвестные и повреждённые признаки stderr отвергаются: $findings', ({ findings }) => {
+    const f = fixture(); Object.assign(f.evidence.report.processes[3]!, { stderrFindings: findings });
+    expect(inspectR3Evidence(f.evidence, f.expected).review).toMatchObject({ consistent: false, provenance: 'invalid' });
+  });
   it('использует внешний expected; подмена файла/неполный manifest отвергаются', () => {
     const f = fixture(); f.evidence.identity.files['tests/helpers/codex/admission-probe.ts'] = 'b'.repeat(64);
     expect(inspectR3Evidence(f.evidence, f.expected).review.identity).toBe('mismatch');

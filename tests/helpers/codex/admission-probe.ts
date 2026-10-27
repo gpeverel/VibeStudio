@@ -28,6 +28,12 @@ export function claimR3Attempt(stateDir: string): { fd: number; startedAt: strin
 type Reason = 'cancelled' | 'deadline' | 'launch_failed' | 'lifecycle' | 'output_limit' | 'baseline_failed'
   | 'positive_unconfirmed' | 'policy_unconfirmed' | 'policy_failed' | 'controls_changed'
   | 'evidence_failed' | 'preparation_failed' | 'identity_changed';
+type StderrFinding = 'path_aliases_permission_denied' | 'app_server_permission_denied';
+// Только точные известные строки; raw stderr, пути и произвольные сообщения в экспорт не попадают.
+const STDERR_FINDINGS = new Map<string, StderrFinding>([
+  ['WARNING: proceeding, even though we could not create PATH aliases: Operation not permitted (os error 1)', 'path_aliases_permission_denied'],
+  ['Error: failed to initialize in-process app-server client: Operation not permitted (os error 1)', 'app_server_permission_denied'],
+]);
 export interface R3Report {
   scenario: 'P3-R3'; provenance: 'live' | 'synthetic'; productionAdmission: 'not_assessed';
   status: 'running' | 'observed' | 'stopped'; reason?: Reason;
@@ -35,6 +41,7 @@ export interface R3Report {
   sourceSha256?: string; probeSha256?: string; baseline?: ProbeOutput;
   processes: { step: R3Step; argvSha256: string; handle: 'returned' | 'unconfirmed';
     stdoutBytes: number; stderrBytes: number; stdoutEnded: boolean; stderrEnded: boolean;
+    stderrFindings?: StderrFinding[];
     completion: ReturnType<typeof safeCodexCompletion> | null; observation?: R3Observation;
     effects?: { controls: boolean; writeInside: boolean; writeOutside: boolean; alternativeWrite: boolean; hook: boolean; mcp: boolean };
     threadBinding?: 'first_owned' | 'resume_matched';
@@ -145,6 +152,15 @@ export async function runAdmissionProbe(options: {
       const record = { run, settled: Promise.resolve() as Promise<unknown>, complete: false }; owned.push(record);
       const chunks: Uint8Array[] = [];
       let lineBytes = 0;
+      let stderrLine = ''; let stderrOverflow = false;
+      const finishStderrLine = (): void => {
+        const finding = stderrOverflow ? undefined : STDERR_FINDINGS.get(stderrLine.replace(/\r$/, ''));
+        if (finding) {
+          entry.stderrFindings ??= [];
+          if (!entry.stderrFindings.includes(finding)) entry.stderrFindings.push(finding);
+        }
+        stderrLine = ''; stderrOverflow = false;
+      };
       const consume = async (stream: AsyncIterable<Uint8Array>, name: 'stdout' | 'stderr'): Promise<void> => {
         for await (const chunk of stream) {
           entry[name === 'stdout' ? 'stdoutBytes' : 'stderrBytes'] += chunk.byteLength;
@@ -155,8 +171,16 @@ export async function runAdmissionProbe(options: {
               if (lineBytes > R3_BUDGET.lineBytes) fail('output_limit');
             }
             chunks.push(chunk);
+          } else {
+            // Известные сообщения ASCII; храним не больше 256 байт между переводами строк.
+            for (const byte of chunk) {
+              if (byte === 10) finishStderrLine();
+              else if (stderrLine.length < 256) stderrLine += String.fromCharCode(byte);
+              else stderrOverflow = true;
+            }
           }
         }
+        if (name === 'stderr') finishStderrLine();
         entry[name === 'stdout' ? 'stdoutEnded' : 'stderrEnded'] = true;
       };
       const streams = [consume(run.stdout, 'stdout'), consume(run.stderr, 'stderr')] as const;

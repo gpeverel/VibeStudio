@@ -162,6 +162,39 @@ describe('R3: конечный набор, отдельный от production и
       done: Promise.resolve(processResult(cleanCompletion({ process: { state: 'exited', exitCode: 2, signal: null } }))) } : normal);
     expect(await s.run()).toMatchObject({ reason: 'lifecycle', cleanup: 'removed' });
   });
+  const pathDenied = 'WARNING: proceeding, even though we could not create PATH aliases: Operation not permitted (os error 1)';
+  const appServerDenied = 'Error: failed to initialize in-process app-server client: Operation not permitted (os error 1)';
+  it('stderr сохраняет только известные признаки отказа, включая границы chunks и EOF без перевода строки', async () => {
+    const raw = `${SECRET}\n${pathDenied}\r\n${appServerDenied}`;
+    const s = setup((_, i, normal) => i !== 3 ? normal : { ...normal,
+      stderr: (async function* () { for (const byte of Buffer.from(raw)) yield Uint8Array.of(byte); })(),
+      done: Promise.resolve(processResult(cleanCompletion({ process: { state: 'exited', exitCode: 1, signal: null } }))),
+    });
+    const report = await s.run();
+    expect(report).toMatchObject({ status: 'stopped', reason: 'lifecycle', cleanup: 'removed', attempts: { models: 1 } });
+    expect(report.processes[3]).toMatchObject({ stderrFindings: ['path_aliases_permission_denied', 'app_server_permission_denied'], stderrBytes: Buffer.byteLength(raw) });
+    expect(JSON.stringify(report)).not.toContain(SECRET);
+    expect(JSON.stringify(report)).not.toContain(appServerDenied);
+    expect(s.start).toHaveBeenCalledTimes(4);
+  });
+  it('повтор признака stderr не увеличивает экспорт', async () => {
+    const s = setup((_, i, normal) => i !== 3 ? normal : { ...normal, stderr: bytes(`${appServerDenied}\n`.repeat(100)) });
+    const report = await s.run();
+    expect(report.processes[3]).toMatchObject({ stderrFindings: ['app_server_permission_denied'] });
+    // Текст stderr сам по себе не подменяет код выхода или наблюдения протокола.
+    expect(report.status).toBe('observed');
+  });
+  it.each([`prefix ${appServerDenied}\n`, `${appServerDenied} ${SECRET}\n`, `${'x'.repeat(1000)}${appServerDenied}\n`])(
+    'похожий текст и слишком длинная строка stderr не становятся известным отказом', async raw => {
+      const s = setup((_, i, normal) => i !== 3 ? normal : { ...normal, stderr: bytes(raw) });
+      expect((await s.run()).processes[3]).not.toHaveProperty('stderrFindings');
+    },
+  );
+  it('после слишком длинной строки stderr распознаётся следующая полная строка', async () => {
+    const s = setup((_, i, normal) => i !== 3 ? normal : { ...normal,
+      stderr: bytes(`${'x'.repeat(1000)}\n${appServerDenied}\n`) });
+    expect((await s.run()).processes[3]).toMatchObject({ stderrFindings: ['app_server_permission_denied'] });
+  });
   it('pending done ограничен надзором и cleanup; Stop вызван', async () => {
     const kill = vi.fn(async () => {});
     const s = setup((_, i, normal) => i === 0 ? { ...normal, kill, done: new Promise(() => {}) } : normal);

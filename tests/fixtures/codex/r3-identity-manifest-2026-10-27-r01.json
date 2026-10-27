@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "scenario": "P3-R3",
+  "purpose": "expected_identity_only",
+  "preparedAt": "2026-10-27",
+  "sourceRevision": "c889d1171a364b8e4f04a4b809bf7ae834c2a9f1",
+  "cwd": "/Users/nishimata/Library/Application Support/com.vibeforge.app/data/worktrees/0712ff57-4c40-4d55-b797-62e225b94a6a/session",
+  "identity": {
+    "executable": {
+      "wrapper": "61b0194f3bb6534439c8d26a3ed57d0805f84b884588b761795323eeb92fcf70",
+      "native": "8813367285524ac798dd96d1b071aea30d58708c7226fd236cd275cf1cfdee31",
+      "node": "3200fbd9f7fd4410426dd541e10d1ab829d3472f270d743c7fabd1696c03fe32"
+    },
+    "files": {
+      "tests/live/codex-admission.probe.ts": "335d3abc791336620a402b87e81eadd6d9c3f7bba0a18fe52ed987225d81e6f3",
+      "tests/helpers/codex/admission-probe.ts": "62fcf9ef38282fc8c8afdbb00752c6b2f6ff6b713791f85c16771ba2b27c9ba5",
+      "tests/helpers/codex/admission-probe-scenario.ts": "833ac010d14396b541d83beba7333d665bf7181359bb250e78c6abb8fe67b354",
+      "tests/helpers/codex/admission-probe-observation.ts": "0a7d256540595954d157b741d72993926f0b3bb26f6823ee7bba74ec1ac5af38",
+      "tests/helpers/codex/admission-probe-evidence.ts": "1b90ee8c010bc9f6e9f24f865f6ca881c7da9d6ae258bbe9fc118b772596b0c8",
+      "tests/helpers/codex/r3-mcp.mjs": "cb6b42e1930abd83e0ca6908939a4b3fe2db3be5298a44585ae7a6d37a79d8d0",
+      "tests/helpers/codex/fs-policy-probe.c": "6b68bde03a0142f578d6f905817a269c2804ea113cc34ded122a83046381f6db",
+      "tests/helpers/codex/policy-probe.ts": "d09e78145dacb188a387ea93928ddda63517f0e4ab516f7e00fc530bb54d2ed1",
+      "tests/helpers/codex/live-harness.ts": "ece32b76b5e44f50b831912e272d4611f2531e60d78bb6f937d55bc784afda79",
+      "tests/helpers/codex/live-plan.ts": "0f730ac2d135b2dfdba7d764dadac6a2a301e6def83b0c14fc78b1daad546407",
+      "tests/helpers/codex/m4-evidence.ts": "1464f7e61c3f82daafbc65b3630776ad9c5d27925550781e8a4ec6bed0f33865",
+      "tests/helpers/codex/m4-command-evidence.ts": "e38194f7141a4935b222c7860cfbc1fc87231548426142a82287acc37fd6f1af",
+      "src/adapters/codex/args.ts": "8b1d3fccb4a10052fac13993ecc6d799a61f54f11a1f72fa9d2b75ab475858ee",
+      "src/adapters/codex/contracts.ts": "de8ff3519dd58185de64a65bdaaa485e10b155c6514f5fd19f02318715ad3c6e",
+      "src/adapters/codex/profile.ts": "1805be6b350fcb5fbbd1a2c2c9fbb9881da05dcd7d454fd28db4d3a4ac547826",
+      "src/core/agent-instructions.ts": "b701b2883a0106f4aad1ddc216cc7b4925593265f5751bdad6112599bf0f8dd7",
+      "src/adapters/process-runner/index.ts": "6dd2b2937c2785b99eead1fd728f819ad9f6427a080e6b015d60e92a4c55448b",
+      "src/adapters/process-runner/queue.ts": "8a066a162e6f8d1cb0e5065c9e0409128491b665dafd8120877a112b4c6e30b4",
+      "scripts/with-node.sh": "a7532611da5f4d6f0451891ac4df2d62bfd7d21ad4a3999fb54e84262f1c0323",
+      "package-lock.json": "17d6ad7f0192fb503a01b83af7b8e3b66e5bf388d4abde2089a423a7ce2d7cec",
+      "tests/codex/admission-probe.test.ts": "faa0b5963030f6066e3d92c10bc620161f5535b5edfa0c66c18166ece07924d4",
+      "tests/codex/admission-probe-evidence.test.ts": "e736594daa6892c3edf82fc2fd172e1b77b29e35b8ea9a71b50f57deecf19d0b"
+    }
+  }
+}
