@@ -1,0 +1,257 @@
+{
+  "schemaVersion": 1,
+  "sourceEvidenceSha256": "8c37340799b815edb60653dd052e6105d66423d7348c0d538cc6ea4f12b231d9",
+  "evidence": {
+    "scenario": "P3-R4",
+    "revision": "r02",
+    "startedAt": "2026-10-27T05:30:35.620Z",
+    "productionAdmission": "not_assessed",
+    "sources": {
+      "tests/live/codex-extensions.probe.ts": "4c455c634474d687ede3064dd52bd251ed3ec856b5b86ed8989b00dff04b0adb",
+      "tests/helpers/codex/admission-probe-observation.ts": "3575aca3f8d1cdf2b21b030cfcc1e5ad3817916f47f53977146b76293e2966f0",
+      "src/adapters/codex/extensions.ts": "085f1b3b409db532d38c1036047e8e1204d47bafaaabcce65678858711f3c1b6",
+      "src/adapters/codex/args.ts": "9f2dbd2c263e5d56e2a1a75871fa06c0b754a46372d011320ae15705e361e1fe",
+      "src/adapters/codex/contracts.ts": "17a618aeb3ebd13464390c23382966a2868ed3d8588121de1e0e3a3e6fdb0fa9"
+    },
+    "budget": {
+      "models": 2,
+      "auxiliary": 3,
+      "totalMs": 220000,
+      "cleanupMs": 5000
+    },
+    "attempts": {
+      "models": 2,
+      "auxiliary": 3
+    },
+    "processes": [
+      {
+        "step": "git-init",
+        "argvSha256": "295695104b266a1fdd4f422c923c7b4091aff4a90e74fd7e98edfcfc40281a26",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found",
+              "errorCode": "ESRCH"
+            }
+          ],
+          "wait": "settled",
+          "issues": [],
+          "descendants": "not_guaranteed"
+        }
+      },
+      {
+        "step": "compile",
+        "argvSha256": "2a34d8769a3894e972f5e465b3f6ba43845829690eaa81b1f5fe1dcdd5f45b44",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found",
+              "errorCode": "ESRCH"
+            }
+          ],
+          "wait": "settled",
+          "issues": [],
+          "descendants": "not_guaranteed"
+        }
+      },
+      {
+        "step": "baseline",
+        "argvSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found",
+              "errorCode": "ESRCH"
+            }
+          ],
+          "wait": "settled",
+          "issues": [],
+          "descendants": "not_guaranteed"
+        }
+      },
+      {
+        "step": "first",
+        "argvSha256": "2976f618b346f214b9415a6a1a7f0654797b142a4f9df89344a42efa2450cd7c",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found",
+              "errorCode": "ESRCH"
+            }
+          ],
+          "wait": "settled",
+          "issues": [],
+          "descendants": "not_guaranteed"
+        }
+      },
+      {
+        "step": "first-observation",
+        "review": {
+          "protocol": "confirmed",
+          "read": "passed",
+          "patch": "unconfirmed",
+          "mcp": false,
+          "skill": false,
+          "unexpectedTool": false,
+          "probe": {
+            "schemaVersion": 1,
+            "control": {
+              "attempted": true,
+              "state": "allowed",
+              "code": "NONE",
+              "matched": true
+            },
+            "outside": {
+              "attempted": true,
+              "state": "denied",
+              "code": "EPERM",
+              "matched": false
+            },
+            "symlink": {
+              "attempted": true,
+              "state": "denied",
+              "code": "EPERM",
+              "matched": false
+            },
+            "writeInside": {
+              "attempted": true,
+              "state": "denied",
+              "code": "EPERM",
+              "matched": false
+            },
+            "writeOutside": {
+              "attempted": true,
+              "state": "denied",
+              "code": "EPERM",
+              "matched": false
+            }
+          }
+        },
+        "controls": true,
+        "effects": [],
+        "inventoryUnchanged": true
+      },
+      {
+        "step": "resume",
+        "argvSha256": "8bd7ed490d39503e1c5b1277a67254422453a16328476c47e4bbd69ee0bc9de8",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found",
+              "errorCode": "ESRCH"
+            }
+          ],
+          "wait": "settled",
+          "issues": [],
+          "descendants": "not_guaranteed"
+        }
+      },
+      {
+        "step": "resume-observation",
+        "review": {
+          "protocol": "confirmed",
+          "read": "passed",
+          "patch": "unconfirmed",
+          "mcp": false,
+          "skill": false,
+          "unexpectedTool": false,
+          "probe": {
+            "schemaVersion": 1,
+            "control": {
+              "attempted": true,
+              "state": "allowed",
+              "code": "NONE",
+              "matched": true
+            },
+            "outside": {
+              "attempted": true,
+              "state": "denied",
+              "code": "EPERM",
+              "matched": false
+            },
+            "symlink": {
+              "attempted": true,
+              "state": "denied",
+              "code": "EPERM",
+              "matched": false
+            },
+            "writeInside": {
+              "attempted": true,
+              "state": "denied",
+              "code": "EPERM",
+              "matched": false
+            },
+            "writeOutside": {
+              "attempted": true,
+              "state": "denied",
+              "code": "EPERM",
+              "matched": false
+            }
+          }
+        },
+        "controls": true,
+        "effects": [],
+        "inventoryUnchanged": true
+      }
+    ],
+    "cleanup": "removed",
+    "status": "observed"
+  },
+  "denials": [
+    {
+      "step": "first",
+      "stderrSha256": "5da7df51ad71cb8632565c6646097daf723d56f12f7db2ef486534278c22b3ce",
+      "patchDenied": true
+    },
+    {
+      "step": "resume",
+      "stderrSha256": "3dd9cf4c50789c402affe21011e162d534ce830c0f7fc410f3519a1a33473e6f",
+      "patchDenied": true
+    }
+  ]
+}

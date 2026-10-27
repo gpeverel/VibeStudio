@@ -1,0 +1,548 @@
+{
+  "schemaVersion": 1,
+  "sourceEvidenceSha256": "bbdafd783cae215157ca0d93bbdc473e15907205ce3228dde1489949857a2b4d",
+  "evidence": {
+    "schemaVersion": 1,
+    "scenario": "P3-M",
+    "provenance": "live",
+    "admission": "production",
+    "profile": "codex-sandbox-read-v1",
+    "expectedVersion": "0.163.0",
+    "executable": [
+      {
+        "role": "wrapper",
+        "sha256": "61b0194f3bb6534439c8d26a3ed57d0805f84b884588b761795323eeb92fcf70"
+      },
+      {
+        "role": "native",
+        "sha256": "8813367285524ac798dd96d1b071aea30d58708c7226fd236cd275cf1cfdee31"
+      },
+      {
+        "role": "node",
+        "sha256": "3200fbd9f7fd4410426dd541e10d1ab829d3472f270d743c7fabd1696c03fe32"
+      }
+    ],
+    "budget": {
+      "diagnostics": 16,
+      "models": 4,
+      "processes": 20,
+      "scenarioMs": 100000,
+      "totalMs": 420000,
+      "cleanupMs": 5000,
+      "stopMs": 5000,
+      "modelBytes": 1048576,
+      "diagnosticBytes": 262144,
+      "textBytes": 65536
+    },
+    "auxiliaryProcesses": {
+      "gitInit": 1
+    },
+    "reports": [
+      {
+        "label": "M1",
+        "execution": "attempted",
+        "outcome": "passed",
+        "checks": {
+          "terminal": "passed",
+          "completion": "passed",
+          "launches": "passed",
+          "limitations": "passed",
+          "read": "passed",
+          "thread": "passed",
+          "instruction": "passed",
+          "memory": "passed"
+        },
+        "terminalCount": 1,
+        "stopAccepted": false,
+        "diagnostics": 4,
+        "models": 1,
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        },
+        "cleanup": {
+          "verdict": "passed",
+          "safeToRemove": true,
+          "stopFailures": 0,
+          "pendingStarts": 0,
+          "lostHandle": false
+        },
+        "resultKind": "success"
+      },
+      {
+        "label": "M2",
+        "execution": "attempted",
+        "outcome": "failed",
+        "checks": {
+          "terminal": "passed",
+          "completion": "passed",
+          "launches": "passed",
+          "limitations": "passed",
+          "thread": "passed",
+          "history": "passed",
+          "instruction": "failed",
+          "memory": "passed"
+        },
+        "terminalCount": 1,
+        "stopAccepted": false,
+        "diagnostics": 4,
+        "models": 1,
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        },
+        "cleanup": {
+          "verdict": "passed",
+          "safeToRemove": true,
+          "stopFailures": 0,
+          "pendingStarts": 0,
+          "lostHandle": false
+        },
+        "resultKind": "success",
+        "reason": "check_failed"
+      }
+    ],
+    "processes": [
+      {
+        "label": "M1",
+        "phase": "version",
+        "handle": "returned",
+        "startedAt": "2026-10-27T05:44:02.080Z",
+        "argvSha256": "9fdf2694b9ead23bc82a47690dfe436e0ea7fcc138ce85ef7d6d71d4521f6232",
+        "envNames": [
+          "HOME",
+          "LANG",
+          "LC_ALL",
+          "LC_CTYPE",
+          "LOGNAME",
+          "PATH",
+          "TMPDIR",
+          "USER"
+        ],
+        "stdoutBytes": 18,
+        "stderrBytes": 0,
+        "stdoutEnded": true,
+        "stderrEnded": true,
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M1",
+        "phase": "exec-help",
+        "handle": "returned",
+        "startedAt": "2026-10-27T05:44:02.133Z",
+        "argvSha256": "aaa731f643df469280c04c687d3a2492c3b992017fb0a51d588a6b1f04114f62",
+        "envNames": [
+          "HOME",
+          "LANG",
+          "LC_ALL",
+          "LC_CTYPE",
+          "LOGNAME",
+          "PATH",
+          "TMPDIR",
+          "USER"
+        ],
+        "stdoutBytes": 4331,
+        "stderrBytes": 0,
+        "stdoutEnded": true,
+        "stderrEnded": true,
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M1",
+        "phase": "resume-help",
+        "handle": "returned",
+        "startedAt": "2026-10-27T05:44:02.178Z",
+        "argvSha256": "08954d44d017b3902e5563b03aad71e77a059f2377dae8957cedafb309efba06",
+        "envNames": [
+          "HOME",
+          "LANG",
+          "LC_ALL",
+          "LC_CTYPE",
+          "LOGNAME",
+          "PATH",
+          "TMPDIR",
+          "USER"
+        ],
+        "stdoutBytes": 3183,
+        "stderrBytes": 0,
+        "stdoutEnded": true,
+        "stderrEnded": true,
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M1",
+        "phase": "auth",
+        "handle": "returned",
+        "startedAt": "2026-10-27T05:44:02.222Z",
+        "argvSha256": "9f815502629fccd321bb0bbc9daeed9df6ffcb724c66d1112c9c1cc9146d5b11",
+        "envNames": [
+          "HOME",
+          "LANG",
+          "LC_ALL",
+          "LC_CTYPE",
+          "LOGNAME",
+          "PATH",
+          "TMPDIR",
+          "USER"
+        ],
+        "stdoutBytes": 0,
+        "stderrBytes": 24,
+        "stdoutEnded": true,
+        "stderrEnded": true,
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M1",
+        "phase": "model",
+        "handle": "returned",
+        "startedAt": "2026-10-27T05:44:02.288Z",
+        "argvSha256": "fdd0c525f9f92f0634fbcff0e0e1500d0811f234fbca48085a64f89cd131f372",
+        "envNames": [
+          "HOME",
+          "LANG",
+          "LC_ALL",
+          "LC_CTYPE",
+          "LOGNAME",
+          "PATH",
+          "TMPDIR",
+          "USER"
+        ],
+        "stdoutBytes": 1134,
+        "stderrBytes": 0,
+        "stdoutEnded": true,
+        "stderrEnded": true,
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M2",
+        "phase": "version",
+        "handle": "returned",
+        "startedAt": "2026-10-27T05:44:13.261Z",
+        "argvSha256": "9fdf2694b9ead23bc82a47690dfe436e0ea7fcc138ce85ef7d6d71d4521f6232",
+        "envNames": [
+          "HOME",
+          "LANG",
+          "LC_ALL",
+          "LC_CTYPE",
+          "LOGNAME",
+          "PATH",
+          "TMPDIR",
+          "USER"
+        ],
+        "stdoutBytes": 18,
+        "stderrBytes": 0,
+        "stdoutEnded": true,
+        "stderrEnded": true,
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M2",
+        "phase": "exec-help",
+        "handle": "returned",
+        "startedAt": "2026-10-27T05:44:13.317Z",
+        "argvSha256": "aaa731f643df469280c04c687d3a2492c3b992017fb0a51d588a6b1f04114f62",
+        "envNames": [
+          "HOME",
+          "LANG",
+          "LC_ALL",
+          "LC_CTYPE",
+          "LOGNAME",
+          "PATH",
+          "TMPDIR",
+          "USER"
+        ],
+        "stdoutBytes": 4331,
+        "stderrBytes": 0,
+        "stdoutEnded": true,
+        "stderrEnded": true,
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M2",
+        "phase": "resume-help",
+        "handle": "returned",
+        "startedAt": "2026-10-27T05:44:13.360Z",
+        "argvSha256": "08954d44d017b3902e5563b03aad71e77a059f2377dae8957cedafb309efba06",
+        "envNames": [
+          "HOME",
+          "LANG",
+          "LC_ALL",
+          "LC_CTYPE",
+          "LOGNAME",
+          "PATH",
+          "TMPDIR",
+          "USER"
+        ],
+        "stdoutBytes": 3183,
+        "stderrBytes": 0,
+        "stdoutEnded": true,
+        "stderrEnded": true,
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M2",
+        "phase": "auth",
+        "handle": "returned",
+        "startedAt": "2026-10-27T05:44:13.402Z",
+        "argvSha256": "9f815502629fccd321bb0bbc9daeed9df6ffcb724c66d1112c9c1cc9146d5b11",
+        "envNames": [
+          "HOME",
+          "LANG",
+          "LC_ALL",
+          "LC_CTYPE",
+          "LOGNAME",
+          "PATH",
+          "TMPDIR",
+          "USER"
+        ],
+        "stdoutBytes": 0,
+        "stderrBytes": 24,
+        "stdoutEnded": true,
+        "stderrEnded": true,
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M2",
+        "phase": "model",
+        "handle": "returned",
+        "startedAt": "2026-10-27T05:44:13.465Z",
+        "argvSha256": "e6f3fdf1d29d0f95849482a9c8f0848caf5f8f67d1b924d691d4eef5f2ec5997",
+        "envNames": [
+          "HOME",
+          "LANG",
+          "LC_ALL",
+          "LC_CTYPE",
+          "LOGNAME",
+          "PATH",
+          "TMPDIR",
+          "USER"
+        ],
+        "stdoutBytes": 509,
+        "stderrBytes": 0,
+        "stdoutEnded": true,
+        "stderrEnded": true,
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      }
+    ],
+    "cleanup": {
+      "verdict": "passed",
+      "safeToRemove": true,
+      "stopFailures": 0,
+      "pendingStarts": 0,
+      "lostHandle": false
+    },
+    "rootCleanup": "removed",
+    "persistedCliHistory": "retained",
+    "p3": "unconfirmed"
+  }
+}

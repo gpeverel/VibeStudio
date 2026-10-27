@@ -1,0 +1,32 @@
+{
+  "provenance": "live",
+  "cli": 1,
+  "models": 0,
+  "methods": [
+    "initialize",
+    "initialized",
+    "config/read"
+  ],
+  "passed": true,
+  "policySourceSha256": "b7b8231df1b5d7c40749c2c5de8fe19e9cfae7f1ec94881516be153a8699db3f",
+  "completion": {
+    "process": {
+      "state": "exited",
+      "exitCode": 0,
+      "signal": null
+    },
+    "stdout": "ended",
+    "stderr": "ended",
+    "wait": "settled",
+    "descendants": "not_guaranteed",
+    "signals": [
+      {
+        "signal": "SIGKILL",
+        "target": "group",
+        "status": "not_found"
+      }
+    ],
+    "issues": []
+  },
+  "cleanup": "removed"
+}

@@ -1,0 +1,1116 @@
+{
+  "schemaVersion": 1,
+  "provenance": "live",
+  "projection": "Без config/read, пользовательских настроек, входных инструкций, reasoning и секретов; поля результатов и команд сохранены",
+  "report": {
+    "scenario": "P3-RPC-M",
+    "revision": "r02",
+    "provenance": "live",
+    "profile": "codex-app-server-read-v1",
+    "sourceManifestSha256": "f3b4c6499599968b16ece340b8142672dd8d982841297d962ed8f299066efb95",
+    "binaryPins": [
+      {
+        "path": "/Users/nishimata/.nvm/versions/node/v24.15.0/bin/codex",
+        "sha256": "61b0194f3bb6534439c8d26a3ed57d0805f84b884588b761795323eeb92fcf70"
+      },
+      {
+        "path": "/Users/nishimata/.nvm/versions/node/v24.15.0/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex",
+        "sha256": "8813367285524ac798dd96d1b071aea30d58708c7226fd236cd275cf1cfdee31"
+      },
+      {
+        "path": "/Users/nishimata/.nvm/versions/node/v24.15.0/bin/node",
+        "sha256": "3200fbd9f7fd4410426dd541e10d1ab829d3472f270d743c7fabd1696c03fe32"
+      }
+    ],
+    "budget": {
+      "models": 4,
+      "diagnostics": 12,
+      "auxiliary": 3,
+      "totalMs": 440000
+    },
+    "attempts": {
+      "models": 4,
+      "diagnostics": 12,
+      "auxiliary": 3
+    },
+    "checks": [
+      {
+        "label": "M1",
+        "kind": "success",
+        "terminalCount": 1,
+        "stopAccepted": false,
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M1",
+        "checks": {
+          "success": true,
+          "read": "passed",
+          "thread": "passed",
+          "instruction": "passed",
+          "memory": "passed"
+        }
+      },
+      {
+        "label": "M2",
+        "kind": "success",
+        "terminalCount": 1,
+        "stopAccepted": false,
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M2",
+        "checks": {
+          "success": true,
+          "thread": "passed",
+          "memory": "passed",
+          "history": "passed",
+          "instruction": "passed"
+        }
+      },
+      {
+        "label": "M3-missing",
+        "kind": "error",
+        "reason": "invalid_request",
+        "detail": "Нужна собственная ссылка Codex",
+        "terminalCount": 1,
+        "stopAccepted": false,
+        "completion": {
+          "process": {
+            "state": "not_started"
+          },
+          "stdout": "not_started",
+          "stderr": "not_started",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [],
+          "issues": []
+        }
+      },
+      {
+        "label": "M3-missing",
+        "checks": {
+          "rejected": true,
+          "noProcesses": true
+        }
+      },
+      {
+        "label": "M3-foreign",
+        "kind": "error",
+        "reason": "invalid_request",
+        "detail": "Нужна собственная ссылка Codex",
+        "terminalCount": 1,
+        "stopAccepted": false,
+        "completion": {
+          "process": {
+            "state": "not_started"
+          },
+          "stdout": "not_started",
+          "stderr": "not_started",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [],
+          "issues": []
+        }
+      },
+      {
+        "label": "M3-foreign",
+        "checks": {
+          "rejected": true,
+          "noProcesses": true
+        }
+      },
+      {
+        "label": "M3-binding",
+        "kind": "error",
+        "reason": "invalid_request",
+        "detail": "История не принадлежит этому участнику и workspace",
+        "terminalCount": 1,
+        "stopAccepted": false,
+        "completion": {
+          "process": {
+            "state": "not_started"
+          },
+          "stdout": "not_started",
+          "stderr": "not_started",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [],
+          "issues": []
+        }
+      },
+      {
+        "label": "M3-binding",
+        "checks": {
+          "rejected": true,
+          "noProcesses": true
+        }
+      },
+      {
+        "label": "M4",
+        "kind": "success",
+        "terminalCount": 1,
+        "stopAccepted": false,
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M4",
+        "checks": {
+          "success": true,
+          "allowedRead": true,
+          "filePolicy": true,
+          "effectivePolicy": true,
+          "extensionPolicy": true,
+          "controls": true
+        }
+      },
+      {
+        "label": "M5",
+        "kind": "interrupted",
+        "terminalCount": 1,
+        "stopAccepted": true,
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M5",
+        "checks": {
+          "interrupted": true,
+          "accepted": true,
+          "exited": true,
+          "stdout": true,
+          "stderr": true,
+          "issues": true
+        }
+      }
+    ],
+    "processes": [
+      {
+        "label": "M1",
+        "model": false,
+        "argvSha256": "9fdf2694b9ead23bc82a47690dfe436e0ea7fcc138ce85ef7d6d71d4521f6232",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M1",
+        "model": false,
+        "argvSha256": "fa8f6995d03654560e329dd8c27140c38a22ab6b4cc6782b7b1ceff5c7f4f5a6",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M1",
+        "model": false,
+        "argvSha256": "9f815502629fccd321bb0bbc9daeed9df6ffcb724c66d1112c9c1cc9146d5b11",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M1",
+        "model": true,
+        "argvSha256": "695eb8f30a358c28f7ecd386b804ca548252be279b39d7f4ae817ceba4b06a2d",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M2",
+        "model": false,
+        "argvSha256": "9fdf2694b9ead23bc82a47690dfe436e0ea7fcc138ce85ef7d6d71d4521f6232",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M2",
+        "model": false,
+        "argvSha256": "fa8f6995d03654560e329dd8c27140c38a22ab6b4cc6782b7b1ceff5c7f4f5a6",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M2",
+        "model": false,
+        "argvSha256": "9f815502629fccd321bb0bbc9daeed9df6ffcb724c66d1112c9c1cc9146d5b11",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M2",
+        "model": true,
+        "argvSha256": "695eb8f30a358c28f7ecd386b804ca548252be279b39d7f4ae817ceba4b06a2d",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M4",
+        "model": false,
+        "argvSha256": "9fdf2694b9ead23bc82a47690dfe436e0ea7fcc138ce85ef7d6d71d4521f6232",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M4",
+        "model": false,
+        "argvSha256": "fa8f6995d03654560e329dd8c27140c38a22ab6b4cc6782b7b1ceff5c7f4f5a6",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M4",
+        "model": false,
+        "argvSha256": "9f815502629fccd321bb0bbc9daeed9df6ffcb724c66d1112c9c1cc9146d5b11",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M4",
+        "model": true,
+        "argvSha256": "7eab346230f56da4e2aabc3e97ac5c1619681fed6d0a4cabbb1da50e4e22a98e",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M5",
+        "model": false,
+        "argvSha256": "9fdf2694b9ead23bc82a47690dfe436e0ea7fcc138ce85ef7d6d71d4521f6232",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M5",
+        "model": false,
+        "argvSha256": "fa8f6995d03654560e329dd8c27140c38a22ab6b4cc6782b7b1ceff5c7f4f5a6",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M5",
+        "model": false,
+        "argvSha256": "9f815502629fccd321bb0bbc9daeed9df6ffcb724c66d1112c9c1cc9146d5b11",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      },
+      {
+        "label": "M5",
+        "model": true,
+        "argvSha256": "7eab346230f56da4e2aabc3e97ac5c1619681fed6d0a4cabbb1da50e4e22a98e",
+        "completion": {
+          "process": {
+            "state": "exited",
+            "exitCode": 0,
+            "signal": null
+          },
+          "stdout": "ended",
+          "stderr": "ended",
+          "wait": "settled",
+          "descendants": "not_guaranteed",
+          "signals": [
+            {
+              "signal": "SIGKILL",
+              "target": "group",
+              "status": "not_found"
+            }
+          ],
+          "issues": []
+        }
+      }
+    ],
+    "status": "passed",
+    "cleanup": "removed",
+    "p3": "accepted_rpc_profile"
+  },
+  "sourceManifest": {
+    "src/adapters/codex/app-server-contracts.ts": "8e3248c5799e9787fda7723cb270682001d137d2287dd7c80a586eb15ee3f89a",
+    "src/adapters/codex/app-server-detect.ts": "0a395c17210aff6591b6ee9e30ba252ee0867d7912d5d05a74b05cd4b66b615a",
+    "src/adapters/codex/app-server-policy.ts": "6ebb1a93469111acf2f8bcb074e9c6e4da660a03f8b03933065ae5a5183b987f",
+    "src/adapters/codex/app-server.ts": "28bf4492d7b327d183f64e9b49c0455fec89f4af305abfcecd0432aa40e30cbf",
+    "src/adapters/codex/args.ts": "8b1d3fccb4a10052fac13993ecc6d799a61f54f11a1f72fa9d2b75ab475858ee",
+    "src/adapters/codex/contracts.ts": "e0a9e3ae1d41cb33bacef2d8b1772be37f422a4945e687d0e07064ed307fb395",
+    "src/adapters/codex/detect.ts": "e0368f894f46c317165d98bb6c57fa20abab81d0dd6ff417d15f0117484908a9",
+    "src/adapters/codex/extensions.ts": "c898aa987eb848a10d48fff8875884fadb7473e3132d04b1081a1b51857911b9",
+    "src/adapters/codex/index.ts": "a1c218c4473b5c8580345c7aceed0c6bbb2d73222dd68134f484ed0fc4ddc70e",
+    "src/adapters/codex/parser.ts": "e5703ae97a73a81ab867292006265fc8a15b2be82cb6de8722ee7af5a5fe64ce",
+    "src/adapters/codex/profile.ts": "163ea2422c191b8b1213eaf777f80cb055086d86171b0497c2a2ea5b7efb7b7a",
+    "src/adapters/codex/rpc.ts": "cbb997a0909fb4fb4469d4d39dff9ed447c1daa86e44b18cfe90be093a04c53e",
+    "src/adapters/process-runner/index.ts": "6dd2b2937c2785b99eead1fd728f819ad9f6427a080e6b015d60e92a4c55448b",
+    "src/adapters/process-runner/interactive.ts": "0cc5164ec5d4022f2aafda6263ee6866491b9417098624a38bfc6b8c539576a4",
+    "src/adapters/process-runner/queue.ts": "8a066a162e6f8d1cb0e5065c9e0409128491b665dafd8120877a112b4c6e30b4",
+    "src/core/agent-instructions.ts": "b701b2883a0106f4aad1ddc216cc7b4925593265f5751bdad6112599bf0f8dd7",
+    "src/core/ports/agent.ts": "cc9548afb67848cbd8e9725175f92781b3e5a7457bae0f8c4b60f7663f41b08d",
+    "src/core/ports/process-runner.ts": "d2711f7fc0b28f41f51e6a6291bf089d2d95e74b3cbd289edd76376331801441",
+    "src/shared/agent.ts": "7a8ddb2e2eea524a0b6dd6a430198eb812180a659c6327d5ed8b25e0d0f65e3a",
+    "tests/helpers/codex/admission-probe-scenario.ts": "833ac010d14396b541d83beba7333d665bf7181359bb250e78c6abb8fe67b354",
+    "tests/helpers/codex/live-harness.ts": "ece32b76b5e44f50b831912e272d4611f2531e60d78bb6f937d55bc784afda79",
+    "tests/helpers/codex/live-plan.ts": "64bae4e23862bff9c464019fa79663ff6ff77c1b570aacd3dc59c62785f2a779",
+    "tests/helpers/codex/m4-command-evidence.ts": "b439ce7e39ece8af5dfe13b206e705016e1fbdbebf628ed10a1192028a7a6c2e",
+    "tests/helpers/codex/m4-evidence.ts": "897942d2b8b1bcd54907f2ef9f4a9cc3d7b6798005a051aab95040a600c07974",
+    "tests/helpers/codex/own-rollout-evidence.ts": "59e6dc75cec3a7ffd925d322a8d39aceb0051ea450fffefd5f779e85a87ba056",
+    "tests/helpers/codex/policy-probe.ts": "d09e78145dacb188a387ea93928ddda63517f0e4ab516f7e00fc530bb54d2ed1",
+    "tests/helpers/codex/rpc-policy-evidence.ts": "34096c93fb1e9b8e12bb27fb39d15db501402212a6db9f7bb5f54503520d4004",
+    "tests/helpers/codex/rpc-rollout-evidence.ts": "550bd11fb493d892fbdadd17e62892faf730d7ace5abf0f48f06d082926eb483",
+    "tests/live/codex-app-server.probe.ts": "db701984fbf7c49d209edacdebea3284bb8d1696a2d32c612d5b7c23be9ce7e3"
+  },
+  "messages": {
+    "M1": {
+      "threadId": "01a17c40-bab2-7f23-be53-4399221fa618",
+      "final": [
+        "КОНТЕКСТ: Твоя задача передана в сообщении пользователя.\nЧТЕНИЕ: READ-6b0a11b0-8581-4ed3-93c8-50523abdbce7\nПАМЯТЬ: MEMORY-ae538bc9-2768-445e-b6d7-cefe4e0dbfb0"
+      ]
+    },
+    "M2": {
+      "threadId": "01a17c40-bab2-7f23-be53-4399221fa618",
+      "final": [
+        "КОНТЕКСТ: Это продолжение предыдущего диалога. Новая инструкция передана в сообщении пользователя.\nПАМЯТЬ: MEMORY-ae538bc9-2768-445e-b6d7-cefe4e0dbfb0"
+      ]
+    }
+  },
+  "m4": {
+    "originalRpcSha256": "e4c2c84ec8569f072b76b59eb70de98042fdb76eaed74ed20688efc8f02782a9",
+    "originalRolloutSha256": "95d07f23a95d91a0572c70e68475f4cc7854e6781b0fb40be7166a27fa518e74",
+    "turnId": "01a17c41-22d5-7dc3-8fb3-9a402451320f",
+    "threadId": "01a17c41-20f6-7862-814d-1fc217ee0714",
+    "cwd": "/private/var/folders/b9/2rsrd3m96dq19pt0gnhl5flr0000gn/T/vs-codex-rpc-M-qiQE4M/project",
+    "home": "/Users/nishimata/.codex",
+    "commandRows": [
+      {
+        "method": "item/started",
+        "params": {
+          "item": {
+            "type": "commandExecution",
+            "id": "exec-7ec1bea1-d35d-4a24-8e88-42feb04b0857",
+            "pluginId": null,
+            "scriptPath": null,
+            "command": "/bin/zsh -lc '/bin/cat -- CONTROL.txt'",
+            "cwd": "/private/var/folders/b9/2rsrd3m96dq19pt0gnhl5flr0000gn/T/vs-codex-rpc-M-qiQE4M/project",
+            "processId": "87054",
+            "source": "unifiedExecStartup",
+            "status": "inProgress",
+            "commandActions": [
+              {
+                "type": "unknown",
+                "command": "/bin/cat -- CONTROL.txt"
+              }
+            ],
+            "aggregatedOutput": null,
+            "exitCode": null,
+            "durationMs": null
+          },
+          "threadId": "01a17c41-20f6-7862-814d-1fc217ee0714",
+          "turnId": "01a17c41-22d5-7dc3-8fb3-9a402451320f",
+          "startedAtMs": 1793086011547
+        },
+        "emittedAtMs": 1793086011548
+      },
+      {
+        "method": "item/completed",
+        "params": {
+          "item": {
+            "type": "commandExecution",
+            "id": "exec-7ec1bea1-d35d-4a24-8e88-42feb04b0857",
+            "pluginId": null,
+            "scriptPath": null,
+            "command": "/bin/zsh -lc '/bin/cat -- CONTROL.txt'",
+            "cwd": "/private/var/folders/b9/2rsrd3m96dq19pt0gnhl5flr0000gn/T/vs-codex-rpc-M-qiQE4M/project",
+            "processId": "87054",
+            "source": "unifiedExecStartup",
+            "status": "completed",
+            "commandActions": [
+              {
+                "type": "unknown",
+                "command": "/bin/cat -- CONTROL.txt"
+              }
+            ],
+            "aggregatedOutput": "READ-6b0a11b0-8581-4ed3-93c8-50523abdbce7\n",
+            "exitCode": 0,
+            "durationMs": 0
+          },
+          "threadId": "01a17c41-20f6-7862-814d-1fc217ee0714",
+          "turnId": "01a17c41-22d5-7dc3-8fb3-9a402451320f",
+          "completedAtMs": 1793086011547
+        },
+        "emittedAtMs": 1793086011548
+      },
+      {
+        "method": "item/started",
+        "params": {
+          "item": {
+            "type": "commandExecution",
+            "id": "exec-aa052d78-9ca4-47b4-8946-d80127019109",
+            "pluginId": null,
+            "scriptPath": null,
+            "command": "/bin/zsh -lc ./fs-probe",
+            "cwd": "/private/var/folders/b9/2rsrd3m96dq19pt0gnhl5flr0000gn/T/vs-codex-rpc-M-qiQE4M/project",
+            "processId": "87363",
+            "source": "unifiedExecStartup",
+            "status": "inProgress",
+            "commandActions": [
+              {
+                "type": "unknown",
+                "command": "./fs-probe"
+              }
+            ],
+            "aggregatedOutput": null,
+            "exitCode": null,
+            "durationMs": null
+          },
+          "threadId": "01a17c41-20f6-7862-814d-1fc217ee0714",
+          "turnId": "01a17c41-22d5-7dc3-8fb3-9a402451320f",
+          "startedAtMs": 1793086014913
+        },
+        "emittedAtMs": 1793086014914
+      },
+      {
+        "method": "item/completed",
+        "params": {
+          "item": {
+            "type": "commandExecution",
+            "id": "exec-aa052d78-9ca4-47b4-8946-d80127019109",
+            "pluginId": null,
+            "scriptPath": null,
+            "command": "/bin/zsh -lc ./fs-probe",
+            "cwd": "/private/var/folders/b9/2rsrd3m96dq19pt0gnhl5flr0000gn/T/vs-codex-rpc-M-qiQE4M/project",
+            "processId": "87363",
+            "source": "unifiedExecStartup",
+            "status": "completed",
+            "commandActions": [
+              {
+                "type": "unknown",
+                "command": "./fs-probe"
+              }
+            ],
+            "aggregatedOutput": "{\"schemaVersion\":1,\"control\":{\"attempted\":true,\"state\":\"allowed\",\"code\":\"NONE\",\"matched\":true},\"outside\":{\"attempted\":true,\"state\":\"denied\",\"code\":\"EPERM\",\"matched\":false},\"symlink\":{\"attempted\":true,\"state\":\"denied\",\"code\":\"EPERM\",\"matched\":false},\"writeInside\":{\"attempted\":true,\"state\":\"denied\",\"code\":\"EPERM\",\"matched\":false},\"writeOutside\":{\"attempted\":true,\"state\":\"denied\",\"code\":\"EPERM\",\"matched\":false}}\n",
+            "exitCode": 0,
+            "durationMs": 0
+          },
+          "threadId": "01a17c41-20f6-7862-814d-1fc217ee0714",
+          "turnId": "01a17c41-22d5-7dc3-8fb3-9a402451320f",
+          "completedAtMs": 1793086014913
+        },
+        "emittedAtMs": 1793086014916
+      }
+    ],
+    "rolloutProjection": [
+      {
+        "type": "session_meta",
+        "payload": {
+          "id": "01a17c41-20f6-7862-814d-1fc217ee0714",
+          "cwd": "/private/var/folders/b9/2rsrd3m96dq19pt0gnhl5flr0000gn/T/vs-codex-rpc-M-qiQE4M/project"
+        }
+      },
+      {
+        "type": "turn_context",
+        "payload": {
+          "turn_id": "auto-compact-0",
+          "cwd": "/private/var/folders/b9/2rsrd3m96dq19pt0gnhl5flr0000gn/T/vs-codex-rpc-M-qiQE4M/project",
+          "approval_policy": "never",
+          "sandbox_policy": {
+            "type": "read-only"
+          },
+          "permission_profile": {
+            "type": "managed",
+            "file_system": {
+              "type": "restricted",
+              "entries": [
+                {
+                  "path": {
+                    "type": "special",
+                    "value": {
+                      "kind": "minimal"
+                    }
+                  },
+                  "access": "read"
+                },
+                {
+                  "path": {
+                    "type": "special",
+                    "value": {
+                      "kind": "root"
+                    }
+                  },
+                  "access": "deny"
+                },
+                {
+                  "path": {
+                    "type": "path",
+                    "path": "/private/var/folders/b9/2rsrd3m96dq19pt0gnhl5flr0000gn/T/vs-codex-rpc-M-qiQE4M/project"
+                  },
+                  "access": "read"
+                },
+                {
+                  "path": {
+                    "type": "path",
+                    "path": "/Users/nishimata/.codex/tmp/arg0-macos/codex-arg0klcd6s"
+                  },
+                  "access": "read"
+                }
+              ]
+            },
+            "network": "restricted"
+          },
+          "active_permission_profile": {
+            "id": "vibestudio-read-v1"
+          },
+          "file_system_sandbox_policy": {
+            "kind": "restricted",
+            "entries": [
+              {
+                "path": {
+                  "type": "special",
+                  "value": {
+                    "kind": "minimal"
+                  }
+                },
+                "access": "read"
+              },
+              {
+                "path": {
+                  "type": "special",
+                  "value": {
+                    "kind": "root"
+                  }
+                },
+                "access": "deny"
+              },
+              {
+                "path": {
+                  "type": "path",
+                  "path": "/private/var/folders/b9/2rsrd3m96dq19pt0gnhl5flr0000gn/T/vs-codex-rpc-M-qiQE4M/project"
+                },
+                "access": "read"
+              },
+              {
+                "path": {
+                  "type": "path",
+                  "path": "/Users/nishimata/.codex/tmp/arg0-macos/codex-arg0klcd6s"
+                },
+                "access": "read"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "turn_context",
+        "payload": {
+          "turn_id": "01a17c41-22d5-7dc3-8fb3-9a402451320f",
+          "root_turn_id": "01a17c41-22d5-7dc3-8fb3-9a402451320f",
+          "cwd": "/private/var/folders/b9/2rsrd3m96dq19pt0gnhl5flr0000gn/T/vs-codex-rpc-M-qiQE4M/project",
+          "approval_policy": "never",
+          "sandbox_policy": {
+            "type": "read-only"
+          },
+          "permission_profile": {
+            "type": "managed",
+            "file_system": {
+              "type": "restricted",
+              "entries": [
+                {
+                  "path": {
+                    "type": "special",
+                    "value": {
+                      "kind": "minimal"
+                    }
+                  },
+                  "access": "read"
+                },
+                {
+                  "path": {
+                    "type": "special",
+                    "value": {
+                      "kind": "root"
+                    }
+                  },
+                  "access": "deny"
+                },
+                {
+                  "path": {
+                    "type": "path",
+                    "path": "/private/var/folders/b9/2rsrd3m96dq19pt0gnhl5flr0000gn/T/vs-codex-rpc-M-qiQE4M/project"
+                  },
+                  "access": "read"
+                },
+                {
+                  "path": {
+                    "type": "path",
+                    "path": "/Users/nishimata/.codex/tmp/arg0-macos/codex-arg0klcd6s"
+                  },
+                  "access": "read"
+                }
+              ]
+            },
+            "network": "restricted"
+          },
+          "active_permission_profile": {
+            "id": "vibestudio-read-v1"
+          },
+          "file_system_sandbox_policy": {
+            "kind": "restricted",
+            "entries": [
+              {
+                "path": {
+                  "type": "special",
+                  "value": {
+                    "kind": "minimal"
+                  }
+                },
+                "access": "read"
+              },
+              {
+                "path": {
+                  "type": "special",
+                  "value": {
+                    "kind": "root"
+                  }
+                },
+                "access": "deny"
+              },
+              {
+                "path": {
+                  "type": "path",
+                  "path": "/private/var/folders/b9/2rsrd3m96dq19pt0gnhl5flr0000gn/T/vs-codex-rpc-M-qiQE4M/project"
+                },
+                "access": "read"
+              },
+              {
+                "path": {
+                  "type": "path",
+                  "path": "/Users/nishimata/.codex/tmp/arg0-macos/codex-arg0klcd6s"
+                },
+                "access": "read"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "timestamp": "2026-10-27T07:26:57.764Z",
+        "ordinal": 26,
+        "type": "response_item",
+        "payload": {
+          "type": "custom_tool_call",
+          "id": "ctc_0fb44fb9860ae85a016ae05241b95481918b2544b1078f8d04",
+          "status": "completed",
+          "call_id": "call_56418371d73746be8beb861db078fb24",
+          "name": "exec",
+          "input": "text(ALL_TOOLS.map(t => t.name));\n",
+          "internal_chat_message_metadata_passthrough": {
+            "turn_id": "01a17c41-22d5-7dc3-8fb3-9a402451320f",
+            "create_time": 1793086017.7320213
+          }
+        }
+      },
+      {
+        "timestamp": "2026-10-27T07:26:57.804Z",
+        "ordinal": 28,
+        "type": "response_item",
+        "payload": {
+          "type": "custom_tool_call_output",
+          "id": "ctco_01a17c41-510c-79b1-88cf-6cf9fb0959fa",
+          "call_id": "call_56418371d73746be8beb861db078fb24",
+          "output": [
+            {
+              "type": "input_text",
+              "text": "Script completed\nWall time 0.0 seconds\nOutput:\n"
+            },
+            {
+              "type": "input_text",
+              "text": "[\"apply_patch\",\"clock__curr_time\",\"exec_command\",\"list_mcp_resource_templates\",\"list_mcp_resources\",\"read_mcp_resource\",\"write_stdin\"]"
+            }
+          ],
+          "internal_chat_message_metadata_passthrough": {
+            "turn_id": "01a17c41-22d5-7dc3-8fb3-9a402451320f",
+            "create_time": 1793086017.804388
+          }
+        },
+        "metadata": {
+          "client_authored": false,
+          "fallback_token_limit_override": 12000
+        }
+      }
+    ],
+    "originalReview": {
+      "runtime": {
+        "ownership": true,
+        "policy": true,
+        "inventory": "confirmed",
+        "toolNames": [
+          "apply_patch",
+          "clock__curr_time",
+          "exec_command",
+          "list_mcp_resource_templates",
+          "list_mcp_resources",
+          "read_mcp_resource",
+          "write_stdin"
+        ],
+        "unexpectedSkills": false
+      },
+      "policy": {
+        "allowedRead": true,
+        "filePolicy": true,
+        "effectivePolicy": true,
+        "extensionPolicy": true,
+        "controls": true
+      },
+      "probeSha": "d639cd5cc6ac875728507bf39d0f1debe056b14ed904dd6e2ca7e52d822351eb",
+      "baseline": {
+        "schemaVersion": 1,
+        "control": {
+          "attempted": true,
+          "state": "allowed",
+          "code": "NONE",
+          "matched": true
+        },
+        "outside": {
+          "attempted": true,
+          "state": "allowed",
+          "code": "NONE",
+          "matched": true
+        },
+        "symlink": {
+          "attempted": true,
+          "state": "allowed",
+          "code": "NONE",
+          "matched": true
+        },
+        "writeInside": {
+          "attempted": true,
+          "state": "allowed",
+          "code": "NONE",
+          "matched": true
+        },
+        "writeOutside": {
+          "attempted": true,
+          "state": "allowed",
+          "code": "NONE",
+          "matched": true
+        }
+      }
+    }
+  }
+}
