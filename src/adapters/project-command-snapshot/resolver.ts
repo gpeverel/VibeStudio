@@ -7,7 +7,7 @@ import {
   issueFromError, readStable, type ReadBudget, type ReadOutcome, type SnapshotFs, type SnapshotIssue,
 } from './file-reader.ts';
 import {
-  classifyCommand, executionEnvironmentIssue, parseScriptBody, parseShellFile, SHELL_BUILTINS, shellShebang,
+  classifyCommand, executionEnvironmentIssue, isUnsupportedShell, parseScriptBody, parseShellFile, SHELL_BUILTINS, shellShebang,
   type CommandSegment,
 } from './script-grammar.ts';
 import { parseStrictJson, type StrictJsonValue } from './strict-json.ts';
@@ -73,6 +73,7 @@ interface Located {
   readonly real: string;
   readonly rel: string;
   readonly target: string | null;
+  readonly isProjectFile: boolean;
 }
 
 /** Закрытый список ключей проектного .npmrc, не выбирающих код, пакет, оболочку и корень (prefix, workspace,
@@ -202,18 +203,23 @@ async function locate(session: Session, baseDir: string, raw: string, detail: st
     session.fail('outside_project', detail);
     return undefined;
   }
+  const isProjectFile = session.inside(real);
   // Реальный путь вне проекта остаётся только в приватном target и хэше fingerprint, не в DTO.
   const target = real === abs ? null : session.inside(real) ? posix(relative(session.realRoot, real)) : real;
   if (session.inside(abs)) {
     const rel = posix(relative(session.realRoot, abs));
-    return { real, rel: rel === '' ? '.' : rel, target };
+    return { real, rel: rel === '' ? '.' : rel, target, isProjectFile };
   }
   // Вне проекта (системный toolchain): в DTO только безопасное имя, идентичность — байты и реальный путь.
-  return { real, rel: `toolchain:${label(abs.slice(abs.lastIndexOf(sep) + 1))}`, target: real };
+  return { real, rel: `toolchain:${label(abs.slice(abs.lastIndexOf(sep) + 1))}`, target: real, isProjectFile };
 }
 
 interface ProjectFile {
   readonly rel: string;
+  /** Канонический путь только для внутреннего обнаружения циклов; не выводится в диагностике. */
+  readonly identity: string;
+  /** Принадлежность реального файла проекту не зависит от отображаемой метки пути. */
+  readonly isProjectFile: boolean;
   /** Есть, если файл помещается в keepBytes. */
   readonly content: Uint8Array | undefined;
   readonly prefix: Uint8Array;
@@ -231,7 +237,10 @@ async function readProjectFile(
     return undefined;
   }
   session.add(located.rel, kind, outcome.digest, located.target);
-  return { rel: located.rel, content: outcome.content, prefix: outcome.prefix };
+  return {
+    rel: located.rel, identity: located.real, isProjectFile: located.isProjectFile,
+    content: outcome.content, prefix: outcome.prefix,
+  };
 }
 
 /** Необязательный файл: отсутствие тоже факт (digest null), чтобы его появление меняло fingerprint. */
@@ -319,6 +328,11 @@ async function resolveHead(session: Session, head: string, scope: Scope, bareDir
   return found === null ? undefined : found;
 }
 
+/** Любая найденная проектная обёртка разбирается одинаково, в том числе вместо node/npm/shell. */
+async function resolveExecutable(session: Session, head: string, scope: Scope): Promise<void> {
+  await walkExecutable(session, await resolveHead(session, head, scope, scope.dirs), scope);
+}
+
 /** Интерпретатор из shebang — существенный вход. Допустимы только `#!/абсолютный/путь` без опций и
  * `#!/…/env <одно имя>`: опции вроде `-l`, `--rcfile` меняют загружаемый код и не принимаются молча. */
 async function resolveShebang(session: Session, text: string, scope: Scope): Promise<void> {
@@ -336,22 +350,42 @@ async function resolveShebang(session: Session, text: string, scope: Scope): Pro
     session.fail('unsupported_command', 'shebang:arguments');
     return;
   }
+  if (isUnsupportedShell(viaEnv ? target ?? '' : interpreter)) {
+    session.fail('unknown_dependency', 'shebang:unsupported_shell');
+    return;
+  }
   session.limitations.add('system_toolchain_not_attested');
-  await resolveHead(session, interpreter, scope, scope.dirs);
-  if (viaEnv && target !== undefined) await resolveHead(session, target, scope, scope.dirs);
+  await resolveExecutable(session, interpreter, scope);
+  if (viaEnv && target !== undefined) await resolveExecutable(session, target, scope);
+}
+
+/** Регистрирует файл до обхода интерпретатора и тела, чтобы циклы shebang тоже давали закрытый отказ. */
+function enterFile(session: Session, file: ProjectFile, scope: Scope): Scope | undefined {
+  const marker = `file:${file.identity}`;
+  if (scope.stack.includes(marker)) {
+    session.fail('dependency_cycle', `file:${label(file.rel)}`);
+    return undefined;
+  }
+  if (scope.stack.length >= session.limits.maxDepth) {
+    session.fail('limit_exceeded', 'depth');
+    return undefined;
+  }
+  return { ...scope, stack: [...scope.stack, marker] };
 }
 
 /** Файл проекта: интерпретатор из shebang учитывается; sh/bash разбирается закрытой грамматикой.
  * Прочие (бинарные, node, python) и системные файлы вне проекта — лист: их внутренние вызовы остаются
  * пределом runtime-зависимостей. */
 async function walkExecutable(session: Session, file: ProjectFile | undefined, scope: Scope): Promise<void> {
-  if (file !== undefined && !file.rel.startsWith('toolchain:')) {
+  if (file?.isProjectFile) {
+    const inner = enterFile(session, file, scope);
+    if (!inner) return;
     // Префикс есть всегда: крупный shell-файл не должен тихо превращаться в непрозрачный лист.
     const text = decode(file.content ?? file.prefix);
     if (text.startsWith('#!')) {
-      await resolveShebang(session, text, scope);
+      await resolveShebang(session, text, inner);
       if (shellShebang(text)) {
-        await walkShellFile(session, file, scope);
+        await walkShellContents(session, file, inner);
         return;
       }
     }
@@ -361,15 +395,12 @@ async function walkExecutable(session: Session, file: ProjectFile | undefined, s
 
 /** Разбирает shell-файл закрытой грамматикой и обходит вызванные им команды; неизвестное — отказ. */
 async function walkShellFile(session: Session, file: ProjectFile, scope: Scope): Promise<void> {
-  const marker = `file:${file.rel}`;
-  if (scope.stack.includes(marker)) {
-    session.fail('dependency_cycle', marker);
-    return;
-  }
-  if (scope.stack.length >= session.limits.maxDepth) {
-    session.fail('limit_exceeded', 'depth');
-    return;
-  }
+  const inner = enterFile(session, file, scope);
+  if (inner) await walkShellContents(session, file, inner);
+}
+
+/** Файл уже присутствует в stack; прямой запуск shell-файла и shebang используют общий обход тела. */
+async function walkShellContents(session: Session, file: ProjectFile, scope: Scope): Promise<void> {
   if (file.content === undefined) {
     session.fail('limit_exceeded', 'shell_file_size');
     return;
@@ -380,7 +411,7 @@ async function walkShellFile(session: Session, file: ProjectFile, scope: Scope):
     return;
   }
   // Внутри файла выполняет оболочка: echo/true/false — встроенные команды.
-  const inner: Scope = { ...scope, inShell: true, stack: [...scope.stack, marker] };
+  const inner: Scope = { ...scope, inShell: true };
   for (const segment of parsed.segments) await handleSegment(session, segment, inner);
 }
 
@@ -514,7 +545,7 @@ async function handleSegment(session: Session, segment: CommandSegment, scope: S
   switch (segment.kind) {
     case 'npm_script': case 'npm_install': {
       session.limitations.add('system_toolchain_not_attested');
-      await resolveHead(session, segment.command, scope, scope.dirs);
+      await resolveExecutable(session, segment.command, scope);
       const npm = await loadNpm(session);
       if (!npm) return;
       if (segment.kind === 'npm_script') {
@@ -532,7 +563,7 @@ async function handleSegment(session: Session, segment: CommandSegment, scope: S
     case 'node': {
       session.limitations.add('system_toolchain_not_attested');
       session.limitations.add('runtime_dependencies_not_attested');
-      await resolveHead(session, segment.command, scope, scope.dirs);
+      await resolveExecutable(session, segment.command, scope);
       for (const file of segment.files) {
         await readProjectFile(session, scope.baseDir, file, 'script', session.limits.scriptBytes, 0, `script:${label(file)}`);
       }
@@ -540,7 +571,7 @@ async function handleSegment(session: Session, segment: CommandSegment, scope: S
     }
     case 'shell': {
       session.limitations.add('system_toolchain_not_attested');
-      await resolveHead(session, segment.command, scope, scope.dirs);
+      await resolveExecutable(session, segment.command, scope);
       const file = await readProjectFile(
         session, scope.baseDir, segment.file, 'script', session.limits.scriptBytes, session.limits.scriptBytes, `script:${label(segment.file)}`,
       );
@@ -548,7 +579,7 @@ async function handleSegment(session: Session, segment: CommandSegment, scope: S
       return;
     }
     case 'path': {
-      await walkExecutable(session, await resolveHead(session, segment.path, scope, scope.dirs), scope);
+      await resolveExecutable(session, segment.path, scope);
       return;
     }
     case 'tool': {
@@ -556,7 +587,7 @@ async function handleSegment(session: Session, segment: CommandSegment, scope: S
         session.limitations.add('system_toolchain_not_attested');
         return;
       }
-      await walkExecutable(session, await resolveHead(session, segment.name, scope, scope.dirs), scope);
+      await resolveExecutable(session, segment.name, scope);
       return;
     }
   }
@@ -592,7 +623,7 @@ export async function analyze(fs: SnapshotFs, limits: SnapshotLimits, request: P
     } else {
       const scope: Scope = { baseDir: realCwd, inShell: false, dirs: projectPathDirs(session), stack: [] };
       session.limitations.add('system_toolchain_not_attested');
-      await resolveHead(session, 'npm', scope, scope.dirs);
+      await resolveExecutable(session, 'npm', scope);
       const npm = await loadNpm(session);
       if (npm) await walkScript(session, npm, command.script, command.args, []);
     }

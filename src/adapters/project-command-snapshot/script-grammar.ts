@@ -9,6 +9,8 @@
  *   node [безопасные флаги] <файл…> [args…];  sh|bash <файл> [args…];
  *   путь с «/» (./scripts/x.sh, node_modules/.bin/x) — файл проекта;
  *   имя инструмента (ищется в node_modules/.bin и PATH, находится — хэшируется, нет — отказ).
+ * Имена node/npm/sh/bash распознаются и в относительных путях. Известные неподдержанные
+ * интерпретаторы не считаются обычными инструментами с непрозрачными аргументами.
  * Всё, что аргументы инструмента читают сами (тесты, конфигурации, плагины), грамматика не видит.
  */
 export type CommandSegment =
@@ -66,6 +68,11 @@ const WRAPPERS: ReadonlySet<string> = new Set([
   'bunx', 'deno', 'cross-env', 'dotenv', 'env-cmd', 'concurrently', 'npm-run-all', 'run-s', 'run-p',
   'start-server-and-test', 'parallelshell', 'nodemon',
 ]);
+const UNSUPPORTED_SHELLS: ReadonlySet<string> = new Set(['zsh', 'dash', 'ash', 'ksh', 'fish', 'csh', 'tcsh']);
+const UNSUPPORTED_INTERPRETERS: ReadonlySet<string> = new Set([
+  'nodejs', 'perl', 'ruby', 'php', 'lua', 'luajit', 'tclsh', 'wish', 'busybox',
+]);
+const PYTHON_INTERPRETER = /^(?:python|pypy)(?:[23](?:\.\d+)*)?$/;
 const DESTRUCTIVE: ReadonlySet<string> = new Set([
   'rm', 'rmdir', 'unlink', 'shred', 'dd', 'truncate', 'mkfs', 'rimraf', 'del', 'del-cli', 'trash', 'trash-cli',
 ]);
@@ -104,10 +111,9 @@ function baseName(token: string): string {
   return token.slice(token.lastIndexOf('/') + 1);
 }
 
-/** Имя специальной команды: голое либо абсолютный путь; относительный путь с «/» — файл проекта. */
-function specialName(head: string): string | undefined {
-  if (!head.includes('/')) return head;
-  return head.startsWith('/') ? baseName(head) : undefined;
+/** Неподдержанная shell-грамматика остаётся неизвестной и при выборе через shebang. */
+export function isUnsupportedShell(command: string): boolean {
+  return UNSUPPORTED_SHELLS.has(baseName(command));
 }
 
 function isPlainPath(token: string): boolean {
@@ -222,18 +228,20 @@ export function classifyCommand(tokens: readonly string[]): SegmentResult {
   if (tokens.some((token) => token.includes('\0'))) return unsupported('nul_in_command');
   if (RESERVED_WORDS.has(head)) return unsupported('syntax:shell_keyword');
   const args = tokens.slice(1);
-  const special = specialName(head);
-  if (special !== undefined) {
-    if (WRAPPERS.has(special)) return unknown(`wrapper:${label(special)}`);
-    if (DESTRUCTIVE.has(special)) return unsupported(`destructive_operation:${label(special)}`);
-    switch (special) {
-      case 'npm': return classifyNpm(head, args);
-      case 'node': return classifyNode(head, args);
-      case 'sh': case 'bash': return classifyShell(head, args);
-      // Конфигурация git (pager, external diff, hooks) не аттестуется, поэтому git не считается известным входом.
-      case 'git': return args[0] === 'push' ? unsupported('publish_operation:git_push') : unknown('tool:git');
-      default: break;
-    }
+  // Способ записи пути не меняет семантику argv: ./tools/node тоже выбирает entrypoint.
+  const special = baseName(head);
+  if (WRAPPERS.has(special)) return unknown(`wrapper:${label(special)}`);
+  if (isUnsupportedShell(head) || UNSUPPORTED_INTERPRETERS.has(special) || PYTHON_INTERPRETER.test(special)) {
+    return unknown(`interpreter:${label(special)}`);
+  }
+  if (DESTRUCTIVE.has(special)) return unsupported(`destructive_operation:${label(special)}`);
+  switch (special) {
+    case 'npm': return classifyNpm(head, args);
+    case 'node': return classifyNode(head, args);
+    case 'sh': case 'bash': return classifyShell(head, args);
+    // Конфигурация git (pager, external diff, hooks) не аттестуется, поэтому git не считается известным входом.
+    case 'git': return args[0] === 'push' ? unsupported('publish_operation:git_push') : unknown('tool:git');
+    default: break;
   }
   if (head.includes('/')) {
     return isPlainPath(head) ? ok({ kind: 'path', path: head }) : unsupported('path_not_plain');
@@ -334,7 +342,9 @@ export function parseScriptBody(body: string, forwarded: readonly string[] = [])
     let start = 0;
     while (start < command.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(command[start] as string)) {
       const name = (command[start] as string).slice(0, (command[start] as string).indexOf('='));
-      if (EXECUTION_ENV.test(name)) return { ok: false, reason: 'unsupported_command', detail: `env_assignment:${label(name)}` };
+      if (EXECUTION_ENV.test(name) || /^npm_config_/i.test(name)) {
+        return { ok: false, reason: 'unsupported_command', detail: `env_assignment:${label(name)}` };
+      }
       start += 1;
     }
     if (start === command.length) return { ok: false, reason: 'unsupported_command', detail: 'syntax:assignment_only' };
