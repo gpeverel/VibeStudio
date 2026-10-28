@@ -7,11 +7,13 @@
   --color-surface: #ffffff;
   --color-surface-sunken: #f2f2f0;
   --color-border: #e2e2de;
+  --color-border-strong: #858580; /* граница полей ввода; не для текста, значков и заливок */
   --color-text: #1b1b1a;
   --color-text-muted: #6b6b66;
   --color-accent: #2f5fd0;
   --color-accent-contrast: #ffffff;
   --color-focus-ring: #2f5fd0;
+  --color-scrim: rgba(250, 250, 249, 0.72); /* затемнение за модальным окном: --color-bg при прозрачности 0,72 */
 
   /* Статусы: используются вместе с текстом или иконкой, не только цветом */
   --color-success: #2a7a4b;
@@ -56,11 +58,13 @@
     --color-surface: #1e1e1c;
     --color-surface-sunken: #121211;
     --color-border: #33332f;
+    --color-border-strong: #6f6f69;
     --color-text: #ecece8;
     --color-text-muted: #9a9a93;
     --color-accent: #7ca0f2;
     --color-accent-contrast: #0e1626;
     --color-focus-ring: #7ca0f2;
+    --color-scrim: rgba(21, 21, 20, 0.72);
     --color-success: #5fbf86;
     --color-warning: #d9a53a;
     --color-danger: #e5796f;
