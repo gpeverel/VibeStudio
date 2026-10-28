@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "sh",
+      "args": [
+        "scripts/with-node.sh",
+        "npx",
+        "-y",
+        "@playwright/mcp@0.0.83",
+        "--extension"
+      ]
+    }
+  }
+}
