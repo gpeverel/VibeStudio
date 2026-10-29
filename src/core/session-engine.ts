@@ -4,7 +4,7 @@ import type { ConfirmSetupRequest, CreateSessionRequest, EventsAvailable, Operat
   ProjectView, ReadEventsRequest, RevokeConsentRequest, SelectProjectRequest, SendTurnRequest,
   SessionCommandRequest, SessionStatus, SessionView, SoloError, SoloErrorCode, SoloEvent, SoloEventPayload } from '../shared/solo.ts';
 import type { AgentRun } from './ports/agent.ts';
-import type { GitOperationStore, GitPort } from './ports/git.ts';
+import { GitError, type GitOperationStore, type GitPort } from './ports/git.ts';
 import type { Journal } from './ports/journal.ts';
 import type { ProcessRun } from './ports/process-runner.ts';
 import type { ProjectCommandRunner } from './ports/project-command-runner.ts';
@@ -14,7 +14,7 @@ import type { SoloAgentPort } from './ports/solo-agent.ts';
 import { StoreError } from './ports/store.ts';
 import type { NewSoloEvent, OperationRecord, ParticipantRecord, ProjectRecord, SessionRecord,
   Store, StoreWrite, TurnRecord, WorkspaceRecord } from './ports/store.ts';
-import type { WorkspaceFiles } from './ports/workspace-files.ts';
+import { WorkspaceFilesError, type WorkspaceFiles } from './ports/workspace-files.ts';
 import type { ProjectCommandConsentPolicy } from './project-command-consent.ts';
 import { completionConfirmed, completionSuccessful, soloOutcome, unconfirmedCompletion } from './solo-strategy.ts';
 
@@ -237,18 +237,23 @@ export function createSessionEngine(options: SessionEngineOptions) {
       return saved ? projectView(saved) : null;
     }
     const task = (async () => {
+      let stage: 'dialog' | 'inspection' | 'storage' = 'dialog';
       try {
         const path = await choose();
         if (!path) { commit({ operations: [opPatch(op, { status: 'completed', phase: 'result_saved', result: { projectId: null } })] }); return null; }
+        stage = 'inspection';
         const inspected = await options.files.inspectProject(path);
+        stage = 'storage';
         const existing = store.findProjectByPath(inspected.canonicalPath);
         const project: ProjectRecord = { ...inspected, id: existing?.id ?? ids.next(),
           configVersion: existing ? existing.configVersion + (canonical(existing.config) === canonical(inspected.config) ? 0 : 1) : 1 };
         commit({ projects: [project], operations: [opPatch(op, { status: 'completed', phase: 'result_saved', projectId: project.id, result: { projectId: project.id } })] });
         return projectView(project);
       } catch (cause) {
-        if (!failed && !store.failed) commit({ operations: [opPatch(op, { status: 'failed', phase: 'result_saved', error: { code: 'workspace_failed', message: 'Не удалось открыть выбранный Git-проект.' } })] });
-        throw cause;
+        const failure = projectSelectionError(cause, stage);
+        if (!failed && !store.failed) commit({ operations: [opPatch(op, { status: 'failed', phase: 'result_saved', error: failure })] });
+        // Тот же безопасный ответ возвращается сейчас, при повторе requestId и после restart.
+        error(failure.code, failure.message);
       } finally { pendingSelections.delete(op.id); }
     })();
     pendingSelections.set(op.id, task); return task;
@@ -609,6 +614,28 @@ export function createSessionEngine(options: SessionEngineOptions) {
   };
 }
 export type SessionEngine = ReturnType<typeof createSessionEngine>;
+function projectSelectionError(cause: unknown, stage: 'dialog' | 'inspection' | 'storage'): SoloError {
+  if (cause instanceof SoloEngineError || cause instanceof StoreError) return soloError(cause);
+  if (stage === 'inspection') {
+    if (cause instanceof WorkspaceFilesError && cause.code === 'invalid_project') {
+      return { code: 'invalid_project', message: cause.message };
+    }
+    if (cause instanceof GitError) {
+      // stderr Git и исходные исключения не передаются в UI: они могут содержать данные проекта.
+      switch (cause.code) {
+        case 'not_git_repository': return { code: cause.code, message: 'Выберите корневую папку Git-репозитория. Папка без Git и вложенная папка проекта не подходят.' };
+        case 'no_commits': return { code: cause.code, message: 'В выбранном репозитории нет коммитов. Создайте первый коммит и выберите проект снова.' };
+        case 'detached_head': return { code: cause.code, message: 'HEAD выбранного проекта отсоединён. Переключите проект на ветку и выберите его снова.' };
+        case 'git_unavailable': return { code: cause.code, message: 'Git недоступен приложению. Проверьте установку Git и доступность выбранного каталога.' };
+        case 'git_timeout': return { code: cause.code, message: 'Проверка Git превысила отведённое время. Попробуйте выбрать проект снова.' };
+        default: return { code: 'git_failed', message: 'Не удалось прочитать состояние Git выбранного проекта. Проверьте доступ и целостность репозитория.' };
+      }
+    }
+  }
+  return { code: 'workspace_failed', message: stage === 'dialog' ? 'Не удалось открыть окно выбора проекта. Попробуйте выбрать проект снова.'
+    : stage === 'inspection' ? 'Не удалось прочитать выбранный проект. Проверьте доступ к каталогу и его файлам.'
+      : 'Не удалось сохранить выбранный проект. Перезапустите приложение и проверьте список проектов.' };
+}
 export function soloError(cause: unknown): SoloError {
   if (cause instanceof SoloEngineError) return { code: cause.code, message: cause.message };
   if (cause instanceof StoreError) return { code: cause.code === 'request_conflict' ? 'request_conflict' : 'store_failed', message: 'Хранилище не может безопасно выполнить операцию.' };

@@ -6,31 +6,10 @@ import { basename, join, posix, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { GitError, type GitPort } from '../../core/ports/git.ts';
 import type { ProjectRecord, WorkspaceRecord } from '../../core/ports/store.ts';
-import type { WorkspaceFiles } from '../../core/ports/workspace-files.ts';
+import { WorkspaceFilesError, type WorkspaceFiles } from '../../core/ports/workspace-files.ts';
+export { WorkspaceFilesError, type WorkspaceFilesErrorCode } from '../../core/ports/workspace-files.ts';
 
 const execute = promisify(execFile);
-
-export type WorkspaceFilesErrorCode =
-  | 'invalid_project' | 'invalid_session_id' | 'workspace_exists' | 'unsafe_workspace_path'
-  | 'invalid_copy_rule' | 'copy_source_missing' | 'copy_forbidden_path' | 'copy_symlink'
-  | 'copy_tracked' | 'copy_not_ignored' | 'copy_collision' | 'copy_limit_exceeded' | 'copy_failed';
-
-/** Типизированный отказ подготовки. Сообщение называет правило и причину, но не содержит содержимого файлов. */
-export class WorkspaceFilesError extends Error {
-  readonly code: WorkspaceFilesErrorCode;
-  /** Номер правила copyFiles (с 0), если отказ относится к нему. */
-  readonly rule: number | undefined;
-  /** Ошибка отката копирования, если она была; исходная причина остаётся в cause. */
-  readonly cleanupFailure: string | undefined;
-
-  constructor(code: WorkspaceFilesErrorCode, message: string, options: { rule?: number; cause?: unknown; cleanupFailure?: string } = {}) {
-    super(message, { cause: options.cause });
-    this.name = 'WorkspaceFilesError';
-    this.code = code;
-    this.rule = options.rule;
-    this.cleanupFailure = options.cleanupFailure;
-  }
-}
 
 /** Файл назначения заменён или изменён после создания: откат его не трогает. */
 class ReplacedFile extends Error {

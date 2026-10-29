@@ -8,7 +8,9 @@ export type SessionStatus = 'preparing' | 'needs_consent' | 'ready' | 'running' 
 export type SoloErrorCode = 'invalid_request' | 'unauthorized' | 'not_found' | 'foreign_entity'
   | 'request_conflict' | 'busy' | 'invalid_transition' | 'store_failed' | 'workspace_failed'
   | 'consent_required' | 'consent_blocked' | 'history_missing' | 'adapter_unavailable'
-  | 'recovery_required' | 'signal_failed' | 'internal_error';
+  | 'recovery_required' | 'signal_failed' | 'internal_error'
+  | 'invalid_project' | 'not_git_repository' | 'no_commits' | 'detached_head'
+  | 'git_unavailable' | 'git_timeout' | 'git_failed';
 export interface SoloError { code: SoloErrorCode; message: string }
 export type ApiResult<T> = { ok: true; value: T } | { ok: false; error: SoloError };
 export interface ProjectView { id: string; name: string; setup: string | null; configVersion: number }
