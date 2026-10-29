@@ -1,6 +1,6 @@
 # P5: durable Solo, восстановление и UI
 
-Дата: 2026-10-29. **Инженерный срез P5 завершён и проверен.** Это внутренний работающий Solo-сценарий, а не весь MVP. Реализация подключена к производственной композиции; замечания взаимного ревью A/B/C исправлены и проверены. Повторная приёмка A после исправления выбора Node для npm-команд: Vitest **2160/2160**, Node **78/78**, typecheck, lint, архитектурные границы, build, smoke, обе SQLite-пробы и проверка diff — успешно. Независимые проверки, baseline и пределы приёмки описаны ниже.
+Дата: 2026-10-29. **Инженерный срез P5 завершён и проверен.** Это внутренний работающий Solo-сценарий, а не весь MVP. Реализация подключена к производственной композиции; замечания взаимного ревью A/B/C исправлены и проверены. Последняя приёмка A после исправления выбора Node и часов synthetic-тестов: Vitest **2161/2161**, Node **78/78**, typecheck, lint, архитектурные границы, build, smoke, обе SQLite-пробы и проверка diff — успешно. Независимые проверки, baseline и пределы приёмки описаны ниже.
 
 Исторические результаты [P3](P3-CODEX-APP-SERVER.md), [P4](P4-PROJECT-COMMAND-CONSENT.md) и [Git 0B](STAGE-0B-REPORT.md) не заменяются новыми синтетическими проверками. Настоящие Claude/Codex и модельные запросы в P5 не запускались. Живая приёмка требует отдельного конкретного разрешения.
 
@@ -166,6 +166,29 @@ P4 не реализован заново: сохранение добавлен
 | `sh scripts/with-node.sh npm run check:sqlite` | exit 0; Node 24.15.0, ABI137, SQLite 3.53.4 |
 | `sh scripts/with-node.sh npm run check:sqlite:electron` | exit 0; Electron 43.7.9, ABI148, SQLite 3.53.4 |
 | `git diff --check` | exit 0 после обновления отчёта |
+
+### Повторный отказ: время synthetic-сценария Claude
+
+В следующей автоматической проверке упал `tests/claude/practical-live.test.ts`: обязательный `controlUnchanged=unconfirmed` отсутствовал в отчёте. Адресно прежние 115 тестов проходили, но воспроизведение с паузой собственного потока в 60 мс дало ту же ошибку `expected undefined to deeply equal`. Причина: тестовый бюджет 40 мс измерялся реальным `performance.now()`. Срок истекал до `inspect`; harness возвращал `unconfirmed` по причине `scenario_timeout`, а не `required_unconfirmed`. Прежняя проверка одного `outcome` не различала эти ветки.
+
+В этом synthetic-файле теперь единые управляемые часы для `performance.now()` и таймеров. Deadline/Stop-сценарии по-прежнему явно продвигают время и проверяют запрет запуска, конечное ожидание и неизменность выданного отчёта. Исходная проверка усилена точным `reason`; новая регрессия моделирует паузу потока, проверяет вызов `inspect`, сохранение обязательного результата и блокировку следующего запуска. До исправления регрессия падала, после него адресный файл прошёл **116/116, 418 мс** (15:27:03 МСК). Production Claude, live-harness, лимиты и исторические fixtures не изменены; настоящих CLI-процессов здесь нет.
+
+Последний полный цикл A, 2026-10-29, выполнен на этой правке; Vitest и Node последовательно:
+
+| Команда | Фактический результат |
+|---|---|
+| `npm test` без дополнительных флагов, оболочка без профиля | exit 0; **78 файлов, 2161/2161**, 209,90 с; начало 15:30:38 МСК |
+| `npm run test:node`, оболочка без профиля | exit 0; **78/78**, 181,07 с; skipped/todo/cancelled — 0 |
+| `sh scripts/with-node.sh npm run typecheck` | exit 0 |
+| `sh scripts/with-node.sh npm run lint` | exit 0 |
+| `sh scripts/with-node.sh npm run check:boundaries` | exit 0; 83 модуля, 292 связи |
+| `sh scripts/with-node.sh npm run build` | exit 0 |
+| `sh scripts/with-node.sh npm run smoke` | exit 0; окно Electron и preload |
+| `sh scripts/with-node.sh npm run check:sqlite` | exit 0; Node 24.15.0, ABI137, SQLite 3.53.4 |
+| `sh scripts/with-node.sh npm run check:sqlite:electron` | exit 0; Electron 43.7.9, ABI148, SQLite 3.53.4 |
+| `git diff --check` | exit 0 после обновления отчёта |
+
+Для текущей правки baseline не переснимался: изменён только synthetic-тест, производственные исходники не менялись.
 
 ## Baseline ресурсов
 

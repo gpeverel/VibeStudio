@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createClaudeAdapter } from '../../src/adapters/claude/index.ts';
 import type { AgentDiagnostic, AgentRun, AgentRunCompletion, NormalizedPayload } from '../../src/core/ports/agent.ts';
 import type { ProcessCompletion, ProcessRequest, ProcessResult, ProcessRun, ProcessRunner } from '../../src/core/ports/process-runner.ts';
@@ -86,6 +86,9 @@ const optionalUnknown = (): LiveChecks => ({
   pluginRecognition: { verdict: 'unconfirmed', required: false },
   providerRefresh: { verdict: 'unconfirmed', required: false },
 });
+// Здесь нет OS-процессов: 40 мс — бюджет моделируемого сценария, а не скорости CI.
+// performance.now и таймеры движутся вместе; deadline/Stop-тесты явно продвигают время.
+beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('P2b live: независимое наблюдение контекста инструкции, synthetic', () => {
@@ -342,10 +345,33 @@ describe('P2b live: evidence и раздельные проверки на synth
     const { harness } = setup();
     const report = await harness.runScenario({ label: 'p-read', start: () => launchSequence(harness),
       inspect: () => ({ controlUnchanged: { verdict, required: true } }) });
-    expect(report.outcome).toBe(verdict);
+    expect(report).toMatchObject({ outcome: verdict, reason: verdict === 'failed' ? 'check_failed' : 'required_unconfirmed' });
     expect(report.checks.controlUnchanged).toEqual({ verdict, required: true });
     const start = vi.fn(async () => agentDouble());
     await harness.runScenario({ label: 'p-persist', start });
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('пауза хоста не подменяет обязательный unconfirmed таймаутом synthetic-сценария', async () => {
+    let delayed = false;
+    const { harness } = setup(req => {
+      if (!delayed) {
+        delayed = true;
+        // Реальная пауза собственного потока моделирует вытеснение при параллельной приёмке.
+        // Время synthetic-сценария должно двигаться только явно, а не вместе с нагрузкой хоста.
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 60);
+      }
+      return processDouble(req);
+    });
+    const inspect = vi.fn((): LiveChecks => ({ controlUnchanged: { verdict: 'unconfirmed', required: true } }));
+    const report = await harness.runScenario({ label: 'p-read', start: () => launchSequence(harness), inspect });
+    expect(report.checks.controlUnchanged).toEqual({ verdict: 'unconfirmed', required: true });
+    expect(report).toMatchObject({ outcome: 'unconfirmed', reason: 'required_unconfirmed',
+      checks: { lifecycle: { verdict: 'passed', required: true } } });
+    expect(inspect).toHaveBeenCalledTimes(1);
+    expect(harness.halted).toBe(true);
+    const start = vi.fn(async () => agentDouble());
+    expect(await harness.runScenario({ label: 'p-persist', start })).toMatchObject({ reason: 'launch_blocked' });
     expect(start).not.toHaveBeenCalled();
   });
 
