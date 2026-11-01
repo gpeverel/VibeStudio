@@ -26,7 +26,8 @@ it('Git deadline завершает собственный процесс, иг�
   ].join('')], { ...options, timeout: 300 }));
   const started = performance.now();
   const error = await createGitAdapter().inspectRepository(process.cwd()).catch((failure: unknown) => failure);
-  expect(error).toMatchObject({ code: 'not_git_repository', cause: { signal: 'SIGKILL', killed: true } });
+  // G9: истёкший предел — отдельный типизированный отказ, а не «не репозиторий».
+  expect(error).toMatchObject({ code: 'git_timeout', cause: { signal: 'SIGKILL', killed: true } });
   expect(performance.now() - started).toBeLessThan(1_200);
   const pid = Number((error as { cause: { stdout: string } }).cause.stdout);
   expect(Number.isSafeInteger(pid) && pid > 0).toBe(true);

@@ -1,0 +1,786 @@
+{
+  "measuredAt": "2026-10-29T11:20:06.577Z",
+  "kind": "full-observations-from-three-successful-processes",
+  "command": "sh scripts/with-node.sh node --experimental-transform-types tests/helpers/p5-baseline-run.ts",
+  "scenario": "real-electron-sqlite-solo-synthetic-agent",
+  "platform": "darwin",
+  "arch": "arm64",
+  "macOS": "15.0.1 (24A348)",
+  "hardware": "MacBookPro18,1 / Apple M1 Pro / 16 GiB",
+  "node": "24.21.0",
+  "electron": "43.7.9",
+  "sqliteAbi": "148",
+  "sampleIntervalMs": 50,
+  "window": {
+    "width": 1000,
+    "height": 720,
+    "shown": false
+  },
+  "setupConfigured": false,
+  "artificialAgentDelayMs": 40,
+  "repetitions": [
+    {
+      "repetition": 1,
+      "externalElapsedMs": 2749.747875,
+      "scenario": "real-electron-sqlite-solo-synthetic-agent",
+      "platform": "darwin",
+      "arch": "arm64",
+      "node": "24.21.0",
+      "electron": "43.7.9",
+      "sqliteAbi": "148",
+      "timings": {
+        "startupToUiMs": 753.540375,
+        "workspaceMs": 395.5681249999998,
+        "first_turnMs": 61.49187499999971,
+        "first_turnAcceptanceMs": 5.358208000000104,
+        "resumeMs": 130.05250000000024,
+        "resumeAcceptanceMs": 20.050250000000233,
+        "stopMs": 44.78854199999978
+      },
+      "samples": [
+        {
+          "phase": "startup",
+          "elapsedMs": 460.59929199999993,
+          "rssKiB": 186896,
+          "cpuSeconds": 0.5900000000000001,
+          "processes": 3
+        },
+        {
+          "phase": "startup",
+          "elapsedMs": 543.200292,
+          "rssKiB": 203040,
+          "cpuSeconds": 0.69,
+          "processes": 4
+        },
+        {
+          "phase": "startup",
+          "elapsedMs": 623.9522919999999,
+          "rssKiB": 260880,
+          "cpuSeconds": 0.7699999999999999,
+          "processes": 4
+        },
+        {
+          "phase": "startup",
+          "elapsedMs": 672.6046670000001,
+          "rssKiB": 278816,
+          "cpuSeconds": 0.82,
+          "processes": 4
+        },
+        {
+          "phase": "startup",
+          "elapsedMs": 727.2772500000001,
+          "rssKiB": 293536,
+          "cpuSeconds": 0.86,
+          "processes": 4
+        },
+        {
+          "phase": "idle",
+          "elapsedMs": 784.5624580000001,
+          "rssKiB": 301056,
+          "cpuSeconds": 0.9,
+          "processes": 4
+        },
+        {
+          "phase": "idle",
+          "elapsedMs": 854.477042,
+          "rssKiB": 320528,
+          "cpuSeconds": 0.96,
+          "processes": 4
+        },
+        {
+          "phase": "idle",
+          "elapsedMs": 914.8566250000001,
+          "rssKiB": 320528,
+          "cpuSeconds": 0.97,
+          "processes": 4
+        },
+        {
+          "phase": "idle",
+          "elapsedMs": 990.8852079999999,
+          "rssKiB": 320304,
+          "cpuSeconds": 0.97,
+          "processes": 4
+        },
+        {
+          "phase": "idle",
+          "elapsedMs": 1052.895375,
+          "rssKiB": 314048,
+          "cpuSeconds": 0.97,
+          "processes": 4
+        },
+        {
+          "phase": "project_selection",
+          "elapsedMs": 1081.3963330000001,
+          "rssKiB": 302928,
+          "cpuSeconds": 0.98,
+          "processes": 4
+        },
+        {
+          "phase": "project_selection",
+          "elapsedMs": 1121.40825,
+          "rssKiB": 320944,
+          "cpuSeconds": 1.03,
+          "processes": 5
+        },
+        {
+          "phase": "project_selection",
+          "elapsedMs": 1182.016917,
+          "rssKiB": 321632,
+          "cpuSeconds": 1.04,
+          "processes": 5
+        },
+        {
+          "phase": "project_selection",
+          "elapsedMs": 1223.0028750000001,
+          "rssKiB": 315632,
+          "cpuSeconds": 1.06,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 1283.294958,
+          "rssKiB": 326192,
+          "cpuSeconds": 1.1,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 1327.125458,
+          "rssKiB": 333488,
+          "cpuSeconds": 1.1500000000000001,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 1379.7009170000001,
+          "rssKiB": 338224,
+          "cpuSeconds": 1.1800000000000002,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 1427.065,
+          "rssKiB": 339040,
+          "cpuSeconds": 1.1800000000000002,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 1480.17275,
+          "rssKiB": 338800,
+          "cpuSeconds": 1.2,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 1533.898333,
+          "rssKiB": 336832,
+          "cpuSeconds": 1.1999999999999997,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 1578.817458,
+          "rssKiB": 332640,
+          "cpuSeconds": 1.2099999999999997,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 1628.8129170000002,
+          "rssKiB": 335776,
+          "cpuSeconds": 1.22,
+          "processes": 5
+        },
+        {
+          "phase": "first_turn",
+          "elapsedMs": 1689.293667,
+          "rssKiB": 332640,
+          "cpuSeconds": 1.25,
+          "processes": 4
+        },
+        {
+          "phase": "first_turn",
+          "elapsedMs": 1721.660833,
+          "rssKiB": 333728,
+          "cpuSeconds": 1.27,
+          "processes": 4
+        },
+        {
+          "phase": "resume",
+          "elapsedMs": 1739.1202079999998,
+          "rssKiB": 333872,
+          "cpuSeconds": 1.2799999999999998,
+          "processes": 4
+        },
+        {
+          "phase": "resume",
+          "elapsedMs": 1811.967333,
+          "rssKiB": 331664,
+          "cpuSeconds": 1.2999999999999998,
+          "processes": 4
+        },
+        {
+          "phase": "resume",
+          "elapsedMs": 1850.4969580000002,
+          "rssKiB": 327296,
+          "cpuSeconds": 1.31,
+          "processes": 4
+        },
+        {
+          "phase": "resume",
+          "elapsedMs": 1887.949208,
+          "rssKiB": 328448,
+          "cpuSeconds": 1.32,
+          "processes": 4
+        },
+        {
+          "phase": "stop",
+          "elapsedMs": 1918.315583,
+          "rssKiB": 326080,
+          "cpuSeconds": 1.33,
+          "processes": 4
+        },
+        {
+          "phase": "stop",
+          "elapsedMs": 1968.1414169999998,
+          "rssKiB": 325072,
+          "cpuSeconds": 1.36,
+          "processes": 4
+        },
+        {
+          "phase": "after_stop",
+          "elapsedMs": 2006.5736670000001,
+          "rssKiB": 323616,
+          "cpuSeconds": 1.37,
+          "processes": 4
+        },
+        {
+          "phase": "reload",
+          "elapsedMs": 2053.997792,
+          "rssKiB": 327760,
+          "cpuSeconds": 1.3800000000000001,
+          "processes": 4
+        },
+        {
+          "phase": "reload",
+          "elapsedMs": 2108.193,
+          "rssKiB": 333392,
+          "cpuSeconds": 1.4300000000000002,
+          "processes": 4
+        },
+        {
+          "phase": "reloaded",
+          "elapsedMs": 2144.394875,
+          "rssKiB": 335360,
+          "cpuSeconds": 1.44,
+          "processes": 4
+        },
+        {
+          "phase": "window_closed",
+          "elapsedMs": 2171.9655000000002,
+          "rssKiB": 335824,
+          "cpuSeconds": 1.4500000000000002,
+          "processes": 4
+        }
+      ],
+      "peakSampledRssKiB": 339040,
+      "dataBytes": 1188967,
+      "profileBytes": 1807945,
+      "events": 27,
+      "agentRuns": 3,
+      "modelCliRuns": 0,
+      "artificialAgentDelayMs": 40
+    },
+    {
+      "repetition": 2,
+      "externalElapsedMs": 1733.198958,
+      "scenario": "real-electron-sqlite-solo-synthetic-agent",
+      "platform": "darwin",
+      "arch": "arm64",
+      "node": "24.21.0",
+      "electron": "43.7.9",
+      "sqliteAbi": "148",
+      "timings": {
+        "startupToUiMs": 373.457583,
+        "workspaceMs": 378.02099999999996,
+        "first_turnMs": 75.758333,
+        "first_turnAcceptanceMs": 5.113957999999911,
+        "resumeMs": 96.62574999999993,
+        "resumeAcceptanceMs": 22.76958300000001,
+        "stopMs": 14.469957999999906
+      },
+      "samples": [
+        {
+          "phase": "startup",
+          "elapsedMs": 209.65716600000002,
+          "rssKiB": 200288,
+          "cpuSeconds": 0.39,
+          "processes": 3
+        },
+        {
+          "phase": "startup",
+          "elapsedMs": 297.021416,
+          "rssKiB": 231168,
+          "cpuSeconds": 0.49,
+          "processes": 4
+        },
+        {
+          "phase": "startup",
+          "elapsedMs": 372.3835,
+          "rssKiB": 329456,
+          "cpuSeconds": 0.6,
+          "processes": 4
+        },
+        {
+          "phase": "idle",
+          "elapsedMs": 414.37495800000005,
+          "rssKiB": 355552,
+          "cpuSeconds": 0.66,
+          "processes": 4
+        },
+        {
+          "phase": "idle",
+          "elapsedMs": 483.076041,
+          "rssKiB": 355664,
+          "cpuSeconds": 0.66,
+          "processes": 4
+        },
+        {
+          "phase": "idle",
+          "elapsedMs": 551.346125,
+          "rssKiB": 355728,
+          "cpuSeconds": 0.66,
+          "processes": 4
+        },
+        {
+          "phase": "idle",
+          "elapsedMs": 619.940083,
+          "rssKiB": 355728,
+          "cpuSeconds": 0.67,
+          "processes": 4
+        },
+        {
+          "phase": "idle",
+          "elapsedMs": 641.9030829999999,
+          "rssKiB": 355808,
+          "cpuSeconds": 0.67,
+          "processes": 4
+        },
+        {
+          "phase": "project_selection",
+          "elapsedMs": 681.854916,
+          "rssKiB": 367648,
+          "cpuSeconds": 0.7000000000000001,
+          "processes": 5
+        },
+        {
+          "phase": "project_selection",
+          "elapsedMs": 723.21425,
+          "rssKiB": 363168,
+          "cpuSeconds": 0.7300000000000001,
+          "processes": 5
+        },
+        {
+          "phase": "project_selection",
+          "elapsedMs": 773.6102080000001,
+          "rssKiB": 370256,
+          "cpuSeconds": 0.7400000000000001,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 824.3383329999999,
+          "rssKiB": 376224,
+          "cpuSeconds": 0.7699999999999999,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 875.5551660000001,
+          "rssKiB": 376592,
+          "cpuSeconds": 0.82,
+          "processes": 4
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 923.227958,
+          "rssKiB": 379680,
+          "cpuSeconds": 0.8399999999999999,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 975.8521659999999,
+          "rssKiB": 377328,
+          "cpuSeconds": 0.8599999999999999,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 1030.943708,
+          "rssKiB": 374848,
+          "cpuSeconds": 0.8599999999999999,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 1081.5105409999999,
+          "rssKiB": 365392,
+          "cpuSeconds": 0.8699999999999999,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 1124.84775,
+          "rssKiB": 360720,
+          "cpuSeconds": 0.8799999999999999,
+          "processes": 6
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 1175.616458,
+          "rssKiB": 348960,
+          "cpuSeconds": 0.8899999999999999,
+          "processes": 4
+        },
+        {
+          "phase": "first_turn",
+          "elapsedMs": 1226.935416,
+          "rssKiB": 334288,
+          "cpuSeconds": 0.9199999999999999,
+          "processes": 4
+        },
+        {
+          "phase": "first_turn",
+          "elapsedMs": 1270.316,
+          "rssKiB": 333712,
+          "cpuSeconds": 0.95,
+          "processes": 4
+        },
+        {
+          "phase": "resume",
+          "elapsedMs": 1290.397166,
+          "rssKiB": 333776,
+          "cpuSeconds": 0.96,
+          "processes": 4
+        },
+        {
+          "phase": "resume",
+          "elapsedMs": 1342.270041,
+          "rssKiB": 334640,
+          "cpuSeconds": 0.96,
+          "processes": 4
+        },
+        {
+          "phase": "resume",
+          "elapsedMs": 1384.281166,
+          "rssKiB": 336592,
+          "cpuSeconds": 0.98,
+          "processes": 4
+        },
+        {
+          "phase": "stop",
+          "elapsedMs": 1404.067541,
+          "rssKiB": 336816,
+          "cpuSeconds": 0.99,
+          "processes": 4
+        },
+        {
+          "phase": "after_stop",
+          "elapsedMs": 1452.005958,
+          "rssKiB": 338704,
+          "cpuSeconds": 1.03,
+          "processes": 4
+        },
+        {
+          "phase": "reload",
+          "elapsedMs": 1472.678958,
+          "rssKiB": 340880,
+          "cpuSeconds": 1.04,
+          "processes": 4
+        },
+        {
+          "phase": "reloaded",
+          "elapsedMs": 1513.5439159999999,
+          "rssKiB": 350592,
+          "cpuSeconds": 1.07,
+          "processes": 4
+        },
+        {
+          "phase": "window_closed",
+          "elapsedMs": 1538.739666,
+          "rssKiB": 351200,
+          "cpuSeconds": 1.09,
+          "processes": 4
+        }
+      ],
+      "peakSampledRssKiB": 379680,
+      "dataBytes": 1188967,
+      "profileBytes": 1807945,
+      "events": 27,
+      "agentRuns": 3,
+      "modelCliRuns": 0,
+      "artificialAgentDelayMs": 40
+    },
+    {
+      "repetition": 3,
+      "externalElapsedMs": 1867.2699579999999,
+      "scenario": "real-electron-sqlite-solo-synthetic-agent",
+      "platform": "darwin",
+      "arch": "arm64",
+      "node": "24.21.0",
+      "electron": "43.7.9",
+      "sqliteAbi": "148",
+      "timings": {
+        "startupToUiMs": 334.702,
+        "workspaceMs": 453.9325829999999,
+        "first_turnMs": 127.87204100000008,
+        "first_turnAcceptanceMs": 30.34962500000006,
+        "resumeMs": 91.68499999999995,
+        "resumeAcceptanceMs": 3.1952919999998812,
+        "stopMs": 29.99483299999997
+      },
+      "samples": [
+        {
+          "phase": "startup",
+          "elapsedMs": 213.537083,
+          "rssKiB": 198944,
+          "cpuSeconds": 0.38,
+          "processes": 3
+        },
+        {
+          "phase": "startup",
+          "elapsedMs": 284.331083,
+          "rssKiB": 250352,
+          "cpuSeconds": 0.49,
+          "processes": 4
+        },
+        {
+          "phase": "startup",
+          "elapsedMs": 333.77975,
+          "rssKiB": 318512,
+          "cpuSeconds": 0.5700000000000001,
+          "processes": 4
+        },
+        {
+          "phase": "idle",
+          "elapsedMs": 384.648708,
+          "rssKiB": 337776,
+          "cpuSeconds": 0.64,
+          "processes": 4
+        },
+        {
+          "phase": "idle",
+          "elapsedMs": 453.76104100000003,
+          "rssKiB": 337920,
+          "cpuSeconds": 0.64,
+          "processes": 4
+        },
+        {
+          "phase": "idle",
+          "elapsedMs": 522.4929999999999,
+          "rssKiB": 332720,
+          "cpuSeconds": 0.65,
+          "processes": 4
+        },
+        {
+          "phase": "idle",
+          "elapsedMs": 591.3710410000001,
+          "rssKiB": 332992,
+          "cpuSeconds": 0.65,
+          "processes": 4
+        },
+        {
+          "phase": "idle",
+          "elapsedMs": 609.387166,
+          "rssKiB": 333232,
+          "cpuSeconds": 0.65,
+          "processes": 4
+        },
+        {
+          "phase": "project_selection",
+          "elapsedMs": 657.608375,
+          "rssKiB": 344704,
+          "cpuSeconds": 0.6900000000000001,
+          "processes": 5
+        },
+        {
+          "phase": "project_selection",
+          "elapsedMs": 693.8040410000001,
+          "rssKiB": 329344,
+          "cpuSeconds": 0.7000000000000001,
+          "processes": 5
+        },
+        {
+          "phase": "project_selection",
+          "elapsedMs": 751.442916,
+          "rssKiB": 325936,
+          "cpuSeconds": 0.7200000000000001,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 795.678625,
+          "rssKiB": 321712,
+          "cpuSeconds": 0.7400000000000001,
+          "processes": 4
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 848.7715000000001,
+          "rssKiB": 328928,
+          "cpuSeconds": 0.82,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 895.856,
+          "rssKiB": 328384,
+          "cpuSeconds": 0.83,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 946.4242080000001,
+          "rssKiB": 329248,
+          "cpuSeconds": 0.8499999999999999,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 998.1276660000001,
+          "rssKiB": 331776,
+          "cpuSeconds": 0.8799999999999999,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 1056.1981250000001,
+          "rssKiB": 329856,
+          "cpuSeconds": 0.8799999999999999,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 1099.268291,
+          "rssKiB": 330576,
+          "cpuSeconds": 0.8899999999999999,
+          "processes": 5
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 1158.8922910000001,
+          "rssKiB": 341024,
+          "cpuSeconds": 0.9099999999999999,
+          "processes": 6
+        },
+        {
+          "phase": "workspace",
+          "elapsedMs": 1218.9427500000002,
+          "rssKiB": 333568,
+          "cpuSeconds": 0.8899999999999999,
+          "processes": 5
+        },
+        {
+          "phase": "first_turn",
+          "elapsedMs": 1258.985791,
+          "rssKiB": 331808,
+          "cpuSeconds": 0.9099999999999999,
+          "processes": 4
+        },
+        {
+          "phase": "first_turn",
+          "elapsedMs": 1315.291125,
+          "rssKiB": 329584,
+          "cpuSeconds": 0.94,
+          "processes": 4
+        },
+        {
+          "phase": "first_turn",
+          "elapsedMs": 1358.8645000000001,
+          "rssKiB": 328880,
+          "cpuSeconds": 0.97,
+          "processes": 4
+        },
+        {
+          "phase": "first_turn",
+          "elapsedMs": 1377.4520830000001,
+          "rssKiB": 328512,
+          "cpuSeconds": 0.97,
+          "processes": 4
+        },
+        {
+          "phase": "resume",
+          "elapsedMs": 1401.61175,
+          "rssKiB": 329824,
+          "cpuSeconds": 0.99,
+          "processes": 4
+        },
+        {
+          "phase": "resume",
+          "elapsedMs": 1457.528125,
+          "rssKiB": 330864,
+          "cpuSeconds": 1,
+          "processes": 4
+        },
+        {
+          "phase": "resume",
+          "elapsedMs": 1490.337,
+          "rssKiB": 332304,
+          "cpuSeconds": 1,
+          "processes": 4
+        },
+        {
+          "phase": "stop",
+          "elapsedMs": 1517.732541,
+          "rssKiB": 332736,
+          "cpuSeconds": 1.02,
+          "processes": 4
+        },
+        {
+          "phase": "stop",
+          "elapsedMs": 1561.057833,
+          "rssKiB": 335008,
+          "cpuSeconds": 1.07,
+          "processes": 4
+        },
+        {
+          "phase": "after_stop",
+          "elapsedMs": 1578.450333,
+          "rssKiB": 335024,
+          "cpuSeconds": 1.07,
+          "processes": 4
+        },
+        {
+          "phase": "reload",
+          "elapsedMs": 1611.791791,
+          "rssKiB": 344352,
+          "cpuSeconds": 1.1,
+          "processes": 4
+        },
+        {
+          "phase": "reloaded",
+          "elapsedMs": 1640.591916,
+          "rssKiB": 346816,
+          "cpuSeconds": 1.12,
+          "processes": 4
+        },
+        {
+          "phase": "window_closed",
+          "elapsedMs": 1683.656,
+          "rssKiB": 346944,
+          "cpuSeconds": 1.1300000000000001,
+          "processes": 4
+        }
+      ],
+      "peakSampledRssKiB": 346944,
+      "dataBytes": 1188967,
+      "profileBytes": 1807945,
+      "events": 27,
+      "agentRuns": 3,
+      "modelCliRuns": 0,
+      "artificialAgentDelayMs": 40
+    }
+  ]
+}

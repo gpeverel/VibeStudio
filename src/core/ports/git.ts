@@ -1,7 +1,7 @@
 export type GitWarning = 'dirty_tree' | 'submodules_unsupported' | 'lfs_unsupported';
 
 export type GitErrorCode =
-  | 'git_unavailable' | 'git_failed' | 'not_git_repository' | 'no_commits'
+  | 'git_unavailable' | 'git_failed' | 'git_timeout' | 'not_git_repository' | 'no_commits'
   | 'invalid_reference' | 'invalid_branch' | 'invalid_session_id' | 'invalid_request'
   | 'dirty_tree' | 'detached_head' | 'base_branch_missing' | 'base_branch_not_checked_out'
   | 'invalid_workspace' | 'merge_conflict' | 'base_changed' | 'candidate_changed'
@@ -79,6 +79,11 @@ export interface GitOperation {
   plannedSha?: string;
   preApplyRef?: string;
   error?: { code: GitErrorCode; message: string; files: string[] };
+  creation?: {
+    baseSha: string; baseRefCreated: boolean; branchCreated: boolean; worktreeCreated: boolean;
+    cleanup: 'not_needed' | 'pending' | 'completed' | 'failed' | 'preserved';
+  };
+  cleanupError?: { code: GitErrorCode; message: string; files: string[] };
 }
 
 /** В 0B допускается память. Реальная durable-реализация и её приёмка — этап 1. */
@@ -90,10 +95,13 @@ export interface GitOperationStore {
 export type GitFaultPoint = 'after_intent'
   | 'before_checkpoint' | 'after_checkpoint' | 'before_commit' | 'after_commit'
   | 'before_files' | 'after_files' | 'before_ref' | 'after_ref'
-  | 'before_result' | 'after_result';
+  | 'before_result' | 'after_result'
+  | 'create_after_intent' | 'create_after_base_ref' | 'create_after_worktree'
+  | 'create_after_config' | 'create_before_result' | 'create_before_cleanup';
 export interface GitAdapterOptions {
   store?: GitOperationStore;
   faultInjector?: (point: GitFaultPoint, operation: Readonly<GitOperation>) => void | Promise<void>;
+  timeouts?: { readMs?: number; writeMs?: number; networkMs?: number };
 }
 /** Сверка не меняет Git; без записанного завершения требует точного согласованного итога. */
 export interface ReconcileApplyRequest { projectPath: string; operationId: string }
