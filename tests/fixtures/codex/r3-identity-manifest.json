@@ -31,7 +31,7 @@
       "src/adapters/process-runner/index.ts": "6dd2b2937c2785b99eead1fd728f819ad9f6427a080e6b015d60e92a4c55448b",
       "src/adapters/process-runner/queue.ts": "8a066a162e6f8d1cb0e5065c9e0409128491b665dafd8120877a112b4c6e30b4",
       "scripts/with-node.sh": "a7532611da5f4d6f0451891ac4df2d62bfd7d21ad4a3999fb54e84262f1c0323",
-      "package-lock.json": "17d6ad7f0192fb503a01b83af7b8e3b66e5bf388d4abde2089a423a7ce2d7cec",
+      "package-lock.json": "e33b99d15aa646413d71c8cf03f0cd2bb8d446fe1abb986724c56d70d24afb64",
       "tests/codex/admission-probe.test.ts": "9a831db296747fca88d545734ffc7efc0a1ba5420d2097f8aa3ac9737f00f383",
       "tests/codex/admission-probe-evidence.test.ts": "e67b2d473c45db9829094d092bb11ddd7dd7998e3b9860bf1e38d0f722d1dddd",
       "src/adapters/codex/extensions.ts": "c898aa987eb848a10d48fff8875884fadb7473e3132d04b1081a1b51857911b9",

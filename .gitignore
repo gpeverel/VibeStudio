@@ -12,3 +12,5 @@ coverage/
 .tmp/
 .cache/
 /.playwright-mcp/
+/playwright-report/
+/test-results/
