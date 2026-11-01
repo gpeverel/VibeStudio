@@ -20,6 +20,8 @@
     "smoke": "electron . --smoke-test",
     "test": "sh scripts/with-node.sh sh scripts/with-test-awake.sh vitest run",
     "test:node": "sh scripts/with-node.sh sh scripts/with-test-awake.sh node --test tests/run-git-boundaries.node.ts",
+    "pretest:e2e": "sh scripts/with-node.sh npm run build",
+    "test:e2e": "sh scripts/with-node.sh sh scripts/with-test-awake.sh playwright test",
     "test:live": "vitest run --config vitest.live.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "eslint . --max-warnings 0",
@@ -35,8 +37,10 @@
     "zod": "4.1.12"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@electron/rebuild": "4.2.1",
     "@eslint/js": "9.39.1",
+    "@playwright/test": "1.64.1",
     "@swc/core": "1.13.5",
     "@types/better-sqlite3": "7.6.13",
     "@types/node": "24.10.1",
