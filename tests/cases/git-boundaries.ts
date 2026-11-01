@@ -1324,17 +1324,24 @@ export function registerGitBoundaryTests({ beforeEach, afterEach, describe, it }
   });
 
   describe('0B-2: два экземпляра адаптера с общим Store и одним common-dir', () => {
-    interface CountingStore extends GitOperationStore { saves: GitOperation['kind'][] }
+    interface CountingStore extends GitOperationStore {
+      saves: GitOperation['kind'][];
+      /** operationId каждой записи в порядке сохранения: одна логическая операция может записываться по фазам. */
+      operationIds: string[];
+    }
 
     function countingStore(): CountingStore {
       const inner = memoryStore();
       const saves: GitOperation['kind'][] = [];
+      const operationIds: string[] = [];
       return {
         saves,
+        operationIds,
         get: (requestId) => inner.get(requestId),
         list: () => inner.list(),
         async save(operation) {
           saves.push(operation.kind);
+          operationIds.push(operation.operationId);
           await inner.save(operation);
         },
       };
@@ -1363,7 +1370,13 @@ export function registerGitBoundaryTests({ beforeEach, afterEach, describe, it }
       const b = await adapter({ store: shared });
       const [first, second] = await Promise.all([a.createWorkspace(createRequest()), b.createWorkspace(createRequest())]);
       assert.deepEqual(second, first);
-      assert.deepEqual(shared.saves.filter((kind) => kind === 'create'), ['create'], 'операция создания записана один раз');
+      // G10: намерение записывается до первого эффекта, поэтому записей несколько, но операция одна.
+      const createIds = shared.operationIds.filter((_, index) => shared.saves[index] === 'create');
+      assert.ok(createIds.length >= 2, 'намерение и итог записаны отдельными фазами');
+      assert.equal(new Set(createIds).size, 1, 'второй экземпляр не начал вторую операцию создания');
+      const stored = await shared.get('create-1');
+      assert.equal(stored?.phase, 'completed');
+      assert.deepEqual(stored?.workspaceResult, first);
       assert.equal(git(project, 'for-each-ref', '--format=%(refname)', 'refs/vibestudio/boundary/base'),
         'refs/vibestudio/boundary/base');
       assert.equal(git(project, 'rev-parse', 'refs/vibestudio/boundary/base'), first.baseSha);

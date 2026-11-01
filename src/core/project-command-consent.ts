@@ -3,6 +3,7 @@ import type {
   ProjectCommandSnapshot,
 } from '../shared/project-command-consent.ts';
 import type { ProjectCommandRequest, ProjectCommandSnapshotPort } from './ports/project-command-snapshot.ts';
+import type { ConsentRecord } from './ports/store.ts';
 
 type KnownSnapshot = Extract<ProjectCommandSnapshot, { status: 'known' }>;
 interface Challenge {
@@ -17,6 +18,7 @@ interface Consent {
   readonly fingerprint: string;
 }
 interface OperationState {
+  durable?: ConsentRecord;
   consent?: Consent;
   challenge?: Challenge;
   invalidated: boolean;
@@ -36,12 +38,21 @@ export interface ProjectCommandConsentPolicy {
 
 let instanceSequence = 0;
 
-/** P4: только память доверенного приложения. Durable store/IPC/исполнитель — P5.
+export interface ConsentPersistence {
+  find(operationId: string): ConsentRecord | undefined;
+  get(consentId: string): ConsentRecord | undefined;
+  save(record: ConsentRecord): void;
+  digest(context: string): string;
+  nextId(): string;
+  now(): string;
+}
+
+/** Политика P4 с необязательным durable-портом P5. Challenges всегда живут только в памяти.
  * Все проверки сериализованы, чтобы поздний старый снимок не оживлял отозванный допуск.
  * operationId обозначает одну именованную операцию экземпляра, включая её проект.
  * IDs — ссылки на частное состояние, не аутентификация пользовательского решения. */
-export function createProjectCommandConsent(port: ProjectCommandSnapshotPort): ProjectCommandConsentPolicy {
-  const instance = ++instanceSequence;
+export function createProjectCommandConsent(port: ProjectCommandSnapshotPort, persistence?: ConsentPersistence): ProjectCommandConsentPolicy {
+  const instance = persistence?.nextId() ?? ++instanceSequence;
   let sequence = 0;
   let tail: Promise<void> = Promise.resolve();
   const operations = new Map<string, OperationState>();
@@ -57,17 +68,29 @@ export function createProjectCommandConsent(port: ProjectCommandSnapshotPort): P
     let state = operations.get(operationId);
     if (!state) {
       state = { invalidated: false, revision: 0 };
+      const saved = persistence?.find(operationId);
+      if (saved) {
+        state.durable = saved;
+        state.invalidated = saved.status !== 'granted';
+        if (saved.status === 'granted' && saved.version === 1) {
+          state.consent = { id: saved.id, context: saved.contextDigest, fingerprint: saved.fingerprint };
+        }
+      }
       operations.set(operationId, state);
     }
     return state;
   }
 
-  function invalidate(state: OperationState): void {
+  function invalidate(state: OperationState, status: 'invalidated' | 'revoked' = 'invalidated'): void {
     if (state.challenge) challenges.delete(state.challenge.id);
     state.consent = undefined;
     state.challenge = undefined;
     state.invalidated = true;
     ++state.revision;
+    if (state.durable?.status === 'granted') {
+      state.durable = { ...state.durable, status, updatedAt: persistence!.now() };
+      persistence!.save(state.durable);
+    }
   }
 
   async function capture(request: ProjectCommandRequest): Promise<ProjectCommandSnapshot> {
@@ -108,7 +131,7 @@ export function createProjectCommandConsent(port: ProjectCommandSnapshotPort): P
         invalidate(state);
         return blocked('separate_authorization_required');
       }
-      const context = JSON.stringify(copied);
+      const context = persistence ? persistence.digest(JSON.stringify(copied)) : JSON.stringify(copied);
       const startedAt = state.revision;
       const snapshot = await capture(copied);
       if (startedAt !== state.revision) {
@@ -162,6 +185,13 @@ export function createProjectCommandConsent(port: ProjectCommandSnapshotPort): P
       }
       const consent: Consent = { id: `consent-${instance}-${++sequence}`,
         context: challenge.context, fingerprint: snapshot.fingerprint };
+      if (persistence) {
+        const saved: ConsentRecord = { id: consent.id, operationId: challenge.request.operationId,
+          projectId: challenge.request.projectId, version: 1, contextDigest: consent.context,
+          fingerprint: consent.fingerprint, coverage: snapshot.coverage, status: 'granted', updatedAt: persistence.now() };
+        persistence.save(saved);
+        state.durable = saved;
+      }
       state.consent = consent;
       state.invalidated = false;
       return allowed(consent, snapshot);
@@ -169,9 +199,11 @@ export function createProjectCommandConsent(port: ProjectCommandSnapshotPort): P
   }
 
   function revoke(consentId: string): boolean {
+    const saved = persistence?.get(consentId);
+    if (saved) stateFor(saved.operationId);
     for (const state of operations.values()) {
       if (state.consent?.id === consentId) {
-        invalidate(state);
+        invalidate(state, 'revoked');
         return true;
       }
     }
